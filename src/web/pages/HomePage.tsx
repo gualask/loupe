@@ -57,7 +57,7 @@ function NewProjectForm({ onCancel }: { onCancel: () => void }) {
 }
 
 function ProjectCard({ project }: { project: Project }) {
-    const showOwner = currentUser.value?.role === 'admin';
+    const showOwner = project.owner.id !== currentUser.value?.id;
     return (
         <a
             href={`/projects/${project.id}`}
@@ -79,7 +79,41 @@ function ProjectCard({ project }: { project: Project }) {
     );
 }
 
+/** Admins see every workspace; they pick one, or all, through `?owner=`. */
+function WorkspacePicker({
+    projects,
+    value,
+    onChange,
+}: {
+    projects: Project[];
+    value: string;
+    onChange: (owner: string) => void;
+}) {
+    const me = currentUser.value?.id;
+    const others = new Map(
+        projects.filter((p) => p.owner.id !== me).map((p) => [p.owner.id, p.owner.displayName]),
+    );
+    return (
+        <select
+            aria-label="Workspace"
+            value={value}
+            onChange={(e) => onChange(e.currentTarget.value)}
+            class="rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
+        >
+            <option value="">My workspace</option>
+            <option value="all">All workspaces</option>
+            {[...others].map(([id, name]) => (
+                <option key={id} value={id}>
+                    {name}
+                </option>
+            ))}
+        </select>
+    );
+}
+
 export function HomePage() {
+    const { path, query, route } = useLocation();
+    const user = currentUser.value;
     const [projects, setProjects] = useState<Project[]>();
     const [error, setError] = useState<string>();
     const [creating, setCreating] = useState(false);
@@ -88,11 +122,24 @@ export function HomePage() {
         api.get<Project[]>('/projects').then(setProjects, (err) => setError(errorMessage(err)));
     }, []);
 
+    const owner = user?.role === 'admin' ? (query.owner ?? '') : '';
+    const shown = projects?.filter((p) =>
+        owner === 'all' ? true : p.owner.id === (owner || user?.id),
+    );
+
     return (
         <AppShell>
             <div class="flex flex-col gap-6">
-                <div class="flex items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-4">
                     <h1 class="font-semibold text-2xl tracking-tight">Workspace</h1>
+                    {user?.role === 'admin' && projects ? (
+                        <WorkspacePicker
+                            projects={projects}
+                            value={owner}
+                            onChange={(value) => route(value ? `${path}?owner=${value}` : path)}
+                        />
+                    ) : null}
+                    <span class="flex-1" />
                     {creating ? null : (
                         <Button onClick={() => setCreating(true)}>
                             <IconPlus size={16} />
@@ -102,7 +149,7 @@ export function HomePage() {
                 </div>
                 {creating ? <NewProjectForm onCancel={() => setCreating(false)} /> : null}
                 <FormError message={error} />
-                {projects?.length === 0 && !creating ? (
+                {shown?.length === 0 && !creating ? (
                     <div class="rounded-xl border border-stone-300 border-dashed p-10 text-center">
                         <p class="font-medium">No projects yet</p>
                         <p class="mt-1 text-sm text-stone-500">
@@ -110,9 +157,9 @@ export function HomePage() {
                         </p>
                     </div>
                 ) : null}
-                {projects?.length ? (
+                {shown?.length ? (
                     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {projects.map((project) => (
+                        {shown.map((project) => (
                             <ProjectCard key={project.id} project={project} />
                         ))}
                     </div>

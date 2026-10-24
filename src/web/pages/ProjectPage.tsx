@@ -1,12 +1,12 @@
-import { IconFileTypeHtml, IconPencil, IconTrash } from '@tabler/icons-preact';
+import { IconFileTypeHtml, IconMessage, IconPencil, IconTrash } from '@tabler/icons-preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
-import type { Mockup, Project, ProjectDetail } from '../../shared/api/projects.ts';
+import type { Mockup, MockupActivity, Project, ProjectDetail } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { MockupBadges } from '../components/MockupBadges.tsx';
 import { UploadDropzone } from '../components/UploadDropzone.tsx';
 import { api, errorMessage } from '../lib/api.ts';
-import { formatBytes, formatDate } from '../lib/format.ts';
+import { formatBytes, formatDate, formatRelative } from '../lib/format.ts';
 import { Button } from '../ui/Button.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { TextField } from '../ui/TextField.tsx';
@@ -60,7 +60,19 @@ function RenameForm({
     );
 }
 
-function MockupRow({ mockup }: { mockup: Mockup }) {
+function Activity({ activity }: { activity: MockupActivity }) {
+    if (!activity.lastActivityAt)
+        return <span class="text-stone-400 text-xs">No comments yet</span>;
+    return (
+        <span class="flex items-center gap-1.5 text-stone-600 text-xs">
+            <IconMessage size={14} class="text-stone-400" />
+            {activity.openThreads} open · {activity.resolvedThreads} resolved · last{' '}
+            {formatRelative(activity.lastActivityAt)}
+        </span>
+    );
+}
+
+function MockupRow({ mockup }: { mockup: ProjectDetail['mockups'][number] }) {
     return (
         <li>
             <a
@@ -75,6 +87,7 @@ function MockupRow({ mockup }: { mockup: Mockup }) {
                         · uploaded {formatDate(mockup.version.createdAt)}
                     </p>
                 </div>
+                <Activity activity={mockup.activity} />
                 <MockupBadges mockup={mockup} />
             </a>
         </li>

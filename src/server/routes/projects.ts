@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
     createProjectRequestSchema,
+    type ProjectDetail,
     updateMockupRequestSchema,
     updateProjectRequestSchema,
 } from '../../shared/api/projects.ts';
@@ -24,7 +25,7 @@ import {
     updateProject,
 } from '../db/projects.ts';
 import { listReviews } from '../db/reviews.ts';
-import { countThreadsByViewer } from '../db/threads.ts';
+import { activityByVersion, countThreadsByViewer } from '../db/threads.ts';
 import { listViewers } from '../db/viewers.ts';
 import { apiError, parseJson } from '../http.ts';
 import { canManage, toMockup, toProject } from '../mockups/access.ts';
@@ -71,8 +72,24 @@ export function projectRoutes({ db, config }: AppDeps) {
         })
         .get('/projects/:id', (c) => {
             const row = managedProject(c, c.req.param('id'));
-            const mockups = listMockups(db, row.project.id).map((m) => toMockup(config, m));
-            return c.json({ ...toProject(row), mockups });
+            const rows = listMockups(db, row.project.id);
+            const activity = activityByVersion(
+                db,
+                rows.map((m) => m.version.id),
+            );
+            const mockups = rows.map((m) => {
+                const a = activity.get(m.version.id);
+                return {
+                    ...toMockup(config, m),
+                    activity: {
+                        openThreads: a?.openThreads ?? 0,
+                        resolvedThreads: a?.resolvedThreads ?? 0,
+                        lastActivityAt: a?.lastActivityAt?.toISOString() ?? null,
+                    },
+                };
+            });
+            const body: ProjectDetail = { ...toProject(row), mockups };
+            return c.json(body);
         })
         .patch('/projects/:id', async (c) => {
             const row = managedProject(c, c.req.param('id'));

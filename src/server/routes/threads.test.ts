@@ -313,6 +313,36 @@ describe('reviews', () => {
     });
 });
 
+describe('project activity', () => {
+    it('counts threads and dates the latest comment per mockup', async () => {
+        const { editor, mockup, base, viewer } = await sharedMockup();
+        const empty = await editor.get(`/api/projects/${mockup.projectId}`);
+        expect(empty.body.mockups[0].activity).toEqual({
+            openThreads: 0,
+            resolvedThreads: 0,
+            lastActivityAt: null,
+        });
+
+        const alice = await viewer('Alice');
+        const id = crypto.randomUUID();
+        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        await alice.client.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'pin',
+            anchor: ANCHOR,
+            body: 'There',
+        });
+        await editor.patch(`${base}/threads/${id}`, { status: 'resolved' });
+
+        const listed = await editor.get(`/api/projects/${mockup.projectId}`);
+        expect(listed.body.mockups[0].activity).toEqual({
+            openThreads: 1,
+            resolvedThreads: 1,
+            lastActivityAt: expect.any(String),
+        });
+    });
+});
+
 describe('event stream', () => {
     it('streams presence and thread changes', async () => {
         const { t, base, viewer } = await sharedMockup();

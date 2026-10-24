@@ -50,7 +50,15 @@ export type Mockup = {
     createdAt: string;
 };
 
-export type ProjectDetail = Project & { mockups: Mockup[] };
+/** Feedback on a mockup's current version, as listed in its project. */
+export type MockupActivity = {
+    openThreads: number;
+    resolvedThreads: number;
+    /** Time of the latest comment, or null without any. */
+    lastActivityAt: string | null;
+};
+
+export type ProjectDetail = Project & { mockups: (Mockup & { activity: MockupActivity })[] };
 
 /** What a share link exposes before anything else is loaded. */
 export type SharedMockup = {

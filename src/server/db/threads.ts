@@ -1,4 +1,4 @@
-import { count, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { count, eq, inArray, max, type SQL, sql } from 'drizzle-orm';
 import type { PinAnchor } from '../../shared/anchor.ts';
 import type { Db } from './client.ts';
 import { comments, threads, users, viewers } from './schema.ts';
@@ -99,4 +99,34 @@ export function countThreadsByViewer(db: Db, versionId: string) {
         .where(eq(threads.versionId, versionId))
         .groupBy(threads.authorViewerId, threads.status)
         .all();
+}
+
+/** Thread counts and the latest comment time for each of the given versions. */
+export function activityByVersion(db: Db, versionIds: string[]) {
+    const counts = db
+        .select({ versionId: threads.versionId, status: threads.status, n: count() })
+        .from(threads)
+        .where(inArray(threads.versionId, versionIds))
+        .groupBy(threads.versionId, threads.status)
+        .all();
+    const latest = db
+        .select({ versionId: threads.versionId, at: max(comments.createdAt) })
+        .from(comments)
+        .innerJoin(threads, eq(threads.id, comments.threadId))
+        .where(inArray(threads.versionId, versionIds))
+        .groupBy(threads.versionId)
+        .all();
+    return new Map(
+        versionIds.map((versionId) => {
+            const countOf = (status: string) =>
+                counts.find((c) => c.versionId === versionId && c.status === status)?.n ?? 0;
+            const at = latest.find((l) => l.versionId === versionId)?.at;
+            const activity = {
+                openThreads: countOf('open'),
+                resolvedThreads: countOf('resolved'),
+                lastActivityAt: at ?? null,
+            };
+            return [versionId, activity];
+        }),
+    );
 }

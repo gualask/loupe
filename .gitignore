@@ -1,0 +1,41 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+
+# Local data (SQLite database and uploaded mockups)
+data
+
+# System files
+.DS_Store
+
+# Logs
+*.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# IDE settings (keep .vscode/ tracked for team standards)
+.idea/
+*.swp
+*.swo
+*~
+
+# Agent tooling
+.mcp.json
+.playwright-mcp/
+.claude/settings.local.json
+
+# Vitest reports and attachments
+.vitest/

@@ -1,0 +1,37 @@
+# Development
+
+## Requirements
+
+- Node.js 24 or newer
+- pnpm 11
+
+## Setup
+
+```sh
+pnpm install
+pnpm dev
+```
+
+`pnpm dev` starts three processes: the Hono server on port 3000, Vite on port 5173 and the bridge
+build in watch mode. Open `http://localhost:5173`; Vite forwards API and mockup requests to the
+server. Local data is stored in `./data`.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Run the app in development mode |
+| `pnpm build` | Type-check and build the web app and the bridge into `dist/` |
+| `pnpm start` | Run the production server from the working tree, after `pnpm build` |
+| `pnpm test` | Run the tests (Vitest) |
+| `pnpm lint` | Check formatting and lint rules (Biome); `pnpm format` fixes formatting |
+| `pnpm typecheck` | Type-check the whole project |
+| `pnpm knip` | Find unused files, exports and dependencies |
+| `pnpm db:generate` | Generate a migration after changing the database schema |
+| `docker build -t loupe .` | Build the production image |
+
+## Project layout and conventions
+
+Code layout, coding rules, security invariants and the changelog policy are described in
+[`AGENTS.md`](../AGENTS.md), which applies to human contributors and coding agents alike. Product
+behavior and architecture are in [`SPEC.md`](SPEC.md).

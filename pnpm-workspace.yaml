@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+
+peerDependencyRules:
+  allowedVersions:
+    # Tabler has not widened its peer range yet; the icons render fine on Preact 11.
+    '@tabler/icons-preact>preact': '11'

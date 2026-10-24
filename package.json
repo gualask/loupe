@@ -1,0 +1,54 @@
+{
+    "name": "loupe",
+    "private": true,
+    "version": "0.0.0",
+    "description": "Self-hosted pinned comments on HTML mockups: upload a self-contained design, share a link, collect feedback.",
+    "license": "MIT",
+    "author": "Andrea Gualandi (Gorgonauta)",
+    "homepage": "https://github.com/gualask/loupe",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/gualask/loupe.git"
+    },
+    "bugs": {
+        "url": "https://github.com/gualask/loupe/issues"
+    },
+    "packageManager": "pnpm@11.22.0",
+    "engines": {
+        "node": ">=24"
+    },
+    "type": "module",
+    "scripts": {
+        "dev": "node scripts/dev.mjs",
+        "start": "node src/server/index.ts",
+        "build": "pnpm typecheck && vite build && vite build -c vite.bridge.config.ts",
+        "typecheck": "tsc --noEmit -p tsconfig.json",
+        "lint": "biome check .",
+        "format": "biome format --write .",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "knip": "knip",
+        "db:generate": "drizzle-kit generate"
+    },
+    "dependencies": {
+        "@hono/node-server": "^2.1.5",
+        "drizzle-orm": "1.0.0-rc.5",
+        "hono": "^4.13.13",
+        "zod": "^4.6.7"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.6.2",
+        "@preact/preset-vite": "^2.10.6",
+        "@tabler/icons-preact": "^3.49.0",
+        "@tailwindcss/vite": "^4.3.3",
+        "@types/node": "^24.19.2",
+        "drizzle-kit": "1.0.0-rc.5",
+        "knip": "^6.42.1",
+        "preact": "^11.0.1",
+        "preact-iso": "^2.12.2",
+        "tailwindcss": "^4.3.3",
+        "typescript": "^7.0.2",
+        "vite": "^8.3.5",
+        "vitest": "^5.0.5"
+    }
+}

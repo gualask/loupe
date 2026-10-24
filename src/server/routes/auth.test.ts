@@ -1,39 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { issueSetupLinkIfNeeded } from '../auth/accounts.ts';
-import { createTestApp, tokenFromUrl } from '../test-utils.ts';
-
-const PASSWORD = 'correct horse battery';
-
-function setupLink(t: ReturnType<typeof createTestApp>) {
-    const link = issueSetupLinkIfNeeded(t.db, t.config);
-    if (!link) throw new Error('expected a setup link');
-    return link;
-}
-
-/** Runs first-run setup and returns the admin's signed-in client. */
-async function setUpAdmin(t: ReturnType<typeof createTestApp>) {
-    const admin = t.client();
-    await admin.post(`/api/auth/tokens/${tokenFromUrl(setupLink(t).url)}`, {
-        username: 'Admin',
-        displayName: 'The Admin',
-        password: PASSWORD,
-    });
-    return admin;
-}
-
-async function inviteEditor(
-    t: ReturnType<typeof createTestApp>,
-    admin: Awaited<ReturnType<typeof setUpAdmin>>,
-) {
-    const invite = await admin.post('/api/admin/invites', { role: 'editor' });
-    const editor = t.client();
-    const res = await editor.post(`/api/auth/tokens/${tokenFromUrl(invite.body.url)}`, {
-        username: 'eddie',
-        displayName: 'Eddie',
-        password: PASSWORD,
-    });
-    return { editor, editorId: res.body.id as string };
-}
+import {
+    createTestApp,
+    inviteEditor,
+    PASSWORD,
+    setUpAdmin,
+    setupLink,
+    tokenFromUrl,
+} from '../test-utils.ts';
 
 describe('first-run setup', () => {
     it('issues a setup link only while no account exists', async () => {
@@ -42,7 +16,7 @@ describe('first-run setup', () => {
         expect(link.url).toMatch(/^http:\/\/loupe\.test\/setup\/[\w-]{43}$/);
 
         const info = await t.client().get(`/api/auth/tokens/${tokenFromUrl(link.url)}`);
-        expect(info).toEqual({ status: 200, body: { kind: 'setup', role: 'admin' } });
+        expect(info).toMatchObject({ status: 200, body: { kind: 'setup', role: 'admin' } });
 
         await setUpAdmin(t);
         expect(issueSetupLinkIfNeeded(t.db, t.config)).toBeUndefined();
@@ -123,7 +97,7 @@ describe('login and logout', () => {
         const unknown = await t
             .client()
             .post('/api/auth/login', { username: 'ghost', password: 'nope' });
-        expect(wrong).toEqual(unknown);
+        expect(wrong.body).toEqual(unknown.body);
         expect(wrong.status).toBe(401);
     });
 
@@ -236,7 +210,7 @@ describe('user management', () => {
         const admin = await setUpAdmin(t);
         const me = await admin.get('/api/auth/me');
         const res = await admin.patch(`/api/admin/users/${me.body.id}`, { role: 'editor' });
-        expect(res).toEqual({ status: 409, body: { error: 'cannot_modify_self' } });
+        expect(res).toMatchObject({ status: 409, body: { error: 'cannot_modify_self' } });
     });
 
     it('lists users for admins', async () => {

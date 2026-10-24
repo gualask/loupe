@@ -210,7 +210,8 @@ GET  /api/admin/users                           PATCH /api/admin/users/:id
 
 GET|POST         /api/projects                  GET|PATCH|DELETE /api/projects/:id
 GET|POST         /api/projects/:id/mockups      GET|PATCH|DELETE /api/mockups/:id
-POST             /api/mockups/:id/versions      POST /api/mockups/:id/share/regenerate
+POST             /api/mockups/:id/share/regenerate
+POST             /api/mockups/:id/versions      (v1.x)
 GET              /api/mockups/:id/reviews
 
 # Share-link scope (viewers and editors); viewer key in X-Loupe-Viewer header

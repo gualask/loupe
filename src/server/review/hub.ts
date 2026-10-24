@@ -1,0 +1,40 @@
+import type { Author, ShareEvent } from '../../shared/api/reviews.ts';
+
+type Member = { participant: Author | null; send: (event: ShareEvent) => void };
+
+/**
+ * In-memory pub/sub for share-link event streams, one room per mockup version. Loupe runs as a
+ * single process, so nothing has to be shared between instances (docs/SPEC.md §5.2).
+ */
+export function createHub() {
+    const rooms = new Map<string, Set<Member>>();
+
+    function publish(room: string, event: ShareEvent) {
+        for (const member of rooms.get(room) ?? []) member.send(event);
+    }
+
+    function publishPresence(room: string) {
+        const participants = new Map<string, Author>();
+        for (const { participant } of rooms.get(room) ?? []) {
+            if (participant) participants.set(`${participant.kind}:${participant.id}`, participant);
+        }
+        publish(room, { type: 'presence', participants: [...participants.values()] });
+    }
+
+    /** Subscribes to a room; returns the function that leaves it. */
+    function join(room: string, participant: Author | null, send: Member['send']) {
+        const member = { participant, send };
+        const members = rooms.get(room) ?? new Set();
+        rooms.set(room, members.add(member));
+        publishPresence(room);
+        return () => {
+            members.delete(member);
+            if (!members.size) rooms.delete(room);
+            else if (participant) publishPresence(room);
+        };
+    }
+
+    return { publish, join };
+}
+
+export type Hub = ReturnType<typeof createHub>;

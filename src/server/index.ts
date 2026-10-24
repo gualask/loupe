@@ -25,6 +25,8 @@ function shutdown() {
         db.$client.close();
         process.exit(0);
     });
+    // Event streams never end on their own; close them so close() can finish.
+    if ('closeAllConnections' in server) server.closeAllConnections();
 }
 
 process.on('SIGINT', shutdown);

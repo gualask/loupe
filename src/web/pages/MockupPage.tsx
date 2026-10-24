@@ -4,6 +4,7 @@ import { useLocation, useRoute } from 'preact-iso';
 import type { Mockup, Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { MockupFrame } from '../components/MockupFrame.tsx';
+import { ReviewsPanel } from '../components/ReviewsPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api, errorMessage } from '../lib/api.ts';
 import { formatBytes, formatDateTime } from '../lib/format.ts';
@@ -105,12 +106,15 @@ export function MockupPage() {
                 </div>
                 <FormError message={error} />
                 <div class="grid gap-6 lg:grid-cols-[1fr_20rem]">
-                    <div class="overflow-hidden rounded-xl border border-stone-200 bg-white">
-                        <MockupFrame
-                            src={`/s/${token}/content`}
-                            title={`Preview of ${mockup.name}`}
-                            class="h-[70vh] w-full"
-                        />
+                    <div class="flex min-w-0 flex-col gap-6">
+                        <div class="overflow-hidden rounded-xl border border-stone-200 bg-white">
+                            <MockupFrame
+                                src={`/s/${token}/content`}
+                                title={`Preview of ${mockup.name}`}
+                                class="h-[70vh] w-full"
+                            />
+                        </div>
+                        <ReviewsPanel mockupId={mockup.id} token={token} />
                     </div>
                     <div class="flex flex-col gap-6">
                         <SharePanel mockup={mockup} onChange={setMockup} />

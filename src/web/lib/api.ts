@@ -10,11 +10,18 @@ export class ApiError extends Error {
     }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+type Headers = Record<string, string>;
+
+async function request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    headers: Headers = {},
+): Promise<T> {
     const json = body !== undefined && !(body instanceof FormData);
     const res = await fetch(`/api${path}`, {
         method,
-        headers: json ? { 'content-type': 'application/json' } : undefined,
+        headers: json ? { ...headers, 'content-type': 'application/json' } : headers,
         body: json ? JSON.stringify(body) : (body as FormData | undefined),
     });
     if (res.status === 204) return undefined as T;
@@ -24,10 +31,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-    get: <T>(path: string) => request<T>('GET', path),
-    post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
-    patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
-    delete: (path: string) => request<void>('DELETE', path),
+    get: <T>(path: string, headers?: Headers) => request<T>('GET', path, undefined, headers),
+    post: <T>(path: string, body?: unknown, headers?: Headers) =>
+        request<T>('POST', path, body, headers),
+    patch: <T>(path: string, body?: unknown, headers?: Headers) =>
+        request<T>('PATCH', path, body, headers),
+    put: <T>(path: string, body?: unknown, headers?: Headers) =>
+        request<T>('PUT', path, body, headers),
+    delete: (path: string, headers?: Headers) => request<void>('DELETE', path, undefined, headers),
 };
 
 /** A message suitable for showing next to a form. */

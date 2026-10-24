@@ -35,9 +35,10 @@ type App = ReturnType<typeof createApp>;
 
 function createClient(app: App) {
     const cookies = new Map<string, string>();
+    const extraHeaders: Record<string, string> = {};
 
     async function request(method: string, path: string, body?: unknown) {
-        const headers: Record<string, string> = { origin: 'http://loupe.test' };
+        const headers: Record<string, string> = { origin: 'http://loupe.test', ...extraHeaders };
         const isForm = body instanceof FormData;
         if (body !== undefined && !isForm) headers['content-type'] = 'application/json';
         if (cookies.size) {
@@ -64,7 +65,12 @@ function createClient(app: App) {
         get: (path: string) => request('GET', path),
         post: (path: string, body?: unknown) => request('POST', path, body),
         patch: (path: string, body?: unknown) => request('PATCH', path, body),
+        put: (path: string, body?: unknown) => request('PUT', path, body),
         delete: (path: string) => request('DELETE', path),
+        /** Sends a header with every following request. */
+        header: (name: string, value: string) => {
+            extraHeaders[name] = value;
+        },
     };
 }
 

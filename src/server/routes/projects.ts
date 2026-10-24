@@ -23,6 +23,9 @@ import {
     listProjects,
     updateProject,
 } from '../db/projects.ts';
+import { listReviews } from '../db/reviews.ts';
+import { countThreadsByViewer } from '../db/threads.ts';
+import { listViewers } from '../db/viewers.ts';
 import { apiError, parseJson } from '../http.ts';
 import { canManage, toMockup, toProject } from '../mockups/access.ts';
 import {
@@ -31,6 +34,7 @@ import {
     findExternalRefs,
     storeMockupFile,
 } from '../mockups/files.ts';
+import { toReviewerSummaries } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 // Multipart framing and the name field on top of the file itself.
@@ -140,6 +144,16 @@ export function projectRoutes({ db, config }: AppDeps) {
             const { mockup } = managedMockup(c, c.req.param('id'));
             updateMockup(db, mockup.id, { shareToken: randomToken() });
             return c.json(toMockup(config, managedMockup(c, mockup.id)));
+        })
+        .get('/mockups/:id/reviews', (c) => {
+            const { mockup, version } = managedMockup(c, c.req.param('id'));
+            return c.json(
+                toReviewerSummaries(
+                    listViewers(db, mockup.id),
+                    countThreadsByViewer(db, version.id),
+                    listReviews(db, version.id),
+                ),
+            );
         })
         .delete('/mockups/:id', async (c) => {
             const { mockup } = managedMockup(c, c.req.param('id'));

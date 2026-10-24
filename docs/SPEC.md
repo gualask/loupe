@@ -35,7 +35,8 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
 - **Thread**: either a **pin** (anchored to a DOM element) or a **general** comment. Has a status
   (`open` / `resolved`).
 - **Comment**: a message inside a thread. The first comment is the thread's body; the rest are
-  replies from viewers or editors.
+  replies from viewers or editors. A deleted comment is blanked but keeps its place; a thread left
+  without any visible comment is deleted.
 
 ### 2.1 Tables (SQLite)
 
@@ -115,8 +116,9 @@ mockup code cannot tamper with it.
 
 - On first visit to a share link the viewer is asked for a name (optional). Skipping assigns a
   generated name such as "Anonymous Fox".
-- The browser stores a secret **viewer key** per mockup in `localStorage`; the server stores its
-  hash. The key authorizes editing and deleting the viewer's own comments.
+- The browser stores a secret **viewer key** per mockup in `localStorage` and sends it in the
+  `X-Loupe-Viewer` header; the server stores its hash. The key authorizes editing and deleting
+  the viewer's own comments. Without a key, the threads can still be read.
 - Each viewer gets a color from a fixed 12-color palette, assigned in order of arrival
   (`color_index = viewers on this mockup mod 12`). Editors use a distinct neutral style with an
   "Editor" badge.
@@ -140,8 +142,11 @@ text match → `point`. Pins that cannot be resolved are listed as **orphaned** 
 
 ## 5. Viewer experience
 
-- **Floating toolbar** (draggable): Pin · General comment · Show/hide pins ·
-  Filter (mine / all / resolved) · presence avatars · save status · "Finish review".
+- **Floating toolbar** (draggable): Pin · General comment · Show/hide pins · save status ·
+  "Finish review" · shortcuts help.
+- **Header**: mockup name, viewport switcher, presence avatars and the side-panel toggle.
+- **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
+  marked. Editors can open it filtered to one viewer (`?viewer=<id>`).
 - **Pin flow**: press Pin (or `P`) → inspect mode → click an element → pin appears with a
   floating popover next to it → write → `Enter` / Send. `Esc` cancels; an empty pin is discarded.
 - **General comment** (`C`): a popover attached to the toolbar.
@@ -150,20 +155,25 @@ text match → `point`. Pins that cannot be resolved are listed as **orphaned** 
   viewport it was created at; switching shows a hint when it differs.
 - **Finish review**: verdict (Approved / Changes requested) + optional summary. Adding comments
   after submitting moves the review back to `in_progress` until submitted again.
+- **Moderation**: only editors resolve and reopen threads; authors edit their own comments;
+  authors and editors delete them. Read-only mockups accept changes from editors only.
 - **Shortcuts**: `P` pin, `C` comment, `H` hide pins, `Esc` cancel, `?` help.
 
 ### 5.1 Saving
 
 Comments are discrete actions, so there is no keystroke autosave. Every action (create, reply,
 edit, delete, resolve) is sent immediately with optimistic UI and a small status indicator:
-"Saving…" → "Saved ✓", or "Offline — retrying" with automatic retry. Unsent drafts are kept in
-`localStorage` per thread and restored on reload.
+"Saving…" → "Saved ✓", or "Offline — retrying" with automatic retry. Clients generate thread and
+comment ids, so a retried request is answered with what it already created. Unsent replies and
+general comments are kept in `localStorage` per thread and restored on reload.
 
 ### 5.2 Real time
 
-One **Server-Sent Events** channel per mockup version broadcasts thread/comment changes, review
-status and presence (join/leave with name and color). Loupe runs as a single process, so an
-in-memory pub/sub hub is sufficient. Clients reconnect with `Last-Event-ID` and refetch on gap.
+One **Server-Sent Events** channel per mockup version broadcasts the full state of each changed
+thread, deleted threads, review status and presence (who is connected, with name and color).
+Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The client reads the
+stream with `fetch`, so it can send the viewer key, reconnects with backoff, and refetches the
+threads on every (re)connection instead of replaying missed events.
 
 ## 6. Editor experience
 

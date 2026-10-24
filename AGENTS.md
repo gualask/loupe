@@ -7,9 +7,12 @@ documents, and serves the Preact web app built by Vite. The product and technica
 `docs/SPEC.md`; read it before changing behavior.
 
 - `src/server`: Hono app (`app.ts`), entry point (`index.ts`), maintenance CLI (`cli.ts`),
-  configuration (`config.ts`), HTTP routes (`routes/`), accounts and sessions (`auth/`), and all
-  database access (`db/`: schema, client and one module of query functions per table).
-- `src/web`: Preact single-page app (`App.tsx` routes, `pages/`, `components/`).
+  configuration (`config.ts`), HTTP routes (`routes/`), accounts and sessions (`auth/`), stored
+  mockups and their sandboxing (`mockups/`), share-link reviews and the real-time hub
+  (`review/`), and all database access (`db/`: schema, client and one module of query functions
+  per table).
+- `src/web`: Preact single-page app (`App.tsx` routes, `pages/`, `components/`, `ui/`) and the
+  review space behind share links (`viewer/`).
 - `src/bridge`: script inlined into every served mockup; runs inside the sandboxed iframe and talks
   to the app only through `postMessage`. Keep it dependency-free and small.
 - `src/shared`: Zod schemas and types shared by server, web app and bridge (API payloads, pin

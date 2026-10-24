@@ -3,10 +3,12 @@ import { Hono } from 'hono';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { sessionMiddleware } from './auth/session.ts';
+import { createHub } from './review/hub.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { authRoutes } from './routes/auth.ts';
 import { projectRoutes } from './routes/projects.ts';
 import { shareApiRoutes, shareContentRoutes } from './routes/share.ts';
+import { threadRoutes } from './routes/threads.ts';
 import type { AppDeps, AppEnv } from './types.ts';
 
 export function createApp(
@@ -19,6 +21,7 @@ export function createApp(
 ) {
     const { db, config, webRoot = './dist/web' } = deps;
     const app = new Hono<AppEnv>();
+    const hub = createHub();
 
     app.onError((err, c) => {
         if (err instanceof HTTPException) return err.getResponse();
@@ -35,6 +38,7 @@ export function createApp(
     app.route('/api/auth', authRoutes(deps));
     app.route('/api/admin', adminRoutes(deps));
     app.route('/api/s', shareApiRoutes(deps));
+    app.route('/api/s', threadRoutes({ ...deps, hub }));
     // Every project route resolves the signed-in user and answers 401 without one.
     app.route('/api', projectRoutes(deps));
     app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));

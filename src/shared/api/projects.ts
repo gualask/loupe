@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Author, Review } from './reviews.ts';
 
 const nameSchema = z.string().trim().min(1, 'Required').max(120, 'At most 120 characters');
 
@@ -52,4 +53,15 @@ export type Mockup = {
 export type ProjectDetail = Project & { mockups: Mockup[] };
 
 /** What a share link exposes before anything else is loaded. */
-export type SharedMockup = { name: string; readOnly: boolean; contentUrl: string };
+export type SharedMockup = {
+    mockupId: string;
+    name: string;
+    readOnly: boolean;
+    contentUrl: string;
+    /** An editor who manages the mockup, the viewer owning the viewer key, or null. */
+    me: Author | null;
+    /** Whether `me` may resolve threads and delete any comment. */
+    canModerate: boolean;
+    /** The viewer's own review of the current version. */
+    review: Review | null;
+};

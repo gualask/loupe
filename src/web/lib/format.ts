@@ -15,3 +15,16 @@ export function formatDate(iso: string) {
 export function formatDateTime(iso: string) {
     return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
+
+// English like the rest of the UI (localization is on the roadmap).
+const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+/** "just now", "5 minutes ago", "yesterday", then a date. */
+export function formatRelative(iso: string) {
+    const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
+    if (Math.abs(seconds) < 60) return 'just now';
+    if (Math.abs(seconds) < 3600) return relative.format(Math.round(seconds / 60), 'minute');
+    if (Math.abs(seconds) < 86_400) return relative.format(Math.round(seconds / 3600), 'hour');
+    if (Math.abs(seconds) < 7 * 86_400) return relative.format(Math.round(seconds / 86_400), 'day');
+    return formatDate(iso);
+}

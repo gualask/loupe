@@ -130,9 +130,13 @@ describe('share links', () => {
         const token = shareToken(mockup.shareUrl);
         const res = await t.client().get(`/api/s/${token}`);
         expect(res.body).toEqual({
+            mockupId: mockup.id,
             name: 'checkout',
             readOnly: false,
             contentUrl: `/s/${token}/content`,
+            me: null,
+            canModerate: false,
+            review: null,
         });
     });
 

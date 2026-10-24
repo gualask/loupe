@@ -1,22 +1,23 @@
-import { IconZoomScan } from '@tabler/icons-preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
-import type { SharedMockup } from '../../shared/api/projects.ts';
-import { MockupFrame } from '../components/MockupFrame.tsx';
-import { api } from '../lib/api.ts';
 import { CenteredCard } from '../ui/CenteredCard.tsx';
+import { ReviewSpace } from '../viewer/ReviewSpace.tsx';
+import { loadSharedMockup } from '../viewer/session.ts';
 
-/** What reviewers see when they open a share link. Pins and comments come next. */
+type Loaded = Awaited<ReturnType<typeof loadSharedMockup>>;
+
+/** What reviewers, and the editors managing the mockup, see when they open a share link. */
 export function ViewerPage() {
     const { params } = useRoute();
-    const [shared, setShared] = useState<SharedMockup | null>();
+    const token = params.token ?? '';
+    const [loaded, setLoaded] = useState<Loaded | null>();
 
     useEffect(() => {
-        api.get<SharedMockup>(`/s/${params.token}`).then(setShared, () => setShared(null));
-    }, [params.token]);
+        loadSharedMockup(token).then(setLoaded, () => setLoaded(null));
+    }, [token]);
 
-    if (shared === undefined) return null;
-    if (shared === null) {
+    if (loaded === undefined) return null;
+    if (loaded === null) {
         return (
             <CenteredCard title="Link not available">
                 <p class="text-sm text-stone-600">
@@ -26,19 +27,5 @@ export function ViewerPage() {
             </CenteredCard>
         );
     }
-
-    return (
-        <div class="flex h-dvh flex-col bg-stone-100">
-            <header class="flex h-11 shrink-0 items-center gap-3 border-stone-200 border-b bg-white px-4 text-sm">
-                <IconZoomScan size={18} stroke={1.75} />
-                <span class="font-medium">{shared.name}</span>
-                {shared.readOnly ? (
-                    <span class="rounded-full bg-stone-100 px-2 py-0.5 text-stone-600 text-xs">
-                        Read-only
-                    </span>
-                ) : null}
-            </header>
-            <MockupFrame src={shared.contentUrl} title={shared.name} class="w-full flex-1" />
-        </div>
-    );
+    return <ReviewSpace key={token} token={token} shared={loaded.shared} viewerKey={loaded.key} />;
 }

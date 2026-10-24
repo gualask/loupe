@@ -30,6 +30,19 @@ server. Local data is stored in `./data`.
 | `pnpm db:generate` | Generate a migration after changing the database schema |
 | `docker build -t loupe .` | Build the production image |
 
+## Releases
+
+Pushing a version tag runs `.github/workflows/release.yml`: the same checks as above, then a
+multi-platform image (`linux/amd64`, `linux/arm64`) published to
+`ghcr.io/gualask/loupe`. Nothing runs on branch pushes.
+
+1. Move the `[Unreleased]` entries of `CHANGELOG.md` into the new version and commit.
+2. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
+
+A stable version (`v1.2.3`) is tagged `1.2.3`, `1.2` and `latest`; a pre-release
+(`v1.2.3-rc.1`) only gets its own tag. The first published image is private on GitHub: make the
+package public once in its settings.
+
 ## Project layout and conventions
 
 Code layout, coding rules, security invariants and the changelog policy are described in

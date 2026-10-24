@@ -39,6 +39,7 @@
     "devDependencies": {
         "@biomejs/biome": "^2.6.2",
         "@preact/preset-vite": "^2.10.6",
+        "@preact/signals": "^2.11.3",
         "@tabler/icons-preact": "^3.49.0",
         "@tailwindcss/vite": "^4.3.3",
         "@types/node": "^24.19.2",

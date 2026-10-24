@@ -1,6 +1,9 @@
 // Runs the bridge build in watch mode, the Hono server with --watch and the Vite dev server.
 import { spawn } from 'node:child_process';
 
+// Links printed by the server (setup, invites) should open the Vite dev server.
+const env = { LOUPE_PUBLIC_URL: 'http://localhost:5173', ...process.env };
+
 const tasks = [
     ['bridge', 'pnpm', ['exec', 'vite', 'build', '-c', 'vite.bridge.config.ts', '--watch']],
     ['server', 'node', ['--watch', 'src/server/index.ts']],
@@ -8,7 +11,7 @@ const tasks = [
 ];
 
 const children = tasks.map(([name, command, args]) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const prefix = `[${name}] `;
     for (const stream of [child.stdout, child.stderr]) {
         stream.on('data', (chunk) => {

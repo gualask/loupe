@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createApp } from './app.ts';
-import { openDb } from './db/client.ts';
+import { createTestApp } from './test-utils.ts';
 
 describe('createApp', () => {
-    const app = createApp({ db: openDb(':memory:') });
+    const { app } = createTestApp();
 
     it('reports health once migrations are applied', async () => {
         const res = await app.request('/healthz');

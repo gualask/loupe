@@ -6,8 +6,9 @@ Loupe is a single Node.js process: a Hono server that exposes the API, serves sa
 documents, and serves the Preact web app built by Vite. The product and technical reference is
 `docs/SPEC.md`; read it before changing behavior.
 
-- `src/server`: Hono app (`app.ts`), entry point (`index.ts`), configuration (`config.ts`),
-  Drizzle schema and database client (`db/`).
+- `src/server`: Hono app (`app.ts`), entry point (`index.ts`), maintenance CLI (`cli.ts`),
+  configuration (`config.ts`), HTTP routes (`routes/`), accounts and sessions (`auth/`), and all
+  database access (`db/`: schema, client and one module of query functions per table).
 - `src/web`: Preact single-page app (`App.tsx` routes, `pages/`, `components/`).
 - `src/bridge`: script inlined into every served mockup; runs inside the sandboxed iframe and talks
   to the app only through `postMessage`. Keep it dependency-free and small.
@@ -97,8 +98,9 @@ consolidate `[Unreleased]` into the new version; never edit released sections.
 
 ## Testing Guidelines
 
-Colocate tests as `*.test.ts` / `*.test.tsx`. Test server routes through `app.request()` against
-an in-memory database (`openDb(':memory:')`), which applies the real migrations. Prefer tests that
+Colocate tests as `*.test.ts` / `*.test.tsx`. Test server routes with `createTestApp()` from
+`src/server/test-utils.ts`: an in-memory database with the real migrations and a client that keeps
+cookies. Prefer tests that
 assert complete response payloads over tests that only check status codes.
 
 Run the narrowest relevant checks, then broaden them in proportion to the change. Before handing

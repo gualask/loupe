@@ -24,7 +24,9 @@ COPY package.json ./
 COPY drizzle ./drizzle
 COPY src/server ./src/server
 COPY src/shared ./src/shared
-RUN mkdir /data && chown node:node /data
+RUN mkdir /data && chown node:node /data \
+    && printf '#!/bin/sh\nexec node /app/src/server/cli.ts "$@"\n' > /usr/local/bin/loupe \
+    && chmod +x /usr/local/bin/loupe
 USER node
 VOLUME /data
 EXPOSE 3000

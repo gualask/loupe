@@ -66,12 +66,16 @@ No email server is required. Every account flow is a **single-use link** that ex
 - **Invite**: an admin creates an invite for a role and copies the link (`/invite/<token>`,
   valid 48 h). The invitee chooses username, display name and password.
 - **Password reset**: an admin generates a reset link for a user (`/reset/<token>`, valid 24 h).
+  Using it signs the user out of every session.
+- **Account management**: admins change roles and disable accounts (which ends their sessions).
+  Admins cannot change their own account, so at least one admin always remains.
 - **Locked-out admin**: `docker exec loupe loupe reset-link <username>` prints a reset link.
 - **Passwords**: `scrypt` from `node:crypto`, minimum 10 characters.
 - **Sessions**: opaque id in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` when
   `LOUPE_PUBLIC_URL` is https), stored hashed in SQLite, sliding expiry (default 30 days).
 - **CSRF**: Hono `csrf()` middleware (Origin check) on all state-changing routes.
-- **Brute force**: in-memory rate limit on login and token endpoints.
+- **Brute force**: in-memory limit of 10 failed logins per username per 15 minutes. Account
+  links carry 256-bit secrets and need no limit.
 - **Roadmap**: optional SMTP to email invite/reset links (v1.x); OIDC single sign-on (later).
 
 ## 4. Mockup viewing
@@ -199,7 +203,8 @@ All settings are environment variables prefixed with `LOUPE_`, validated at star
 GET  /healthz
 
 POST /api/auth/login | /api/auth/logout        GET /api/auth/me
-POST /api/auth/setup/:token | invite/:token | reset/:token
+GET  /api/auth/tokens/:token                    what a setup/invite/reset link is for
+POST /api/auth/tokens/:token                    redeem it (create account or set password)
 POST /api/admin/invites                         POST /api/admin/users/:id/reset-link
 GET  /api/admin/users                           PATCH /api/admin/users/:id
 

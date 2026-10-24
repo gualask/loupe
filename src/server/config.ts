@@ -10,6 +10,8 @@ const envSchema = z.object({
     LOUPE_SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
 });
 
+export type Config = ReturnType<typeof loadConfig>;
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     const parsed = envSchema.safeParse(env);
     if (!parsed.success) {

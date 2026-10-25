@@ -179,6 +179,7 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 - **Floating toolbar** (draggable): Pin · General comment · Show/hide pins · save status ·
   "Finish review" · shortcuts help.
 - **Header**: mockup name, viewport switcher, presence avatars and the side-panel toggle.
+  Editors also get a link back to the mockup page.
 - **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
   marked. Editors can open it filtered to one viewer (`?viewer=<id>`).
 - **Narrow screens** (below 768 px, e.g. phones): the side panel covers the mockup instead of
@@ -223,7 +224,8 @@ answer on reconnection is final: the client stops retrying and shows the link as
 ## 6. Editor experience
 
 - **Workspace**: list of own projects (admins can switch to any user's workspace).
-- **Project**: list of mockups with open/resolved counts and last activity.
+- **Project**: list of mockups with open/resolved counts and last activity; each row renames
+  (inline) or deletes its mockup.
 - **Upload**: drag & drop an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
   self-contained.

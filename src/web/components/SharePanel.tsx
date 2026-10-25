@@ -6,6 +6,7 @@ import { shareState } from '../lib/share.ts';
 import { Button } from '../ui/Button.tsx';
 import { CopyField } from '../ui/CopyField.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { buttonClass } from '../ui/styles.ts';
 
 /** `datetime-local` works in local time without a zone; convert both ways. */
 function toLocalInput(iso: string | null) {
@@ -73,7 +74,7 @@ export function SharePanel({
     const state = shareState(mockup);
 
     return (
-        <section class="flex flex-col gap-4 rounded-xl border border-stone-200 bg-white p-5">
+        <section class="flex flex-col gap-4 p-5">
             <div class="flex items-center justify-between gap-2">
                 <h2 class="font-semibold">Share</h2>
                 <span class="text-stone-500 text-xs">{state}</span>
@@ -84,7 +85,7 @@ export function SharePanel({
                     href={mockup.shareUrl}
                     target="_blank"
                     rel="noopener"
-                    class="inline-flex items-center gap-2 rounded-md px-3 py-2 font-medium text-sm text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                    class={buttonClass('ghost')}
                 >
                     <IconExternalLink size={16} />
                     Open link

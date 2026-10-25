@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
-import { errorMessage } from '../lib/api.ts';
+import { useFormSubmit } from '../lib/form.ts';
 import { Button } from './Button.tsx';
 import { FormError } from './FormError.tsx';
 
@@ -16,22 +15,12 @@ export function FormCard({
     onCancel: () => void;
     children: ComponentChildren;
 }) {
-    const [error, setError] = useState<string>();
-
-    async function submit(e: Event) {
-        e.preventDefault();
-        setError(undefined);
-        try {
-            await onSubmit();
-        } catch (err) {
-            setError(errorMessage(err));
-        }
-    }
+    const { error, submit } = useFormSubmit(onSubmit);
 
     return (
         <form
-            class="flex flex-col gap-4 rounded-xl border border-stone-200 bg-white p-5"
-            onSubmit={(e) => void submit(e)}
+            class="flex max-w-xl flex-col gap-4 rounded-xl border border-stone-200 bg-white p-5"
+            onSubmit={submit}
         >
             {children}
             <FormError message={error} />

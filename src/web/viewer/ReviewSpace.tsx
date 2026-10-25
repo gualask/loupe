@@ -1,4 +1,5 @@
 import {
+    IconArrowLeft,
     IconDeviceDesktop,
     IconDeviceMobile,
     IconDeviceTablet,
@@ -35,6 +36,8 @@ const VIEWPORT_HINT_PX = 100;
 // Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 const DRAFT_PIN = 'draft';
+const HEADER_BUTTON =
+    'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900';
 
 /** What is being written; `body` refills the box after the server rejected it. */
 type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & { body?: string };
@@ -81,6 +84,7 @@ export function ReviewSpace({
 
     const shared = session.shared.value;
     const me = session.me.value;
+    const isEditor = me?.kind === 'editor';
     const threads = session.threads.value;
     const mayWrite = session.mayWrite.value;
 
@@ -332,6 +336,16 @@ export function ReviewSpace({
     return (
         <div class="flex h-dvh flex-col bg-stone-100 text-stone-900">
             <header class="flex h-12 shrink-0 items-center gap-3 border-stone-200 border-b bg-white px-4 text-sm">
+                {isEditor ? (
+                    <a
+                        href={`/mockups/${shared.mockupId}`}
+                        title="Back to the mockup page"
+                        class={`-ml-2 shrink-0 ${HEADER_BUTTON}`}
+                    >
+                        <IconArrowLeft size={18} />
+                        <span class="hidden sm:inline">Back</span>
+                    </a>
+                ) : null}
                 <IconZoomScan size={18} stroke={1.75} class="shrink-0" />
                 <span class="truncate font-medium">{shared.name}</span>
                 {shared.readOnly ? (
@@ -370,7 +384,7 @@ export function ReviewSpace({
                         onClick={() => setPanelOpen((open) => !open)}
                         aria-pressed={panelOpen}
                         title="Comments panel"
-                        class="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-stone-600 hover:bg-stone-100"
+                        class={HEADER_BUTTON}
                     >
                         <IconLayoutSidebarRight size={18} />
                         <span class="tabular-nums">
@@ -415,7 +429,7 @@ export function ReviewSpace({
                 pinsHidden={pinsHidden}
                 mayWrite={mayWrite}
                 saveState={session.saveState.value}
-                review={me?.kind === 'editor' ? undefined : shared.review}
+                review={isEditor ? undefined : shared.review}
                 onPin={startPin}
                 onComment={startComment}
                 onTogglePins={() => setPinsHidden((hidden) => !hidden)}

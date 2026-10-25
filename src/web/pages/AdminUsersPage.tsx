@@ -7,6 +7,7 @@ import { currentUser } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { CopyField } from '../ui/CopyField.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { PageHeader } from '../ui/PageHeader.tsx';
 
 function InviteSection() {
     const [role, setRole] = useState<Role>('editor');
@@ -148,16 +149,20 @@ export function AdminUsersPage() {
     return (
         <AppShell>
             <div class="flex flex-col gap-6">
-                <h1 class="font-semibold text-2xl tracking-tight">Users</h1>
-                <InviteSection />
+                <PageHeader title="Users" />
                 <FormError message={error} />
-                {users ? (
-                    <ul class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
-                        {users.map((user) => (
-                            <UserRow key={user.id} user={user} onChange={replace} />
-                        ))}
-                    </ul>
-                ) : null}
+                <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                    {users ? (
+                        <ul class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
+                            {users.map((user) => (
+                                <UserRow key={user.id} user={user} onChange={replace} />
+                            ))}
+                        </ul>
+                    ) : null}
+                    <div class="xl:col-start-2">
+                        <InviteSection />
+                    </div>
+                </div>
             </div>
         </AppShell>
     );

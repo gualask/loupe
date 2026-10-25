@@ -1,33 +1,11 @@
 import { IconCheck, IconPencil, IconRotate, IconTrash, IconX } from '@tabler/icons-preact';
-import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import type { Comment, Thread } from '../../shared/api/reviews.ts';
 import { formatRelative } from '../lib/format.ts';
+import { IconButton } from '../ui/IconButton.tsx';
 import { AuthorName, Avatar } from './Avatar.tsx';
 import { Composer } from './Composer.tsx';
 import type { ReviewSession } from './session.ts';
-
-function IconButton({
-    label,
-    onClick,
-    children,
-}: {
-    label: string;
-    onClick: () => void;
-    children: ComponentChildren;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-label={label}
-            title={label}
-            class="grid size-7 place-items-center rounded-md text-stone-500 hover:bg-stone-100 hover:text-stone-900"
-        >
-            {children}
-        </button>
-    );
-}
 
 function CommentItem({ comment, session }: { comment: Comment; session: ReviewSession }) {
     // The text being edited, or null when not editing.

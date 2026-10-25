@@ -1,5 +1,6 @@
 import type { InputHTMLAttributes } from 'preact';
 import { useId } from 'preact/hooks';
+import { INPUT_CLASS } from './styles.ts';
 
 type Props = Pick<
     InputHTMLAttributes<HTMLInputElement>,
@@ -15,7 +16,7 @@ export function TextField({ label, hint, type = 'text', ...input }: Props) {
     const props = {
         ...input,
         id,
-        class: 'rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-500 focus:ring-2 focus:ring-stone-200',
+        class: INPUT_CLASS,
     };
     return (
         <div class="flex flex-col gap-1.5">

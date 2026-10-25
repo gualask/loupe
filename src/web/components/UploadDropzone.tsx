@@ -2,7 +2,16 @@ import { IconUpload } from '@tabler/icons-preact';
 import { useRef, useState } from 'preact/hooks';
 
 /** Drop target and file picker for HTML mockups. */
-export function UploadDropzone({ onFile, busy }: { onFile: (file: File) => void; busy: boolean }) {
+export function UploadDropzone({
+    onFile,
+    busy,
+    compact = false,
+}: {
+    onFile: (file: File) => void;
+    busy: boolean;
+    /** A single line, once the project already lists mockups. */
+    compact?: boolean;
+}) {
     const input = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
 
@@ -25,7 +34,7 @@ export function UploadDropzone({ onFile, busy }: { onFile: (file: File) => void;
                 }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
-                class={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors disabled:opacity-60 ${
+                class={`flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors disabled:opacity-60 ${compact ? 'flex-wrap px-4 py-3' : 'flex-col p-8'} ${
                     dragging
                         ? 'border-stone-500 bg-stone-100'
                         : 'border-stone-300 bg-white hover:border-stone-400'

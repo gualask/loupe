@@ -1,4 +1,3 @@
-import { IconMessages } from '@tabler/icons-preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { Review, ReviewerSummary } from '../../shared/api/reviews.ts';
 import { api } from '../lib/api.ts';
@@ -30,17 +29,8 @@ export function ReviewsPanel({ mockupId, token }: { mockupId: string; token: str
     }, [mockupId]);
 
     return (
-        <section class="flex flex-col rounded-xl border border-stone-200 bg-white text-sm">
-            <header class="flex items-center justify-between gap-4 px-5 py-4">
-                <h2 class="font-semibold">Reviews</h2>
-                <a
-                    href={`/s/${token}`}
-                    class="inline-flex items-center gap-1.5 rounded-md bg-stone-900 px-3 py-2 font-medium text-white hover:bg-stone-700"
-                >
-                    <IconMessages size={16} />
-                    Open review space
-                </a>
-            </header>
+        <section class="flex flex-col text-sm">
+            <h2 class="px-5 py-4 font-semibold">Reviews</h2>
             {reviewers?.length ? (
                 <ul class="divide-y divide-stone-100 border-stone-100 border-t">
                     {reviewers.map(({ viewer, review, threads, lastSeenAt }) => (

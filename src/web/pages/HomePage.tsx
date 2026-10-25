@@ -9,6 +9,7 @@ import { currentUser } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { FormCard } from '../ui/FormCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { PageHeader } from '../ui/PageHeader.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
 function NewProjectForm({ onCancel }: { onCancel: () => void }) {
@@ -114,23 +115,28 @@ export function HomePage() {
     return (
         <AppShell>
             <div class="flex flex-col gap-6">
-                <div class="flex flex-wrap items-center gap-4">
-                    <h1 class="font-semibold text-2xl tracking-tight">Workspace</h1>
-                    {user?.role === 'admin' && projects ? (
-                        <WorkspacePicker
-                            projects={projects}
-                            value={owner}
-                            onChange={(value) => route(value ? `${path}?owner=${value}` : path)}
-                        />
-                    ) : null}
-                    <span class="flex-1" />
-                    {creating ? null : (
-                        <Button onClick={() => setCreating(true)}>
-                            <IconPlus size={16} />
-                            New project
-                        </Button>
-                    )}
-                </div>
+                <PageHeader
+                    title="Workspace"
+                    actions={
+                        <>
+                            {user?.role === 'admin' && projects ? (
+                                <WorkspacePicker
+                                    projects={projects}
+                                    value={owner}
+                                    onChange={(value) =>
+                                        route(value ? `${path}?owner=${value}` : path)
+                                    }
+                                />
+                            ) : null}
+                            {creating ? null : (
+                                <Button onClick={() => setCreating(true)}>
+                                    <IconPlus size={16} />
+                                    New project
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
                 {creating ? <NewProjectForm onCancel={() => setCreating(false)} /> : null}
                 <FormError message={error} />
                 {shown?.length === 0 && !creating ? (
@@ -142,7 +148,7 @@ export function HomePage() {
                     </div>
                 ) : null}
                 {shown?.length ? (
-                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-4">
                         {shown.map((project) => (
                             <ProjectCard key={project.id} project={project} />
                         ))}

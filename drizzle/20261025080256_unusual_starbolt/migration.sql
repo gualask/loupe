@@ -4,12 +4,9 @@ CREATE TABLE `account_tokens` (
 	`kind` text NOT NULL,
 	`role` text,
 	`user_id` text,
-	`created_by` text,
 	`created_at` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
 	`expires_at` integer NOT NULL,
-	`used_at` integer,
-	CONSTRAINT `fk_account_tokens_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_account_tokens_created_by_users_id_fk` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+	CONSTRAINT `fk_account_tokens_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 );
 --> statement-breakpoint
 CREATE TABLE `comments` (
@@ -61,7 +58,6 @@ CREATE TABLE `projects` (
 	`name` text NOT NULL,
 	`description` text DEFAULT '' NOT NULL,
 	`created_at` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
-	`archived_at` integer,
 	CONSTRAINT `fk_projects_owner_id_users_id_fk` FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`)
 );
 --> statement-breakpoint

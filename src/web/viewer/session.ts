@@ -18,18 +18,34 @@ const MAX_RETRY_MS = 30_000;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'offline';
 
+// The viewer key belongs to the mockup, so it survives a regenerated link. Remembering which
+// mockup a link opens lets the first request already carry the key.
 const viewerKeyName = (mockupId: string) => `loupe:viewer:${mockupId}`;
+const linkMockupName = (token: string) => `loupe:link:${token}`;
 
 /**
  * Loads a share link as the current browser sees it: editors through their session, viewers
  * through the viewer key stored for that mockup.
  */
 export async function loadSharedMockup(token: string) {
-    const shared = await api.get<SharedMockup>(`/s/${token}`);
-    const key = shared.me ? null : storage.get(viewerKeyName(shared.mockupId));
+    const knownMockupId = storage.get(linkMockupName(token));
+    const sentKey = knownMockupId ? storage.get(viewerKeyName(knownMockupId)) : null;
+    const shared = await api.get<SharedMockup>(
+        `/s/${token}`,
+        sentKey ? { [VIEWER_KEY_HEADER]: sentKey } : undefined,
+    );
+    storage.set(linkMockupName(token), shared.mockupId);
+    // Editors are recognized by their session; a viewer key is then ignored.
+    if (shared.me) return { shared, key: shared.me.kind === 'viewer' ? sentKey : null };
+
+    const key = storage.get(viewerKeyName(shared.mockupId));
     if (!key) return { shared, key: null };
-    const identified = await api.get<SharedMockup>(`/s/${token}`, { [VIEWER_KEY_HEADER]: key });
-    if (identified.me) return { shared: identified, key };
+    // Unknown link (e.g. regenerated): identify with the mockup's key now.
+    if (key !== sentKey) {
+        const identified = await api.get<SharedMockup>(`/s/${token}`, { [VIEWER_KEY_HEADER]: key });
+        if (identified.me) return { shared: identified, key };
+    }
+    // The server no longer knows this key.
     storage.remove(viewerKeyName(shared.mockupId));
     return { shared, key: null };
 }
@@ -60,9 +76,10 @@ export function createReviewSession(
     let pending = 0;
 
     const me = computed(() => shared.value.me);
-    const canWrite = computed(
-        () => !!me.value && (shared.value.canModerate || !shared.value.readOnly),
-    );
+    /** Whether changes are accepted here at all; a viewer may first have to choose a name. */
+    const mayWrite = computed(() => shared.value.canModerate || !shared.value.readOnly);
+    /** Whether this browser can change things right now: writing is open and it has an identity. */
+    const canWrite = computed(() => !!me.value && mayWrite.value);
     const headers = () => (key ? { [VIEWER_KEY_HEADER]: key } : undefined);
 
     function upsert(thread: Thread) {
@@ -90,6 +107,12 @@ export function createReviewSession(
                     return await send();
                 } catch (err) {
                     if (err instanceof ApiError) {
+                        // An editor's session ended: sign in again, then come back here.
+                        if (err.status === 401 && me.value?.kind === 'editor') {
+                            const here = location.pathname + location.search;
+                            location.assign(`/login?next=${encodeURIComponent(here)}`);
+                            return undefined;
+                        }
                         error.value = errorMessage(err);
                         await refresh().catch(() => undefined);
                         return undefined;
@@ -153,6 +176,7 @@ export function createReviewSession(
         saveState,
         error,
         me,
+        mayWrite,
         canWrite,
         connect,
         disconnect: () => closeStream?.(),
@@ -219,7 +243,12 @@ export function createReviewSession(
                     c.id === comment.id ? { ...c, body: '', deleted: true } : c,
                 ),
             }));
-            void perform(() => api.delete(`${base}/comments/${comment.id}`, headers()));
+            void perform(() =>
+                api.delete(`${base}/comments/${comment.id}`, headers()).catch((err) => {
+                    // A retry after a lost response: the comment is already gone.
+                    if (!(err instanceof ApiError && err.status === 404)) throw err;
+                }),
+            );
         },
 
         setStatus(threadId: string, status: Thread['status']) {

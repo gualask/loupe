@@ -45,17 +45,19 @@ function ToolButton({
 
 function SaveStatus({ state }: { state: SaveState }) {
     if (state === 'idle') return null;
-    const content = {
-        saving: [<IconLoader2 key="i" size={14} class="animate-spin" />, 'Saving…'],
-        saved: [<IconCheck key="i" size={14} />, 'Saved'],
-        offline: [<IconCloudOff key="i" size={14} />, 'Offline — retrying'],
+    const { icon, label } = {
+        saving: { icon: <IconLoader2 size={14} class="animate-spin" />, label: 'Saving…' },
+        saved: { icon: <IconCheck size={14} />, label: 'Saved' },
+        offline: { icon: <IconCloudOff size={14} />, label: 'Offline — retrying' },
     }[state];
     return (
         <span
             role="status"
             class={`flex items-center gap-1 px-1 text-xs ${state === 'offline' ? 'text-amber-700' : 'text-stone-500'}`}
         >
-            {content}
+            {icon}
+            {/* Icon only on narrow screens, where the toolbar has no room for words. */}
+            <span class="sr-only sm:not-sr-only">{label}</span>
         </span>
     );
 }
@@ -70,7 +72,7 @@ export function Toolbar({
     toolbarRef,
     inspecting,
     pinsHidden,
-    canWrite,
+    mayWrite,
     saveState,
     review,
     onPin,
@@ -82,7 +84,8 @@ export function Toolbar({
     toolbarRef: RefObject<HTMLDivElement | null>;
     inspecting: boolean;
     pinsHidden: boolean;
-    canWrite: boolean;
+    /** Writing is open; the actions ask a viewer for a name first if needed. */
+    mayWrite: boolean;
     saveState: SaveState;
     /** The viewer's review; undefined for editors, who do not submit one. */
     review: Review | null | undefined;
@@ -109,7 +112,7 @@ export function Toolbar({
     return (
         <div
             ref={toolbarRef}
-            class="fixed bottom-5 left-1/2 z-20 flex items-center gap-1 rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
+            class="fixed bottom-5 left-1/2 z-20 flex max-w-[calc(100vw-1rem)] items-center gap-1 rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
             style={{ transform: `translate(calc(-50% + ${offset.x}px), ${offset.y}px)` }}
         >
             <span
@@ -127,20 +130,20 @@ export function Toolbar({
                 label="Place a pin"
                 shortcut="P"
                 active={inspecting}
-                disabled={!canWrite}
+                disabled={!mayWrite}
                 onClick={onPin}
             >
                 <IconMapPin size={18} />
-                Pin
+                <span class="hidden sm:inline">Pin</span>
             </ToolButton>
             <ToolButton
                 label="General comment"
                 shortcut="C"
-                disabled={!canWrite}
+                disabled={!mayWrite}
                 onClick={onComment}
             >
                 <IconMessage size={18} />
-                Comment
+                <span class="hidden sm:inline">Comment</span>
             </ToolButton>
             <ToolButton
                 label={pinsHidden ? 'Show pins' : 'Hide pins'}
@@ -154,11 +157,13 @@ export function Toolbar({
                 <button
                     type="button"
                     onClick={onFinish}
-                    disabled={!canWrite}
-                    class={`ml-1 flex items-center gap-1.5 rounded-lg px-3 py-2 font-medium text-sm disabled:opacity-40 ${review?.status === 'submitted' ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'bg-stone-900 text-white hover:bg-stone-700'}`}
+                    disabled={!mayWrite}
+                    class={`ml-1 flex min-w-0 items-center gap-1.5 rounded-lg px-3 py-2 font-medium text-sm disabled:opacity-40 ${review?.status === 'submitted' ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'bg-stone-900 text-white hover:bg-stone-700'}`}
                 >
-                    {review?.status === 'submitted' ? <IconCheck size={16} /> : null}
-                    {reviewLabel(review)}
+                    {review?.status === 'submitted' ? (
+                        <IconCheck size={16} class="shrink-0" />
+                    ) : null}
+                    <span class="truncate">{reviewLabel(review)}</span>
                 </button>
             ) : null}
             <ToolButton label="Keyboard shortcuts" shortcut="?" onClick={onHelp}>

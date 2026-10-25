@@ -74,7 +74,7 @@ function createClient(app: App) {
     };
 }
 
-/** The secret part of an account link URL. */
+/** The secret at the end of an account or share link URL. */
 export function tokenFromUrl(url: string) {
     return url.slice(url.lastIndexOf('/') + 1);
 }

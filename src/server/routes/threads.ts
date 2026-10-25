@@ -4,6 +4,7 @@ import { streamSSE } from 'hono/streaming';
 import {
     createCommentRequestSchema,
     createThreadRequestSchema,
+    type Review,
     submitReviewRequestSchema,
     updateCommentRequestSchema,
     updateThreadRequestSchema,
@@ -17,7 +18,8 @@ import {
     listThreads,
     updateThreadStatus,
 } from '../db/threads.ts';
-import { apiError, parseJson } from '../http.ts';
+import { apiError, notFound, parseJson } from '../http.ts';
+import { createWindowLimiter } from '../rate-limit.ts';
 import {
     authorIds,
     isAuthor,
@@ -30,31 +32,44 @@ import type { Hub } from '../review/hub.ts';
 import { toReview, toThread } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
+// A retried creation reusing an id that belongs to something else.
+const CONFLICT = 'This conflicts with something that already exists. Reload and retry.';
+
 // Keeps idle connections open through proxies that drop silent ones.
 const HEARTBEAT_MS = 25_000;
 
 /** Threads, comments, reviews and the event stream of a share link, mounted under /api/s. */
 export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
-    /** The mockup and actor for a change; read-only mockups accept changes from editors only. */
+    // Far above a person typing comments; stops scripts flooding a mockup.
+    const viewerChanges = createWindowLimiter({ max: 30, windowMs: 60 * 1000 });
+
+    /**
+     * The mockup and actor for a change; read-only mockups accept changes from editors only.
+     * Viewers are rate limited, editors are trusted.
+     */
     function writer(c: Context<AppEnv>) {
         const row = sharedMockup(db, c);
         const actor = shareActor(db, c, row);
         if (!actor) throw apiError(401, 'viewer_required', 'Choose a name before commenting.');
-        if (actor.kind === 'viewer' && row.mockup.readOnly) {
-            throw apiError(403, 'read_only', 'This mockup is read-only.');
+        if (actor.kind === 'viewer') {
+            if (row.mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
+            if (viewerChanges.isBlocked(actor.viewer.id)) {
+                throw apiError(429, 'too_many_requests', 'Too many changes, retry in a minute.');
+            }
+            viewerChanges.record(actor.viewer.id);
         }
         return { row, actor };
     }
 
     function threadOf(row: SharedMockupRow, id: string) {
         const thread = findThread(db, id);
-        if (!thread || thread.versionId !== row.version.id) throw apiError(404, 'not_found');
+        if (!thread || thread.versionId !== row.version.id) throw notFound();
         return thread;
     }
 
     function loadThread(id: string) {
         const found = findThreadWithComments(db, id);
-        if (!found) throw apiError(404, 'not_found');
+        if (!found) throw notFound();
         return toThread(found);
     }
 
@@ -65,11 +80,20 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
         return thread;
     }
 
+    /** A review is private to its viewer: only their own connections (e.g. other tabs) hear of it. */
+    function publishReview(row: SharedMockupRow, review: Review) {
+        hub.publish(
+            row.version.id,
+            { type: 'review', review },
+            (participant) => participant?.kind === 'viewer' && participant.id === review.viewerId,
+        );
+    }
+
     /** Feedback from a viewer starts their review, or reopens a submitted one. */
     function noteFeedback(row: SharedMockupRow, actor: ShareActor) {
         if (actor.kind !== 'viewer') return;
         const review = reopenReview(db, row.version.id, actor.viewer.id);
-        if (review) hub.publish(row.version.id, { type: 'review', review: toReview(review) });
+        if (review) publishReview(row, toReview(review));
     }
 
     return new Hono<AppEnv>()
@@ -84,7 +108,7 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
             if (existing) {
                 // A retried request: answer with the thread it already created.
                 if (existing.versionId !== row.version.id || !isAuthor(actor, existing)) {
-                    throw apiError(409, 'conflict');
+                    throw apiError(409, 'conflict', CONFLICT);
                 }
                 return c.json(loadThread(existing.id));
             }
@@ -119,7 +143,7 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
             const existing = findComment(db, input.id);
             if (existing) {
                 if (existing.comment.threadId !== thread.id || !isAuthor(actor, existing.comment)) {
-                    throw apiError(409, 'conflict');
+                    throw apiError(409, 'conflict', CONFLICT);
                 }
                 return c.json(loadThread(thread.id));
             }
@@ -131,7 +155,7 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
             const { row, actor } = writer(c);
             const found = findComment(db, c.req.param('id'));
             if (!found || found.versionId !== row.version.id || found.comment.deletedAt) {
-                throw apiError(404, 'not_found');
+                throw notFound();
             }
             if (!isAuthor(actor, found.comment)) {
                 throw apiError(403, 'forbidden', 'You can only edit your own comments.');
@@ -144,7 +168,7 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
             const { row, actor } = writer(c);
             const found = findComment(db, c.req.param('id'));
             if (!found || found.versionId !== row.version.id || found.comment.deletedAt) {
-                throw apiError(404, 'not_found');
+                throw notFound();
             }
             if (actor.kind !== 'editor' && !isAuthor(actor, found.comment)) {
                 throw apiError(403, 'forbidden', 'You can only delete your own comments.');
@@ -164,14 +188,16 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
             }
             const input = await parseJson(c, submitReviewRequestSchema);
             const review = submitReview(db, row.version.id, actor.viewer.id, input);
-            if (!review) throw apiError(500, 'internal_error');
+            if (!review) throw apiError(500, 'internal_error', 'The review could not be saved.');
             const body = toReview(review);
-            hub.publish(row.version.id, { type: 'review', review: body });
+            publishReview(row, body);
             return c.json(body);
         })
         .get('/:token/events', (c) => {
             const row = sharedMockup(db, c);
             const participant = shareActor(db, c, row)?.author ?? null;
+            // Reverse proxies such as nginx would otherwise hold events back in their buffer.
+            c.header('X-Accel-Buffering', 'no');
             return streamSSE(c, async (stream) => {
                 const leave = hub.join(row.version.id, participant, (event) => {
                     stream.writeSSE({ data: JSON.stringify(event) }).catch(() => undefined);

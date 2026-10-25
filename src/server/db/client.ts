@@ -9,6 +9,11 @@ const migrationsFolder = fileURLToPath(new URL('../../../drizzle', import.meta.u
 
 export type Db = ReturnType<typeof openDb>;
 
+/** Opens Loupe's database inside the data directory. */
+export function openDataDb(dataDir: string) {
+    return openDb(path.join(dataDir, 'loupe.db'));
+}
+
 /** Opens the SQLite database (`:memory:` for tests) and applies pending migrations. */
 export function openDb(file: string) {
     if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });

@@ -1,16 +1,31 @@
-/** An error response from the API: `{ error: <code>, message? }`. */
+// The API sends a message with every error; responses that are not from it (a proxy's 502, a
+// rejected cross-site request) get one from their status.
+function fallbackMessage(status: number) {
+    return status >= 500
+        ? `The server had a problem (error ${status}). Retry later.`
+        : `The request failed (error ${status}). Reload the page and retry.`;
+}
+
+/** An error response from the API: `{ error: <code>, message }`. */
 export class ApiError extends Error {
     readonly status: number;
     readonly code: string;
 
     constructor(status: number, code: string, message?: string) {
-        super(message ?? code);
+        super(message ?? fallbackMessage(status));
         this.status = status;
         this.code = code;
     }
 }
 
 type Headers = Record<string, string>;
+
+let onSignedOut = () => {};
+
+/** Called when a request finds the session gone: expired, ended elsewhere or revoked. */
+export function handleSignedOut(handler: () => void) {
+    onSignedOut = handler;
+}
 
 async function request<T>(
     method: string,
@@ -26,6 +41,7 @@ async function request<T>(
     });
     if (res.status === 204) return undefined as T;
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && data.error === 'unauthenticated') onSignedOut();
     if (!res.ok) throw new ApiError(res.status, data.error ?? 'unknown_error', data.message);
     return data as T;
 }

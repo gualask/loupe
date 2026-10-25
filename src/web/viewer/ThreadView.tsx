@@ -47,7 +47,8 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
                         {formatRelative(comment.createdAt)}
                         {comment.editedAt ? ' · edited' : ''}
                     </span>
-                    <span class="ml-auto flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+                    {/* Revealed on hover; always shown on touch screens, which cannot hover. */}
+                    <span class="ml-auto flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                         {canEdit ? (
                             <IconButton label="Edit" onClick={() => setEditing(true)}>
                                 <IconPencil size={15} />

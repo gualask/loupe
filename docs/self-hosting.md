@@ -31,6 +31,9 @@ volumes:
   loupe-data:
 ```
 
+Always set `LOUPE_PUBLIC_URL` to the address people use to reach Loupe: setup, invite, reset and
+share links are built from it, and without it they point to `localhost`.
+
 ## First run
 
 On first start, while no account exists, Loupe prints a one-time setup link in its logs:
@@ -57,20 +60,26 @@ docker exec loupe loupe reset-link <username>
 | `LOUPE_PUBLIC_URL` | `http://localhost:<port>` | Public base URL, used to build links. With `https`, cookies are marked `Secure` |
 | `LOUPE_MAX_UPLOAD_MB` | `20` | Maximum mockup size |
 | `LOUPE_MOCKUP_EXTERNAL` | `block` | `allow` lets mockups load external `https:` resources (CDNs, web fonts) |
-| `LOUPE_SESSION_TTL_DAYS` | `30` | Session lifetime for editors and admins |
+| `LOUPE_SESSION_TTL_DAYS` | `30` | Days without use after which an editor or admin is signed out; sessions end 90 days after sign-in regardless |
 
 ## Reverse proxy
 
 Put Loupe behind your usual HTTPS reverse proxy and set `LOUPE_PUBLIC_URL` to the public address.
-Live updates use Server-Sent Events, so disable response buffering for Loupe. With nginx:
+Loupe compresses and sets cache headers itself, so the proxy needs no configuration for either.
+With nginx:
 
 ```nginx
 location / {
     proxy_pass http://127.0.0.1:3000;
     proxy_set_header Host $host;
-    proxy_buffering off;
 }
 ```
+
+Live updates use a Server-Sent Events stream (`/api/s/<token>/events`), which must reach the
+browser unbuffered. Loupe marks it with `X-Accel-Buffering: no`, which nginx honors, and Caddy
+and Traefik pass event streams through as they come. With another proxy or a CDN that buffers
+responses, turn buffering off for that path. The stream sends a heartbeat every 25 seconds, so
+idle timeouts of 30 seconds or more keep it open.
 
 ## Backup
 

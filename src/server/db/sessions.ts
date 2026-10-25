@@ -2,15 +2,12 @@ import { eq, lt } from 'drizzle-orm';
 import type { Db } from './client.ts';
 import { sessions, users } from './schema.ts';
 
-export function insertSession(db: Db, session: { idHash: string; userId: string; ttlMs: number }) {
-    const now = Date.now();
+export function insertSession(
+    db: Db,
+    session: { idHash: string; userId: string; expiresAt: Date },
+) {
     db.insert(sessions)
-        .values({
-            idHash: session.idHash,
-            userId: session.userId,
-            expiresAt: new Date(now + session.ttlMs),
-            lastSeenAt: new Date(now),
-        })
+        .values({ ...session, lastSeenAt: new Date() })
         .run();
 }
 
@@ -23,10 +20,10 @@ export function findSessionWithUser(db: Db, idHash: string) {
         .get();
 }
 
-export function touchSession(db: Db, idHash: string, ttlMs: number) {
-    const now = Date.now();
+/** Extends a session in use; `last_seen_at` is informative, for debugging. */
+export function touchSession(db: Db, idHash: string, expiresAt: Date) {
     db.update(sessions)
-        .set({ lastSeenAt: new Date(now), expiresAt: new Date(now + ttlMs) })
+        .set({ lastSeenAt: new Date(), expiresAt })
         .where(eq(sessions.idHash, idHash))
         .run();
 }

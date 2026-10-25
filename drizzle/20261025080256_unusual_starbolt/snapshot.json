@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "ddf7e767-e301-4d28-a961-7bb63d097edd",
+  "id": "3ad9cce5-0973-450f-aac5-a35200bdc580",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -98,16 +98,6 @@
     },
     {
       "table": "account_tokens",
-      "name": "created_by",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "account_tokens",
       "name": "created_at",
       "type": "integer",
       "notNull": true,
@@ -121,16 +111,6 @@
       "name": "expires_at",
       "type": "integer",
       "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "account_tokens",
-      "name": "used_at",
-      "type": "integer",
-      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -453,16 +433,6 @@
       "notNull": true,
       "autoincrement": false,
       "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "projects",
-      "name": "archived_at",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
       "generated": null,
       "entityType": "columns"
     },
@@ -968,21 +938,6 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
-      "table": "account_tokens",
-      "name": "fk_account_tokens_created_by_users_id_fk",
-      "columns": [
-        "created_by"
-      ],
-      "tableTo": "users",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
       "nameExplicit": false,
       "entityType": "fks"
     },

@@ -9,7 +9,8 @@ const MARGIN = 8;
 
 /**
  * Floating card in viewport coordinates: beside a pin (`side`), flipping to the left when it
- * would overflow, or centered above a point (`above`), e.g. the toolbar.
+ * would overflow and going below it when neither side fits, or centered above a point
+ * (`above`), e.g. the toolbar.
  */
 export function Popover({
     x,
@@ -38,8 +39,15 @@ export function Popover({
     let top: number;
     if (placement === 'side') {
         const right = x + MARKER + MARGIN;
-        left = right + width > innerWidth - MARGIN ? x - MARGIN - width : right;
-        top = y - MARKER - MARGIN;
+        const leftOfPin = x - MARGIN - width;
+        if (right + width <= innerWidth - MARGIN || leftOfPin >= MARGIN) {
+            left = right + width <= innerWidth - MARGIN ? right : leftOfPin;
+            top = y - MARKER - MARGIN;
+        } else {
+            // Too narrow for either side (phones): below the pin, which is drawn above its point.
+            left = x - width / 2;
+            top = y + MARGIN;
+        }
     } else {
         left = x - width / 2;
         top = y - GAP - height;

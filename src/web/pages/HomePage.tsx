@@ -7,6 +7,7 @@ import { api, errorMessage } from '../lib/api.ts';
 import { formatDate } from '../lib/format.ts';
 import { currentUser } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
+import { FormCard } from '../ui/FormCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
@@ -14,24 +15,14 @@ function NewProjectForm({ onCancel }: { onCancel: () => void }) {
     const { route } = useLocation();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [error, setError] = useState<string>();
 
-    async function submit(e: Event) {
-        e.preventDefault();
-        setError(undefined);
-        try {
-            const project = await api.post<Project>('/projects', { name, description });
-            route(`/projects/${project.id}`);
-        } catch (err) {
-            setError(errorMessage(err));
-        }
+    async function create() {
+        const project = await api.post<Project>('/projects', { name, description });
+        route(`/projects/${project.id}`);
     }
 
     return (
-        <form
-            class="flex flex-col gap-4 rounded-xl border border-stone-200 bg-white p-5"
-            onSubmit={(e) => void submit(e)}
-        >
+        <FormCard submitLabel="Create project" onSubmit={create} onCancel={onCancel}>
             <TextField
                 label="Project name"
                 required
@@ -45,14 +36,7 @@ function NewProjectForm({ onCancel }: { onCancel: () => void }) {
                 value={description}
                 onInput={(e) => setDescription(e.currentTarget.value)}
             />
-            <FormError message={error} />
-            <div class="flex gap-2">
-                <Button type="submit">Create project</Button>
-                <Button variant="ghost" onClick={onCancel}>
-                    Cancel
-                </Button>
-            </div>
-        </form>
+        </FormCard>
     );
 }
 

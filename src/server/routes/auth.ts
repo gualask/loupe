@@ -11,15 +11,15 @@ import {
     redeemResetLink,
     toUser,
 } from '../auth/accounts.ts';
-import { createFailureLimiter } from '../auth/rate-limit.ts';
 import { endSession, signedInUser, startSession } from '../auth/session.ts';
 import { apiError, parseJson } from '../http.ts';
+import { createWindowLimiter } from '../rate-limit.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 export function authRoutes(deps: AppDeps) {
     const { db } = deps;
     // Keyed by username: behind a reverse proxy every client may share the same address.
-    const loginFailures = createFailureLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+    const loginFailures = createWindowLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
     return new Hono<AppEnv>()
         .post('/login', async (c) => {
@@ -29,7 +29,7 @@ export function authRoutes(deps: AppDeps) {
             }
             const user = await checkCredentials(db, username, password);
             if (!user) {
-                loginFailures.recordFailure(username);
+                loginFailures.record(username);
                 throw apiError(401, 'invalid_credentials', 'Wrong username or password.');
             }
             loginFailures.reset(username);

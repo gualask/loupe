@@ -44,8 +44,8 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
 |---|---|
 | `users` | `id`, `username` (unique), `display_name`, `password_hash`, `role` (`admin`/`editor`), `created_at`, `disabled_at` |
 | `sessions` | `id_hash`, `user_id`, `created_at`, `expires_at`, `last_seen_at` |
-| `account_tokens` | `id`, `token_hash`, `kind` (`setup`/`invite`/`reset`), `role` (invite), `user_id` (reset), `created_by`, `expires_at`, `used_at` |
-| `projects` | `id`, `owner_id`, `name`, `description`, `created_at`, `archived_at` |
+| `account_tokens` | `id`, `token_hash`, `kind` (`setup`/`invite`/`reset`), `role` (invite), `user_id` (reset), `created_at`, `expires_at` |
+| `projects` | `id`, `owner_id`, `name`, `description`, `created_at` |
 | `mockups` | `id`, `project_id`, `name`, `share_token`, `share_enabled`, `share_expires_at`, `read_only`, `current_version_id`, `created_by`, `created_at` |
 | `mockup_versions` | `id`, `mockup_id`, `number`, `sha256`, `size_bytes`, `original_filename`, `external_refs` (JSON), `uploaded_by`, `created_at` |
 | `viewers` | `id`, `mockup_id`, `key_hash`, `display_name`, `color_index`, `created_at`, `last_seen_at` |
@@ -71,12 +71,26 @@ No email server is required. Every account flow is a **single-use link** that ex
 - **Account management**: admins change roles and disable accounts (which ends their sessions).
   Admins cannot change their own account, so at least one admin always remains.
 - **Locked-out admin**: `docker exec loupe loupe reset-link <username>` prints a reset link.
-- **Passwords**: `scrypt` from `node:crypto`, minimum 10 characters.
+- **Passwords**: Argon2id from `node:crypto`, with OWASP's minimum parameters (19 MiB, 2
+  passes, 1 lane), stored as a standard PHC string that carries its parameters, so they can be
+  raised later without breaking existing hashes. Minimum 10 characters.
 - **Sessions**: opaque id in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` when
-  `LOUPE_PUBLIC_URL` is https), stored hashed in SQLite, sliding expiry (default 30 days).
+  `LOUPE_PUBLIC_URL` is https), stored hashed in SQLite. A session ends after 30 days without
+  use (`LOUPE_SESSION_TTL_DAYS`), and in any case 90 days after sign-in, so a stolen cookie
+  cannot be kept alive by using it. The expiry is extended only when it moves by more than an
+  hour, so requests rarely write to the database.
+  Signing in, or redeeming an account link, ends the browser's previous session; the account
+  link page warns when someone is already signed in. When a session ends (expiry, logout in
+  another tab, reset, disabled account), open pages return to the login page.
 - **CSRF**: Hono `csrf()` middleware (Origin check) on all state-changing routes.
 - **Brute force**: in-memory limit of 10 failed logins per username per 15 minutes. Account
-  links carry 256-bit secrets and need no limit.
+  links carry 256-bit secrets and need no limit. The limit is per username, not per address:
+  behind a reverse proxy every client shares one address. As a consequence, anyone can lock a
+  known username out of signing in for 15 minutes; existing sessions keep working.
+- **Request size**: API bodies are limited to 64 KB (`413 payload_too_large`); mockup uploads
+  have their own limit.
+- **Clean-up**: an account link is deleted when used; expired sessions and links are deleted at
+  startup.
 - **Roadmap**: optional SMTP to email invite/reset links (v1.x); OIDC single sign-on (later).
 
 ## 4. Mockup viewing
@@ -91,9 +105,21 @@ Uploaded HTML is untrusted. It is never served as a regular page of the app:
 - Default resource policy (self-contained mode):
   `default-src 'none'; script-src 'unsafe-inline' data: blob:; style-src 'unsafe-inline' data:;
   img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'`.
-  This enforces "self-contained" and blocks data exfiltration.
+  This enforces "self-contained": the mockup loads nothing from the network and cannot send
+  requests.
 - `LOUPE_MOCKUP_EXTERNAL=allow` relaxes the policy to allow `https:` resources (CDNs, web fonts).
 - This also protects editors and admins, who view mockups inside their authenticated session.
+- **Trust model**: the sandbox protects the app, its data and its sessions from mockup code. It
+  does not protect viewers from deceptive content: a mockup can still draw anything, such as a
+  fake form, and navigate its own frame elsewhere, which no browser policy can block. Mockups
+  are therefore trusted to their editors, who are invited accounts responsible for what they
+  upload (§1).
+- Every other response carries an app policy: only the app's own scripts and files load, and
+  no other site can frame the app (`frame-ancestors 'none'`, against clickjacking). All
+  responses carry `X-Content-Type-Options: nosniff`.
+- The document is sent with `Cache-Control: private, no-cache` and an `ETag` made of the file's
+  SHA-256 and the bridge's hash: browsers revalidate on every load and get `304` when their copy
+  is current. Access is checked first, so a disabled or expired link stops serving it.
 
 ### 4.2 Bridge script
 
@@ -123,6 +149,9 @@ mockup code cannot tamper with it.
   (`color_index = viewers on this mockup mod 12`). Editors use a distinct neutral style with an
   "Editor" badge.
 - Identity is self-declared and unverified; this is documented in the UI.
+- **Abuse limits** (in memory): at most 60 new viewers per mockup per 10 minutes, and 30 changes
+  (threads, comments, edits, deletions, reviews) per viewer per minute. Editors are not limited.
+  Exceeding a limit answers `429 too_many_requests`.
 
 ### 4.4 Pin anchors
 
@@ -138,7 +167,8 @@ mockup code cannot tamper with it.
 
 Selector strategy: unique `id` → `data-*` test/automation attributes → shortest unique
 `tag:nth-of-type` path. Resolution order: selector (verified against `text` when present) →
-text match → `point`. Pins that cannot be resolved are listed as **orphaned** in the side panel.
+text match → selector match whose text changed (a copy edit should not detach the pin) →
+`point`. Pins that fall back to `point` are listed as **orphaned** in the side panel.
 
 ## 5. Viewer experience
 
@@ -147,6 +177,9 @@ text match → `point`. Pins that cannot be resolved are listed as **orphaned** 
 - **Header**: mockup name, viewport switcher, presence avatars and the side-panel toggle.
 - **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
   marked. Editors can open it filtered to one viewer (`?viewer=<id>`).
+- **Narrow screens** (below 768 px, e.g. phones): the side panel covers the mockup instead of
+  sitting beside it, starts closed and closes when a thread opens or a pin or comment starts;
+  the toolbar shows icons only; comment actions are always visible on touch screens.
 - **Pin flow**: press Pin (or `P`) → inspect mode → click an element → pin appears with a
   floating popover next to it → write → `Enter` / Send. `Esc` cancels; an empty pin is discarded.
 - **General comment** (`C`): a popover attached to the toolbar.
@@ -170,10 +203,12 @@ general comments are kept in `localStorage` per thread and restored on reload.
 ### 5.2 Real time
 
 One **Server-Sent Events** channel per mockup version broadcasts the full state of each changed
-thread, deleted threads, review status and presence (who is connected, with name and color).
+thread, deleted threads and presence (who is connected, with name and color). A viewer's review
+status is sent only to that viewer's own connections, e.g. other tabs.
 Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The client reads the
 stream with `fetch`, so it can send the viewer key, reconnects with backoff, and refetches the
-threads on every (re)connection instead of replaying missed events.
+threads on every (re)connection instead of replaying missed events. The stream sends a heartbeat every 25 seconds
+and `X-Accel-Buffering: no`, so proxies neither drop it as idle nor hold events back.
 
 ## 6. Editor experience
 
@@ -196,7 +231,7 @@ All settings are environment variables prefixed with `LOUPE_`, validated at star
 
 ## 8. Architecture
 
-- **Runtime**: Node.js ≥ 24 (Docker image on the current LTS). Server TypeScript runs directly
+- **Runtime**: Node.js ≥ 24.7, for native Argon2id (Docker image on the current LTS). Server TypeScript runs directly
   through Node's type stripping; no server build step.
 - **Server**: Hono on `@hono/node-server`; Zod validation; Drizzle ORM on `node:sqlite`;
   migrations generated by drizzle-kit and applied at startup.
@@ -205,6 +240,10 @@ All settings are environment variables prefixed with `LOUPE_`, validated at star
 - **Bridge**: a separate Vite IIFE build, inlined into served mockups.
 - **Shared**: Zod schemas and types for the HTTP API and the bridge `postMessage` protocol live in
   `src/shared` and are imported by server, web app and bridge.
+- **HTTP caching**: built assets (hashed names) are `immutable` for a year; `index.html` is
+  `no-cache`, so an update takes effect at the next load; API responses are not cached.
+- **Compression**: gzip for the web app and mockup documents. Not for API responses, which
+  carry secrets next to user input (BREACH), nor for the event stream.
 - **Deployment**: one container, one port, one volume (`/data`).
 
 ### 8.1 HTTP surface (sketch)
@@ -218,8 +257,8 @@ POST /api/auth/tokens/:token                    redeem it (create account or set
 POST /api/admin/invites                         POST /api/admin/users/:id/reset-link
 GET  /api/admin/users                           PATCH /api/admin/users/:id
 
-GET|POST         /api/projects                  GET|PATCH|DELETE /api/projects/:id
-GET|POST         /api/projects/:id/mockups      GET|PATCH|DELETE /api/mockups/:id
+GET|POST         /api/projects                  GET|PATCH|DELETE /api/projects/:id (with mockups)
+POST             /api/projects/:id/mockups      GET|PATCH|DELETE /api/mockups/:id
 POST             /api/mockups/:id/share/regenerate
 POST             /api/mockups/:id/versions      (v1.x)
 GET              /api/mockups/:id/reviews

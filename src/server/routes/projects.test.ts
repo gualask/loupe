@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createTestApp, inviteEditor, setUpAdmin } from '../test-utils.ts';
+import { createTestApp, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
 
 const MOCKUP = `<!doctype html>
 <html><head><title>Checkout</title>
@@ -21,10 +21,6 @@ async function editorWithMockup() {
     const project = await editor.post('/api/projects', { name: 'Shop' });
     const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, htmlFile());
     return { t, admin, editor, project: project.body, mockup: mockup.body };
-}
-
-function shareToken(shareUrl: string) {
-    return shareUrl.slice(shareUrl.lastIndexOf('/') + 1);
 }
 
 describe('projects', () => {
@@ -84,6 +80,14 @@ describe('mockup upload', () => {
         expect(readdirSync(path.join(t.config.dataDir, 'mockups'))).toHaveLength(1);
     });
 
+    it('renames a mockup', async () => {
+        const { editor, mockup } = await editorWithMockup();
+        const renamed = await editor.patch(`/api/mockups/${mockup.id}`, { name: ' Checkout v2 ' });
+        expect(renamed.body).toEqual({ ...mockup, name: 'Checkout v2' });
+        const blank = await editor.patch(`/api/mockups/${mockup.id}`, { name: ' ' });
+        expect(blank).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
+    });
+
     it('rejects files that are not HTML', async () => {
         const { editor, project } = await editorWithMockup();
         const res = await editor.post(
@@ -111,7 +115,7 @@ describe('mockup upload', () => {
 describe('share links', () => {
     it('serves the mockup sandboxed, with the bridge first in <head>', async () => {
         const { t, mockup } = await editorWithMockup();
-        const res = await t.client().get(`/s/${shareToken(mockup.shareUrl)}/content`);
+        const res = await t.client().get(`/s/${tokenFromUrl(mockup.shareUrl)}/content`);
 
         expect(res.status).toBe(200);
         expect(res.headers.get('content-security-policy')).toBe(
@@ -125,9 +129,31 @@ describe('share links', () => {
         );
     });
 
+    it('lets browsers revalidate their copy, while still checking access', async () => {
+        const { t, editor, mockup } = await editorWithMockup();
+        const content = `/s/${tokenFromUrl(mockup.shareUrl)}/content`;
+        const first = await t.app.request(content, { headers: { 'accept-encoding': 'gzip' } });
+        const etag = first.headers.get('etag') ?? '';
+        expect(etag).toMatch(/^W\/"[0-9a-f]{64}-[\w-]{43}"$/);
+        expect(first.headers.get('cache-control')).toBe('private, no-cache');
+        expect(first.headers.get('content-encoding')).toBe('gzip');
+
+        // Compression makes the tag weak; both forms match.
+        for (const tag of [etag, etag.slice(2)]) {
+            const again = await t.app.request(content, { headers: { 'if-none-match': tag } });
+            expect(again.status).toBe(304);
+            expect(await again.text()).toBe('');
+            expect(again.headers.get('content-security-policy')).toMatch(/^sandbox allow-scripts;/);
+        }
+
+        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
+        const revoked = await t.app.request(content, { headers: { 'if-none-match': etag } });
+        expect(revoked.status).toBe(404);
+    });
+
     it('describes the shared mockup to viewers', async () => {
         const { t, mockup } = await editorWithMockup();
-        const token = shareToken(mockup.shareUrl);
+        const token = tokenFromUrl(mockup.shareUrl);
         const res = await t.client().get(`/api/s/${token}`);
         expect(res.body).toEqual({
             mockupId: mockup.id,
@@ -142,7 +168,7 @@ describe('share links', () => {
 
     it('hides disabled or expired links from viewers but not from the owner', async () => {
         const { t, editor, mockup } = await editorWithMockup();
-        const content = `/s/${shareToken(mockup.shareUrl)}/content`;
+        const content = `/s/${tokenFromUrl(mockup.shareUrl)}/content`;
 
         await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
         expect((await t.client().get(content)).status).toBe(404);
@@ -161,8 +187,10 @@ describe('share links', () => {
         const { t, editor, mockup } = await editorWithMockup();
         const res = await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
         expect(res.body.shareUrl).not.toBe(mockup.shareUrl);
-        expect((await t.client().get(`/api/s/${shareToken(mockup.shareUrl)}`)).status).toBe(404);
-        expect((await t.client().get(`/api/s/${shareToken(res.body.shareUrl)}`)).status).toBe(200);
+        expect((await t.client().get(`/api/s/${tokenFromUrl(mockup.shareUrl)}`)).status).toBe(404);
+        expect((await t.client().get(`/api/s/${tokenFromUrl(res.body.shareUrl)}`)).status).toBe(
+            200,
+        );
     });
 
     it('does not let other editors manage the mockup', async () => {

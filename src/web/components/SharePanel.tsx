@@ -87,7 +87,7 @@ export function SharePanel({
                     class="inline-flex items-center gap-2 rounded-md px-3 py-2 font-medium text-sm text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                 >
                     <IconExternalLink size={16} />
-                    Open as reviewer
+                    Open link
                 </a>
                 <Button variant="ghost" onClick={regenerate}>
                     <IconRefresh size={16} />

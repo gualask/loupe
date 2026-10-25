@@ -41,10 +41,8 @@ export const accountTokens = sqliteTable('account_tokens', {
     role: text('role', { enum: ['admin', 'editor'] }),
     // Target account of a reset token.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     expiresAt: timestamp('expires_at').notNull(),
-    usedAt: timestamp('used_at'),
 });
 
 export const projects = sqliteTable(
@@ -57,7 +55,6 @@ export const projects = sqliteTable(
         name: text('name').notNull(),
         description: text('description').notNull().default(''),
         createdAt: createdAt(),
-        archivedAt: timestamp('archived_at'),
     },
     (t) => [index('projects_owner_idx').on(t.ownerId)],
 );

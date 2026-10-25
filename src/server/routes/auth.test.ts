@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { issueSetupLinkIfNeeded } from '../auth/accounts.ts';
 import {
     createTestApp,
@@ -86,6 +86,66 @@ describe('login and logout', () => {
 
         expect((await client.post('/api/auth/logout')).status).toBe(204);
         expect((await client.get('/api/auth/me')).status).toBe(401);
+    });
+
+    describe('session lifetime', () => {
+        const DAY = 24 * 60 * 60 * 1000;
+
+        async function signedIn() {
+            const t = createTestApp();
+            const admin = await setUpAdmin(t);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            const advance = (days: number) => vi.setSystemTime(Date.now() + days * DAY);
+            const status = async () => (await admin.get('/api/auth/me')).status;
+            const lastSeen = () =>
+                t.db.$client.prepare('SELECT last_seen_at AS at FROM sessions').get()?.at;
+            return { advance, status, lastSeen };
+        }
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('ends after 30 days without use', async () => {
+            const { advance, status } = await signedIn();
+            advance(29);
+            expect(await status()).toBe(200);
+            advance(30.1);
+            expect(await status()).toBe(401);
+        });
+
+        it('extends with use, but never past 90 days from sign-in', async () => {
+            const { advance, status, lastSeen } = await signedIn();
+            for (let day = 20; day <= 80; day += 20) {
+                advance(20);
+                expect(await status()).toBe(200);
+            }
+            // The expiry has reached the limit: using the session no longer writes to it.
+            const seen = lastSeen();
+            expect(seen).toEqual(expect.any(Number));
+            advance(9.9);
+            expect(await status()).toBe(200);
+            expect(lastSeen()).toBe(seen);
+            advance(0.2);
+            expect(await status()).toBe(401);
+        });
+    });
+
+    it('ends the previous session when the same browser signs in again', async () => {
+        const t = createTestApp();
+        await setUpAdmin(t);
+        const credentials = { username: 'admin', password: PASSWORD };
+        const first = await t.client().post('/api/auth/login', credentials);
+        const cookie = first.headers.getSetCookie()[0]?.split(';')[0] ?? '';
+        const me = () => t.app.request('/api/auth/me', { headers: { cookie } });
+        expect((await me()).status).toBe(200);
+
+        await t.app.request('/api/auth/login', {
+            method: 'POST',
+            headers: { cookie, origin: 'http://loupe.test', 'content-type': 'application/json' },
+            body: JSON.stringify(credentials),
+        });
+        expect((await me()).status).toBe(401);
     });
 
     it('gives the same answer for unknown users and wrong passwords', async () => {

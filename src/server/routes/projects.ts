@@ -27,32 +27,40 @@ import {
 import { listReviews } from '../db/reviews.ts';
 import { activityByVersion, countThreadsByViewer } from '../db/threads.ts';
 import { listViewers } from '../db/viewers.ts';
-import { apiError, parseJson } from '../http.ts';
-import { canManage, toMockup, toProject } from '../mockups/access.ts';
+import { apiError, notFound, parseJson } from '../http.ts';
+import { canManage } from '../mockups/access.ts';
 import {
     decodeHtml,
     deleteUnreferencedFiles,
     findExternalRefs,
     storeMockupFile,
 } from '../mockups/files.ts';
+import { toMockup, toProject } from '../mockups/present.ts';
 import { toReviewerSummaries } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 // Multipart framing and the name field on top of the file itself.
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
+/**
+ * Whether a request is a mockup upload (`POST /projects/:id/mockups` below): it has its own size
+ * limit, so the API-wide JSON limit (app.ts) does not apply.
+ */
+export function isMockupUpload(path: string) {
+    return /^\/api\/projects\/[^/]+\/mockups$/.test(path);
+}
+
 export function projectRoutes({ db, config }: AppDeps) {
     /** The project, if it exists and the signed-in user manages it (404 otherwise). */
     function managedProject(c: Context<AppEnv>, id: string) {
         const row = findProject(db, id);
-        if (!row || !canManage(signedInUser(c), row.project.ownerId))
-            throw apiError(404, 'not_found');
+        if (!row || !canManage(signedInUser(c), row.project.ownerId)) throw notFound();
         return row;
     }
 
     function managedMockup(c: Context<AppEnv>, id: string) {
         const row = findMockup(db, id);
-        if (!row) throw apiError(404, 'not_found');
+        if (!row) throw notFound();
         managedProject(c, row.mockup.projectId);
         return row;
     }

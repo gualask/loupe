@@ -8,10 +8,10 @@ import type {
 import type { Config } from '../config.ts';
 import {
     type AccountTokenRow,
-    expireUnusedAccountTokens,
+    deleteAccountToken,
+    deleteAccountTokensOfKind,
     findUsableAccountToken,
     insertAccountToken,
-    markAccountTokenUsed,
 } from '../db/account-tokens.ts';
 import type { Db } from '../db/client.ts';
 import { deleteUserSessions } from '../db/sessions.ts';
@@ -33,6 +33,9 @@ const TOKEN_TTL: Record<AccountTokenRow['kind'], number> = {
     reset: 24 * HOUR,
 };
 
+const INVALID_LINK = 'This link is invalid, expired or already used.';
+const WRONG_LINK = 'This link cannot be used here.';
+
 // Verified when the username does not exist, so response time does not reveal valid usernames.
 const DUMMY_PASSWORD_HASH = await hashPassword(randomToken());
 
@@ -47,7 +50,7 @@ export function toAdminUser(row: UserRow): AdminUser {
 export function createAccountLink(
     db: Db,
     config: Config,
-    token: { kind: AccountTokenRow['kind']; role?: Role; userId?: string; createdBy?: string },
+    token: { kind: AccountTokenRow['kind']; role?: Role; userId?: string },
 ): AccountLink {
     const secret = randomToken();
     const expiresAt = new Date(Date.now() + TOKEN_TTL[token.kind]);
@@ -61,14 +64,13 @@ export function createAccountLink(
 /** While no account exists, replaces any previous setup link with a fresh one. */
 export function issueSetupLinkIfNeeded(db: Db, config: Config) {
     if (countUsers(db) > 0) return undefined;
-    expireUnusedAccountTokens(db, 'setup');
+    deleteAccountTokensOfKind(db, 'setup');
     return createAccountLink(db, config, { kind: 'setup', role: 'admin' });
 }
 
 function usableToken(db: Db, secret: string) {
     const row = findUsableAccountToken(db, sha256(secret));
-    if (!row)
-        throw apiError(404, 'invalid_token', 'This link is invalid, expired or already used.');
+    if (!row) throw apiError(404, 'invalid_token', INVALID_LINK);
     return row;
 }
 
@@ -81,7 +83,7 @@ export function describeAccountToken(db: Db, secret: string): AccountTokenInfo {
             return { kind: 'invite', role: row.role ?? 'editor' };
         case 'reset': {
             const user = row.userId ? findUserById(db, row.userId) : undefined;
-            if (!user) throw apiError(404, 'invalid_token');
+            if (!user) throw apiError(404, 'invalid_token', INVALID_LINK);
             return { kind: 'reset', username: user.username };
         }
     }
@@ -96,16 +98,20 @@ export async function redeemAccountLink(
     const passwordHash = await hashPassword(input.password);
     return db.transaction(() => {
         const token = usableToken(db, secret);
-        if (token.kind === 'reset') throw apiError(400, 'wrong_token_kind');
-        if (token.kind === 'setup' && countUsers(db) > 0) throw apiError(409, 'already_set_up');
-        if (findUserByUsername(db, input.username)) throw apiError(409, 'username_taken');
+        if (token.kind === 'reset') throw apiError(400, 'wrong_token_kind', WRONG_LINK);
+        if (token.kind === 'setup' && countUsers(db) > 0) {
+            throw apiError(409, 'already_set_up', 'Loupe is already set up. Sign in instead.');
+        }
+        if (findUserByUsername(db, input.username)) {
+            throw apiError(409, 'username_taken', 'This username is taken. Choose another one.');
+        }
         const user = insertUser(db, {
             username: input.username,
             displayName: input.displayName,
             passwordHash,
             role: token.kind === 'setup' ? 'admin' : (token.role ?? 'editor'),
         });
-        markAccountTokenUsed(db, token.id);
+        deleteAccountToken(db, token.id);
         return user;
     });
 }
@@ -116,11 +122,11 @@ export async function redeemResetLink(db: Db, secret: string, input: { password:
     return db.transaction(() => {
         const token = usableToken(db, secret);
         const user = token.kind === 'reset' && token.userId && findUserById(db, token.userId);
-        if (!user) throw apiError(400, 'wrong_token_kind');
-        if (user.disabledAt) throw apiError(403, 'account_disabled');
+        if (!user) throw apiError(400, 'wrong_token_kind', WRONG_LINK);
+        if (user.disabledAt) throw apiError(403, 'account_disabled', 'This account is disabled.');
         const updated = updateUser(db, user.id, { passwordHash });
         deleteUserSessions(db, user.id);
-        markAccountTokenUsed(db, token.id);
+        deleteAccountToken(db, token.id);
         return updated ?? user;
     });
 }

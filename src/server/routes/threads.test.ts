@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PinAnchor } from '../../shared/anchor.ts';
-import { createTestApp, inviteEditor, setUpAdmin } from '../test-utils.ts';
+import { createTestApp, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
 
 const ANCHOR: PinAnchor = {
     selector: 'main > button.cta',
@@ -18,7 +18,7 @@ async function sharedMockup() {
     const form = new FormData();
     form.set('file', new File(['<!doctype html><main>Hi</main>'], 'home.html'));
     const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, form);
-    const token = mockup.body.shareUrl.slice(mockup.body.shareUrl.lastIndexOf('/') + 1);
+    const token = tokenFromUrl(mockup.body.shareUrl);
     const base = `/api/s/${token}`;
 
     /** A new browser that registers as a viewer and keeps its key. */
@@ -352,6 +352,7 @@ describe('event stream', () => {
             headers: { 'x-loupe-viewer': bob.key },
         });
         expect(res.headers.get('content-type')).toBe('text/event-stream');
+        expect(res.headers.get('x-accel-buffering')).toBe('no');
         const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
         if (!reader) throw new Error('expected a stream');
         const next = async () => {
@@ -361,14 +362,61 @@ describe('event stream', () => {
 
         expect(await next()).toEqual({ type: 'presence', participants: [bob.viewer] });
 
+        // Alice's review stays private to Alice; her thread is shared with everyone.
         const id = crypto.randomUUID();
         await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
-        expect(await next()).toMatchObject({ type: 'review', review: { status: 'in_progress' } });
         expect(await next()).toMatchObject({
             type: 'thread',
             thread: { id, author: alice.viewer },
         });
 
+        await bob.client.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'general',
+            body: 'Yo',
+        });
+        expect(await next()).toEqual({
+            type: 'review',
+            review: {
+                viewerId: bob.viewer.id,
+                status: 'in_progress',
+                verdict: null,
+                summary: '',
+                submittedAt: null,
+            },
+        });
+        expect(await next()).toMatchObject({ type: 'thread', thread: { author: bob.viewer } });
+
         await reader.cancel();
+    });
+});
+
+describe('rate limits', () => {
+    it('limits how fast a viewer can change things, but not editors', async () => {
+        const { editor, base, viewer } = await sharedMockup();
+        const alice = await viewer('Alice');
+        const comment = () => ({ id: crypto.randomUUID(), kind: 'general', body: 'Spam' });
+
+        for (let i = 0; i < 30; i++) {
+            expect((await alice.client.post(`${base}/threads`, comment())).status).toBe(201);
+        }
+        expect(await alice.client.post(`${base}/threads`, comment())).toMatchObject({
+            status: 429,
+            body: { error: 'too_many_requests' },
+        });
+        for (let i = 0; i < 31; i++) {
+            expect((await editor.post(`${base}/threads`, comment())).status).toBe(201);
+        }
+    });
+
+    it('limits how many viewers can join a mockup in a short time', async () => {
+        const { t, base } = await sharedMockup();
+        for (let i = 0; i < 60; i++) {
+            expect((await t.client().post(`${base}/viewers`, {})).status).toBe(201);
+        }
+        expect(await t.client().post(`${base}/viewers`, {})).toMatchObject({
+            status: 429,
+            body: { error: 'too_many_requests' },
+        });
     });
 });

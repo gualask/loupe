@@ -1,9 +1,14 @@
 import { signal } from '@preact/signals';
 import type { User } from '../../shared/api/auth.ts';
-import { ApiError, api } from './api.ts';
+import { ApiError, api, handleSignedOut } from './api.ts';
 
 /** `undefined` while loading, `null` when signed out. */
 export const currentUser = signal<User | null | undefined>(undefined);
+
+// Signed-in pages then redirect to the login page, which brings the user back afterwards.
+handleSignedOut(() => {
+    currentUser.value = null;
+});
 
 export async function loadSession() {
     try {

@@ -32,10 +32,14 @@ const VIEWPORTS = [
 
 // Pins placed at a width this different from the current one may point elsewhere.
 const VIEWPORT_HINT_PX = 100;
+// Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
+const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 const DRAFT_PIN = 'draft';
 
 type Composing = { kind: 'pin'; anchor: PinAnchor } | { kind: 'general' };
 type DialogName = 'identity' | 'review' | 'help';
+
+const panelCoversMockup = () => matchMedia(OVERLAY_PANEL_QUERY).matches;
 
 function isTyping(target: EventTarget | null) {
     return (
@@ -70,7 +74,7 @@ export function ReviewSpace({
     const shared = session.shared.value;
     const me = session.me.value;
     const threads = session.threads.value;
-    const mayWrite = shared.canModerate || !shared.readOnly;
+    const mayWrite = session.mayWrite.value;
 
     const [inspecting, setInspecting] = useState(false);
     const [composing, setComposing] = useState<Composing | null>(null);
@@ -78,7 +82,7 @@ export function ReviewSpace({
     const [pinsHidden, setPinsHidden] = useState(false);
     const [filter, setFilter] = useState<ThreadFilter>('open');
     const [viewport, setViewport] = useState<(typeof VIEWPORTS)[number]>(VIEWPORTS[0]);
-    const [panelOpen, setPanelOpen] = useState(true);
+    const [panelOpen, setPanelOpen] = useState(() => !panelCoversMockup());
     const [dialog, setDialog] = useState<DialogName | null>(
         initial.me || initial.readOnly ? null : 'identity',
     );
@@ -125,6 +129,11 @@ export function ReviewSpace({
         });
     }
 
+    /** On narrow screens the panel hides the mockup, so it makes way for pins and popovers. */
+    function revealMockup() {
+        if (panelCoversMockup()) setPanelOpen(false);
+    }
+
     /** Runs an action that needs an identity, asking for a name first if necessary. */
     function withIdentity(action: () => void) {
         if (!mayWrite) return;
@@ -138,6 +147,7 @@ export function ReviewSpace({
 
     function startPin() {
         withIdentity(() => {
+            revealMockup();
             setComposing(null);
             setOpenId(null);
             setInspecting((on) => !on);
@@ -146,6 +156,7 @@ export function ReviewSpace({
 
     function startComment() {
         withIdentity(() => {
+            revealMockup();
             setInspecting(false);
             setOpenId(null);
             setComposing({ kind: 'general' });
@@ -153,6 +164,7 @@ export function ReviewSpace({
     }
 
     function select(thread: Thread) {
+        revealMockup();
         setInspecting(false);
         setComposing(null);
         setOpenId(thread.id);
@@ -384,7 +396,7 @@ export function ReviewSpace({
                 toolbarRef={toolbar}
                 inspecting={inspecting}
                 pinsHidden={pinsHidden}
-                canWrite={mayWrite}
+                mayWrite={mayWrite}
                 saveState={session.saveState.value}
                 review={me?.kind === 'editor' ? undefined : shared.review}
                 onPin={startPin}

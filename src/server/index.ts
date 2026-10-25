@@ -1,14 +1,17 @@
-import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.ts';
 import { issueSetupLinkIfNeeded } from './auth/accounts.ts';
 import { loadConfig } from './config.ts';
-import { openDb } from './db/client.ts';
+import { deleteExpiredAccountTokens } from './db/account-tokens.ts';
+import { openDataDb } from './db/client.ts';
 import { deleteExpiredSessions } from './db/sessions.ts';
 
 const config = loadConfig();
-const db = openDb(path.join(config.dataDir, 'loupe.db'));
+const db = openDataDb(config.dataDir);
+
+// Expired sessions and account links would otherwise accumulate.
 deleteExpiredSessions(db);
+deleteExpiredAccountTokens(db);
 const app = createApp({ db, config, bridgeFile: './dist/bridge/bridge.js' });
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {

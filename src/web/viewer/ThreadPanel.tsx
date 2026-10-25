@@ -95,7 +95,8 @@ export function ThreadPanel({
     onSelect: (thread: Thread) => void;
 }) {
     return (
-        <aside class="flex w-80 shrink-0 flex-col border-stone-200 border-l bg-white">
+        // A full-width layer over the mockup on narrow screens, a column beside it otherwise.
+        <aside class="fixed inset-x-0 top-12 bottom-0 z-30 flex flex-col border-stone-200 bg-white md:static md:z-auto md:w-80 md:shrink-0 md:border-l">
             <div class="flex gap-1 border-stone-100 border-b p-2">
                 {FILTERS.filter((f) => f.value !== 'mine' || canFilterMine).map((f) => (
                     <button

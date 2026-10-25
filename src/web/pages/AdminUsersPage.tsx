@@ -2,14 +2,11 @@ import { useEffect, useState } from 'preact/hooks';
 import type { AccountLink, AdminUser, Role } from '../../shared/api/auth.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { api, errorMessage } from '../lib/api.ts';
+import { formatDateTime } from '../lib/format.ts';
 import { currentUser } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { CopyField } from '../ui/CopyField.tsx';
 import { FormError } from '../ui/FormError.tsx';
-
-function formatExpiry(link: AccountLink) {
-    return new Date(link.expiresAt).toLocaleString();
-}
 
 function InviteSection() {
     const [role, setRole] = useState<Role>('editor');
@@ -46,7 +43,9 @@ function InviteSection() {
             {link ? (
                 <div class="mt-4 flex flex-col gap-1.5">
                     <CopyField value={link.url} />
-                    <p class="text-stone-500 text-xs">Valid until {formatExpiry(link)}.</p>
+                    <p class="text-stone-500 text-xs">
+                        Valid until {formatDateTime(link.expiresAt)}.
+                    </p>
                 </div>
             ) : null}
             <div class="mt-3">
@@ -126,7 +125,7 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
                 <div class="flex flex-col gap-1.5">
                     <CopyField value={resetLink.url} />
                     <p class="text-stone-500 text-xs">
-                        Password reset link, valid until {formatExpiry(resetLink)}.
+                        Password reset link, valid until {formatDateTime(resetLink.expiresAt)}.
                     </p>
                 </div>
             ) : null}

@@ -6,7 +6,7 @@ Loupe is a small self-hosted app for design reviews. An editor uploads a self-co
 mockup and shares its link; reviewers place pins on precise elements of the page and comment on
 them, together and in real time. Reviewers need no account, and no email server is required.
 
-> **Status:** early development, not ready for use yet.
+> **Status:** early release (0.x): ready to try, expect rough edges until 1.0.
 
 ## Features
 
@@ -22,10 +22,13 @@ them, together and in real time. Reviewers need no account, and no email server 
 ## Quick start
 
 ```sh
-docker run -d --name loupe -p 3000:3000 -v loupe-data:/data ghcr.io/gualask/loupe:latest
+docker run -d --name loupe -p 3000:3000 -v loupe-data:/data \
+  -e LOUPE_PUBLIC_URL=http://loupe.example.com:3000 \
+  ghcr.io/gualask/loupe:latest
 ```
 
-Then follow the first-run steps in the [self-hosting guide](docs/self-hosting.md).
+Set `LOUPE_PUBLIC_URL` to the address people use to reach Loupe: setup, invite and share links
+are built from it. Then follow the first-run steps in the [self-hosting guide](docs/self-hosting.md).
 
 ## Documentation
 

@@ -56,10 +56,18 @@ export function AccountLinkPage() {
 
     const set = (field: keyof typeof form) => (e: Event) =>
         setForm({ ...form, [field]: (e.currentTarget as HTMLInputElement).value });
+    const signedIn = currentUser.value;
 
     return (
         <CenteredCard title={TITLES[info.kind]}>
             <form class="flex flex-col gap-4" onSubmit={(e) => void submit(e)}>
+                {/* E.g. an admin opening an invite link they just created, to check it. */}
+                {signedIn ? (
+                    <p class="rounded-md bg-amber-50 p-3 text-amber-800 text-sm">
+                        You are signed in as <strong>{signedIn.username}</strong>. Continuing signs
+                        you out and into the account of this link.
+                    </p>
+                ) : null}
                 {info.kind === 'reset' ? (
                     <p class="text-sm text-stone-600">
                         Account: <strong>{info.username}</strong>

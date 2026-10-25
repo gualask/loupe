@@ -8,6 +8,7 @@ import { insertViewer } from '../db/viewers.ts';
 import { apiError, parseJson } from '../http.ts';
 import { injectBridge, mockupHeaders } from '../mockups/document.ts';
 import { readMockupFile } from '../mockups/files.ts';
+import { createWindowLimiter } from '../rate-limit.ts';
 import { shareActor, sharedMockup } from '../review/context.ts';
 import { anonymousName } from '../review/names.ts';
 import { toReview, viewerAuthor } from '../review/present.ts';
@@ -15,6 +16,9 @@ import type { AppDeps, AppEnv } from '../types.ts';
 
 /** Share-link metadata and viewer registration, mounted under /api/s. */
 export function shareApiRoutes({ db }: AppDeps) {
+    // Anyone with the link can register, so a script could flood the mockup with viewers.
+    const registrations = createWindowLimiter({ max: 60, windowMs: 10 * 60 * 1000 });
+
     return new Hono<AppEnv>()
         .get('/:token', (c) => {
             const row = sharedMockup(db, c);
@@ -35,7 +39,11 @@ export function shareApiRoutes({ db }: AppDeps) {
         .post('/:token/viewers', async (c) => {
             const { mockup } = sharedMockup(db, c);
             if (mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
+            if (registrations.isBlocked(mockup.id)) {
+                throw apiError(429, 'too_many_requests', 'Too many new reviewers, retry later.');
+            }
             const { displayName } = await parseJson(c, registerViewerRequestSchema);
+            registrations.record(mockup.id);
             const key = randomToken();
             const viewer = insertViewer(db, {
                 mockupId: mockup.id,
@@ -47,15 +55,26 @@ export function shareApiRoutes({ db }: AppDeps) {
         });
 }
 
+/** Whether an If-None-Match header names the ETag; compression makes the browser's copy weak. */
+function matchesEtag(ifNoneMatch: string | undefined, etag: string) {
+    return !!ifNoneMatch?.split(',').some((tag) => tag.trim().replace(/^W\//, '') === etag);
+}
+
 /** The sandboxed mockup document, mounted under /s. */
 export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
     return new Hono<AppEnv>().get('/:token/content', async (c) => {
+        // Access is checked on every request: the browser revalidates its copy (no-cache), so a
+        // disabled or expired link stops serving it.
         const { version } = sharedMockup(deps.db, c);
-        const [html, bridge] = await Promise.all([
-            readMockupFile(deps.config.dataDir, version.sha256),
-            // Read on every request so the watch build is picked up in development.
-            deps.bridgeFile ? readFile(deps.bridgeFile, 'utf8').catch(() => '') : '',
-        ]);
-        return c.body(injectBridge(html, bridge), 200, mockupHeaders(deps.config.mockupExternal));
+        // Read on every request so the watch build is picked up in development.
+        const bridge = deps.bridgeFile
+            ? await readFile(deps.bridgeFile, 'utf8').catch(() => '')
+            : '';
+        // The stored file is addressed by its hash; the bridge changes only with Loupe itself.
+        const etag = `"${version.sha256}-${sha256(bridge)}"`;
+        const headers = { ...mockupHeaders(deps.config.mockupExternal), ETag: etag };
+        if (matchesEtag(c.req.header('If-None-Match'), etag)) return c.body(null, 304, headers);
+        const html = await readMockupFile(deps.config.dataDir, version.sha256);
+        return c.body(injectBridge(html, bridge), 200, headers);
     });
 }

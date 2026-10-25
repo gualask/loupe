@@ -8,10 +8,11 @@ import { UploadDropzone } from '../components/UploadDropzone.tsx';
 import { api, errorMessage } from '../lib/api.ts';
 import { formatBytes, formatDate, formatRelative } from '../lib/format.ts';
 import { Button } from '../ui/Button.tsx';
+import { FormCard } from '../ui/FormCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
-function RenameForm({
+function EditProjectForm({
     project,
     onDone,
 }: {
@@ -20,22 +21,13 @@ function RenameForm({
 }) {
     const [name, setName] = useState(project.name);
     const [description, setDescription] = useState(project.description);
-    const [error, setError] = useState<string>();
 
-    async function submit(e: Event) {
-        e.preventDefault();
-        try {
-            onDone(await api.patch<Project>(`/projects/${project.id}`, { name, description }));
-        } catch (err) {
-            setError(errorMessage(err));
-        }
+    async function save() {
+        onDone(await api.patch<Project>(`/projects/${project.id}`, { name, description }));
     }
 
     return (
-        <form
-            class="flex flex-col gap-4 rounded-xl border border-stone-200 bg-white p-5"
-            onSubmit={(e) => void submit(e)}
-        >
+        <FormCard submitLabel="Save" onSubmit={save} onCancel={() => onDone()}>
             <TextField
                 label="Project name"
                 required
@@ -49,14 +41,7 @@ function RenameForm({
                 value={description}
                 onInput={(e) => setDescription(e.currentTarget.value)}
             />
-            <FormError message={error} />
-            <div class="flex gap-2">
-                <Button type="submit">Save</Button>
-                <Button variant="ghost" onClick={() => onDone()}>
-                    Cancel
-                </Button>
-            </div>
-        </form>
+        </FormCard>
     );
 }
 
@@ -153,7 +138,7 @@ export function ProjectPage() {
                     / {project.name}
                 </nav>
                 {editing ? (
-                    <RenameForm
+                    <EditProjectForm
                         project={project}
                         onDone={(updated) => {
                             if (updated) setProject({ ...project, ...updated });

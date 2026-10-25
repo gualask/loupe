@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import type { Role } from '../../shared/api/auth.ts';
 import type { Db } from './client.ts';
 import { accountTokens } from './schema.ts';
@@ -12,7 +12,6 @@ export function insertAccountToken(
         kind: AccountTokenRow['kind'];
         role?: Role;
         userId?: string;
-        createdBy?: string;
         expiresAt: Date;
     },
 ) {
@@ -21,24 +20,25 @@ export function insertAccountToken(
         .run();
 }
 
-/** Returns the token only while it is unused and not expired. */
+/** Returns the token only while it is not expired; used tokens are deleted. */
 export function findUsableAccountToken(db: Db, tokenHash: string) {
-    const row = db
+    return db
         .select()
         .from(accountTokens)
-        .where(and(eq(accountTokens.tokenHash, tokenHash), isNull(accountTokens.usedAt)))
+        .where(and(eq(accountTokens.tokenHash, tokenHash), gt(accountTokens.expiresAt, new Date())))
         .get();
-    return row && row.expiresAt.getTime() > Date.now() ? row : undefined;
 }
 
-export function markAccountTokenUsed(db: Db, id: string) {
-    db.update(accountTokens).set({ usedAt: new Date() }).where(eq(accountTokens.id, id)).run();
+/** Consumes a token: links are single-use. */
+export function deleteAccountToken(db: Db, id: string) {
+    db.delete(accountTokens).where(eq(accountTokens.id, id)).run();
 }
 
-/** Invalidates unused tokens of one kind, e.g. older setup links when a new one is issued. */
-export function expireUnusedAccountTokens(db: Db, kind: AccountTokenRow['kind']) {
-    db.update(accountTokens)
-        .set({ expiresAt: new Date() })
-        .where(and(eq(accountTokens.kind, kind), isNull(accountTokens.usedAt)))
-        .run();
+/** Deletes every token of one kind, e.g. older setup links when a new one is issued. */
+export function deleteAccountTokensOfKind(db: Db, kind: AccountTokenRow['kind']) {
+    db.delete(accountTokens).where(eq(accountTokens.kind, kind)).run();
+}
+
+export function deleteExpiredAccountTokens(db: Db) {
+    db.delete(accountTokens).where(lt(accountTokens.expiresAt, new Date())).run();
 }

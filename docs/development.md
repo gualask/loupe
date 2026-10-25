@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 24 or newer
+- Node.js 24.7 or newer (native Argon2id)
 - pnpm 11
 
 ## Setup

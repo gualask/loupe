@@ -1,9 +1,10 @@
 import { IconCheck, IconPencil, IconRotate, IconTrash, IconX } from '@tabler/icons-preact';
 import { useState } from 'preact/hooks';
 import type { Comment, Thread } from '../../shared/api/reviews.ts';
+import { AuthorName, Avatar } from '../components/Avatar.tsx';
 import { formatRelative } from '../lib/format.ts';
+import { Badge } from '../ui/Badge.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
-import { AuthorName, Avatar } from './Avatar.tsx';
 import { Composer } from './Composer.tsx';
 import type { ReviewSession } from './session.ts';
 
@@ -98,11 +99,7 @@ export function ThreadView({
         <div class="flex max-h-[min(32rem,70vh)] flex-col">
             <header class="flex items-center gap-2 border-stone-100 border-b px-3 py-2 text-sm">
                 <span class="font-semibold">{label}</span>
-                {resolved ? (
-                    <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 text-xs">
-                        Resolved
-                    </span>
-                ) : null}
+                {resolved ? <Badge tone="good">Resolved</Badge> : null}
                 <span class="ml-auto flex">
                     {canModerate ? (
                         <IconButton

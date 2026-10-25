@@ -219,7 +219,8 @@ threads on every (re)connection instead of replaying missed events. The stream s
 and `X-Accel-Buffering: no`, so proxies neither drop it as idle nor hold events back.
 At every heartbeat the server checks the link again: once it is disabled, regenerated or
 expired, open streams end, so a revoked link stops receiving events within 25 seconds. A 4xx
-answer on reconnection is final: the client stops retrying and shows the link as unavailable.
+answer on reconnection is final: the client stops retrying and loads the link again, which then
+shows it as unavailable (or offers to retry if the server cannot be reached).
 
 ## 6. Editor experience
 
@@ -234,6 +235,10 @@ answer on reconnection is final: the client stops retrying and shows the link as
 - **Reviews**: per mockup, a list grouped by viewer (color, name, thread counts open/resolved,
   verdict, last activity). Selecting a viewer opens the mockup filtered to their pins.
 - **Moderation**: reply to any thread, resolve/reopen, delete any comment.
+
+Pages, share links and account links tell an item that does not exist (404) from one that could
+not be loaded, e.g. offline or a server error, which offers to retry. Buttons that send a request
+are disabled until it completes, so a double click does not send it twice.
 
 ## 7. Configuration
 

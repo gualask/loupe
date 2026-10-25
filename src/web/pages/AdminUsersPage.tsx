@@ -1,27 +1,29 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import type { AccountLink, AdminUser, Role } from '../../shared/api/auth.ts';
 import { AppShell } from '../components/AppShell.tsx';
-import { api, errorMessage } from '../lib/api.ts';
+import { api } from '../lib/api.ts';
+import { useAction } from '../lib/form.ts';
 import { formatDateTime } from '../lib/format.ts';
+import { useResource } from '../lib/resource.ts';
 import { currentUser } from '../lib/session.ts';
+import { Badge } from '../ui/Badge.tsx';
 import { Button } from '../ui/Button.tsx';
 import { CopyField } from '../ui/CopyField.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
+import { INPUT_CLASS } from '../ui/styles.ts';
+
+const ROLE_LABELS: Record<Role, string> = { editor: 'Editor', admin: 'Admin' };
+const ROLES = Object.keys(ROLE_LABELS) as Role[];
 
 function InviteSection() {
     const [role, setRole] = useState<Role>('editor');
     const [link, setLink] = useState<AccountLink>();
-    const [error, setError] = useState<string>();
+    const { error, pending, run } = useAction();
 
-    async function createInvite() {
-        setError(undefined);
-        try {
-            setLink(await api.post<AccountLink>('/admin/invites', { role }));
-        } catch (err) {
-            setError(errorMessage(err));
-        }
-    }
+    const createInvite = () =>
+        run(async () => setLink(await api.post<AccountLink>('/admin/invites', { role })));
 
     return (
         <section class="rounded-xl border border-stone-200 bg-white p-5">
@@ -34,12 +36,17 @@ function InviteSection() {
                     aria-label="Role"
                     value={role}
                     onChange={(e) => setRole(e.currentTarget.value as Role)}
-                    class="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                    class={INPUT_CLASS}
                 >
-                    <option value="editor">Editor</option>
-                    <option value="admin">Admin</option>
+                    {ROLES.map((r) => (
+                        <option key={r} value={r}>
+                            {ROLE_LABELS[r]}
+                        </option>
+                    ))}
                 </select>
-                <Button onClick={() => void createInvite()}>Create invite link</Button>
+                <Button disabled={pending} onClick={createInvite}>
+                    Create invite link
+                </Button>
             </div>
             {link ? (
                 <div class="mt-4 flex flex-col gap-1.5">
@@ -59,16 +66,7 @@ function InviteSection() {
 function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUser) => void }) {
     const isSelf = user.id === currentUser.value?.id;
     const [resetLink, setResetLink] = useState<AccountLink>();
-    const [error, setError] = useState<string>();
-
-    async function run(action: () => Promise<void>) {
-        setError(undefined);
-        try {
-            await action();
-        } catch (err) {
-            setError(errorMessage(err));
-        }
-    }
+    const { error, pending, run } = useAction();
 
     const update = (changes: { role?: Role; disabled?: boolean }) =>
         run(async () => {
@@ -91,16 +89,15 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
                     </p>
                     <p class="text-sm text-stone-500">@{user.username}</p>
                 </div>
-                <span class="rounded-full bg-stone-100 px-2 py-0.5 text-stone-700 text-xs capitalize">
-                    {user.disabled ? 'disabled' : user.role}
-                </span>
+                <Badge>{user.disabled ? 'Disabled' : ROLE_LABELS[user.role]}</Badge>
                 {!isSelf && (
                     <div class="flex flex-wrap gap-1">
                         {!user.disabled && (
                             <Button
                                 variant="ghost"
+                                disabled={pending}
                                 onClick={() =>
-                                    void update({
+                                    update({
                                         role: user.role === 'admin' ? 'editor' : 'admin',
                                     })
                                 }
@@ -109,13 +106,14 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
                             </Button>
                         )}
                         {!user.disabled && (
-                            <Button variant="ghost" onClick={() => void createResetLink()}>
+                            <Button variant="ghost" disabled={pending} onClick={createResetLink}>
                                 Reset link
                             </Button>
                         )}
                         <Button
                             variant="ghost"
-                            onClick={() => void update({ disabled: !user.disabled })}
+                            disabled={pending}
+                            onClick={() => update({ disabled: !user.disabled })}
                         >
                             {user.disabled ? 'Enable' : 'Disable'}
                         </Button>
@@ -136,29 +134,25 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
 }
 
 export function AdminUsersPage() {
-    const [users, setUsers] = useState<AdminUser[]>();
-    const [error, setError] = useState<string>();
-
-    useEffect(() => {
-        api.get<AdminUser[]>('/admin/users').then(setUsers, (err) => setError(errorMessage(err)));
-    }, []);
+    const users = useResource('/admin/users', api.get<AdminUser[]>);
 
     const replace = (updated: AdminUser) =>
-        setUsers((list) => list?.map((u) => (u.id === updated.id ? updated : u)));
+        users.update((list) => list.map((u) => (u.id === updated.id ? updated : u)));
 
     return (
         <AppShell>
             <div class="flex flex-col gap-6">
                 <PageHeader title="Users" />
-                <FormError message={error} />
                 <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                    {users ? (
+                    {users.status === 'ready' ? (
                         <ul class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
-                            {users.map((user) => (
+                            {users.data.map((user) => (
                                 <UserRow key={user.id} user={user} onChange={replace} />
                             ))}
                         </ul>
-                    ) : null}
+                    ) : (
+                        <LoadStatus resource={users} />
+                    )}
                     <div class="xl:col-start-2">
                         <InviteSection />
                     </div>

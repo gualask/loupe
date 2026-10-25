@@ -1,6 +1,7 @@
 import { IconSend2 } from '@tabler/icons-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { storage } from '../lib/storage.ts';
+import { INPUT_CLASS } from '../ui/styles.ts';
 
 /**
  * Comment box: Enter sends, Shift+Enter adds a line, Esc cancels. With `draftKey`, unsent text
@@ -71,7 +72,7 @@ export function Composer({
                 value={text}
                 onInput={(e) => update(e.currentTarget.value)}
                 onKeyDown={onKeyDown}
-                class="min-w-0 flex-1 resize-none rounded-md border border-stone-300 bg-white px-2.5 py-2 text-sm outline-none focus:border-stone-500 focus:ring-2 focus:ring-stone-200"
+                class={`min-w-0 flex-1 resize-none ${INPUT_CLASS}`}
             />
             <button
                 type="button"

@@ -1,43 +1,27 @@
-import {
-    IconArrowLeft,
-    IconDeviceDesktop,
-    IconDeviceMobile,
-    IconDeviceTablet,
-    IconLayoutSidebarRight,
-    IconX,
-    IconZoomScan,
-} from '@tabler/icons-preact';
+import { IconX } from '@tabler/icons-preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import type { PinAnchor } from '../../shared/anchor.ts';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import type { Thread } from '../../shared/api/reviews.ts';
-import type { BridgeMessage, BridgePin, PinPosition } from '../../shared/bridge-protocol.ts';
+import type { BridgeMessage, PinPosition } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
-import { authorColor } from '../lib/colors.ts';
-import { Avatar } from './Avatar.tsx';
 import { useBridge } from './bridge.ts';
 import { Composer } from './Composer.tsx';
 import { HelpDialog, IdentityDialog, ReviewDialog } from './dialogs.tsx';
+import { ErrorToast } from './ErrorToast.tsx';
 import { Popover } from './Popover.tsx';
+import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
+import { ReviewHeader } from './ReviewHeader.tsx';
 import { createReviewSession } from './session.ts';
 import { type ThreadFilter, ThreadPanel } from './ThreadPanel.tsx';
 import { ThreadView } from './ThreadView.tsx';
 import { Toolbar } from './Toolbar.tsx';
 
-const VIEWPORTS = [
-    { value: 'desktop', label: 'Desktop', width: null, Icon: IconDeviceDesktop },
-    { value: 'tablet', label: 'Tablet', width: 768, Icon: IconDeviceTablet },
-    { value: 'mobile', label: 'Mobile', width: 390, Icon: IconDeviceMobile },
-] as const;
-
 // Pins placed at a width this different from the current one may point elsewhere.
 const VIEWPORT_HINT_PX = 100;
 // Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
-const DRAFT_PIN = 'draft';
-const HEADER_BUTTON =
-    'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900';
 
 /** What is being written; `body` refills the box after the server rejected it. */
 type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & { body?: string };
@@ -93,19 +77,15 @@ export function ReviewSpace({
     const [openId, setOpenId] = useState<string | null>(null);
     const [pinsHidden, setPinsHidden] = useState(false);
     const [filter, setFilter] = useState<ThreadFilter>('open');
-    const [viewport, setViewport] = useState<(typeof VIEWPORTS)[number]>(VIEWPORTS[0]);
+    // Null fills the window.
+    const [viewportWidth, setViewportWidth] = useState<number | null>(null);
     const [panelOpen, setPanelOpen] = useState(() => !panelCoversMockup());
     const [dialog, setDialog] = useState<DialogName | null>(
         initial.me || initial.readOnly ? null : 'identity',
     );
     const [positions, setPositions] = useState(new Map<string, PinPosition>());
 
-    const labels = useMemo(() => {
-        // A pin not saved yet shows the next number, which the server normally confirms.
-        let next = Math.max(0, ...threads.map((t) => t.number ?? 0));
-        const pins = threads.filter((t) => t.kind === 'pin');
-        return new Map(pins.map((t) => [t.id, String(t.number ?? ++next)]));
-    }, [threads]);
+    const labels = useMemo(() => pinLabels(threads), [threads]);
 
     const viewerFilter = query.viewer;
     const listed = threads.filter((t) => {
@@ -117,31 +97,13 @@ export function ReviewSpace({
     });
     const openThread = threads.find((t) => t.id === openId);
 
-    const pins: BridgePin[] = pinsHidden
-        ? []
-        : threads
-              // The open thread stays visible even when it no longer matches the filter.
-              .filter(
-                  (t) => t.kind === 'pin' && t.anchor && (listed.includes(t) || t.id === openId),
-              )
-              .map((t) => ({
-                  id: t.id,
-                  anchor: t.anchor as PinAnchor,
-                  label: labels.get(t.id) ?? '',
-                  color: authorColor(t.author),
-                  muted: t.status === 'resolved',
-                  active: t.id === openId,
-              }));
-    if (composing?.kind === 'pin' && me) {
-        pins.push({
-            id: DRAFT_PIN,
-            anchor: composing.anchor,
-            label: '+',
-            color: authorColor(me),
-            muted: false,
-            active: true,
-        });
-    }
+    const pins = bridgePins({
+        threads: pinsHidden ? [] : threads,
+        listed,
+        labels,
+        openId,
+        draft: composing?.kind === 'pin' && me ? { anchor: composing.anchor, author: me } : null,
+    });
 
     /** On narrow screens the panel hides the mockup, so it makes way for pins and popovers. */
     function revealMockup() {
@@ -219,6 +181,8 @@ export function ReviewSpace({
 
     const { ready, send, onFrameLoad } = useBridge(frame, onBridgeMessage);
 
+    // Pins are rebuilt on every render; comparing them as JSON sends them to the mockup only
+    // when they actually change.
     const pinsMessage = JSON.stringify(pins);
     useEffect(() => {
         if (ready) send({ type: 'loupe:pins', pins: JSON.parse(pinsMessage) });
@@ -326,7 +290,6 @@ export function ReviewSpace({
         );
     }
 
-    const presence = session.presence.value;
     const viewerName = viewerFilter
         ? (threads.find((t) => t.author.id === viewerFilter)?.author.displayName ?? 'one viewer')
         : undefined;
@@ -335,69 +298,22 @@ export function ReviewSpace({
 
     return (
         <div class="flex h-dvh flex-col bg-stone-100 text-stone-900">
-            <header class="flex h-12 shrink-0 items-center gap-3 border-stone-200 border-b bg-white px-4 text-sm">
-                {isEditor ? (
-                    <a
-                        href={`/mockups/${shared.mockupId}`}
-                        title="Back to the mockup page"
-                        class={`-ml-2 shrink-0 ${HEADER_BUTTON}`}
-                    >
-                        <IconArrowLeft size={18} />
-                        <span class="hidden sm:inline">Back</span>
-                    </a>
-                ) : null}
-                <IconZoomScan size={18} stroke={1.75} class="shrink-0" />
-                <span class="truncate font-medium">{shared.name}</span>
-                {shared.readOnly ? (
-                    <span class="rounded-full bg-stone-100 px-2 py-0.5 text-stone-600 text-xs">
-                        Read-only
-                    </span>
-                ) : null}
-                <div class="ml-auto flex items-center gap-3">
-                    <div class="hidden rounded-lg bg-stone-100 p-0.5 sm:flex">
-                        {VIEWPORTS.map((option) => (
-                            <button
-                                key={option.value}
-                                type="button"
-                                title={option.label}
-                                aria-label={option.label}
-                                aria-pressed={viewport.value === option.value}
-                                onClick={() => setViewport(option)}
-                                class={`rounded-md p-1.5 ${viewport.value === option.value ? 'bg-white shadow-sm' : 'text-stone-500 hover:text-stone-900'}`}
-                            >
-                                <option.Icon size={16} />
-                            </button>
-                        ))}
-                    </div>
-                    <div class="flex -space-x-1.5" title="People here now">
-                        {presence.slice(0, 5).map((author) => (
-                            <Avatar key={`${author.kind}:${author.id}`} author={author} size={26} />
-                        ))}
-                        {presence.length > 5 ? (
-                            <span class="grid size-[26px] place-items-center rounded-full bg-stone-200 text-[11px] ring-2 ring-white">
-                                +{presence.length - 5}
-                            </span>
-                        ) : null}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setPanelOpen((open) => !open)}
-                        aria-pressed={panelOpen}
-                        title="Comments panel"
-                        class={HEADER_BUTTON}
-                    >
-                        <IconLayoutSidebarRight size={18} />
-                        <span class="tabular-nums">
-                            {threads.filter((t) => t.status === 'open').length}
-                        </span>
-                    </button>
-                </div>
-            </header>
+            <ReviewHeader
+                name={shared.name}
+                readOnly={shared.readOnly}
+                backHref={isEditor ? `/mockups/${shared.mockupId}` : undefined}
+                viewportWidth={viewportWidth}
+                presence={session.presence.value}
+                openCount={threads.filter((t) => t.status === 'open').length}
+                panelOpen={panelOpen}
+                onViewport={setViewportWidth}
+                onTogglePanel={() => setPanelOpen((open) => !open)}
+            />
             <div class="flex min-h-0 flex-1">
                 <main class="flex min-w-0 flex-1 justify-center overflow-auto">
                     <div
                         class="h-full bg-white shadow-sm"
-                        style={{ width: viewport.width ? `${viewport.width}px` : '100%' }}
+                        style={{ width: viewportWidth ? `${viewportWidth}px` : '100%' }}
                     >
                         <MockupFrame
                             frameRef={frame}
@@ -438,21 +354,12 @@ export function ReviewSpace({
             />
             {popover}
             {error ? (
-                <div
-                    role="alert"
-                    class="fixed top-16 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-red-600 px-4 py-2 text-sm text-white shadow-lg"
-                >
-                    {error}
-                    <button
-                        type="button"
-                        aria-label="Dismiss"
-                        onClick={() => {
-                            session.error.value = undefined;
-                        }}
-                    >
-                        <IconX size={16} />
-                    </button>
-                </div>
+                <ErrorToast
+                    message={error}
+                    onDismiss={() => {
+                        session.error.value = undefined;
+                    }}
+                />
             ) : null}
             {dialog === 'identity' ? (
                 <IdentityDialog

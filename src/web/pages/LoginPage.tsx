@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { errorMessage } from '../lib/api.ts';
+import { useFormSubmit } from '../lib/form.ts';
 import { currentUser, login } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { CenteredCard } from '../ui/CenteredCard.tsx';
@@ -16,30 +16,16 @@ export function LoginPage() {
     const { route, query } = useLocation();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState<string>();
-    const [pending, setPending] = useState(false);
+    const { error, pending, submit } = useFormSubmit(() => login(username, password));
     const signedIn = !!currentUser.value;
 
     useEffect(() => {
         if (signedIn) route(safeNext(query.next), true);
     }, [signedIn, route, query.next]);
 
-    async function submit(e: Event) {
-        e.preventDefault();
-        setPending(true);
-        setError(undefined);
-        try {
-            await login(username, password);
-        } catch (err) {
-            setError(errorMessage(err));
-        } finally {
-            setPending(false);
-        }
-    }
-
     return (
         <CenteredCard title="Sign in">
-            <form class="flex flex-col gap-4" onSubmit={(e) => void submit(e)}>
+            <form class="flex flex-col gap-4" onSubmit={submit}>
                 <TextField
                     label="Username"
                     autocomplete="username"

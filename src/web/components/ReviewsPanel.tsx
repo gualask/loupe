@@ -1,32 +1,26 @@
-import { useEffect, useState } from 'preact/hooks';
 import type { Review, ReviewerSummary } from '../../shared/api/reviews.ts';
 import { api } from '../lib/api.ts';
 import { formatRelative } from '../lib/format.ts';
-import { Avatar } from '../viewer/Avatar.tsx';
+import { useResource } from '../lib/resource.ts';
+import { VERDICT_LABELS } from '../lib/review.ts';
+import { Badge } from '../ui/Badge.tsx';
+import { LoadStatus } from '../ui/LoadStatus.tsx';
+import { Avatar } from './Avatar.tsx';
 
 function Verdict({ review }: { review: Review | null }) {
-    if (review?.status !== 'submitted') {
+    const verdict = review?.status === 'submitted' ? review.verdict : null;
+    if (!verdict) {
         return <span class="text-stone-500 text-xs">{review ? 'In progress' : 'No feedback'}</span>;
     }
-    const approved = review.verdict === 'approved';
     return (
-        <span
-            class={`rounded-full px-2 py-0.5 text-xs ${approved ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}
-        >
-            {approved ? 'Approved' : 'Changes requested'}
-        </span>
+        <Badge tone={verdict === 'approved' ? 'good' : 'warning'}>{VERDICT_LABELS[verdict]}</Badge>
     );
 }
 
 /** Viewers of a mockup with their verdict and comment counts; each opens their pins. */
 export function ReviewsPanel({ mockupId, token }: { mockupId: string; token: string }) {
-    const [reviewers, setReviewers] = useState<ReviewerSummary[]>();
-
-    useEffect(() => {
-        api.get<ReviewerSummary[]>(`/mockups/${mockupId}/reviews`).then(setReviewers, () =>
-            setReviewers([]),
-        );
-    }, [mockupId]);
+    const resource = useResource(`/mockups/${mockupId}/reviews`, api.get<ReviewerSummary[]>);
+    const reviewers = resource.status === 'ready' ? resource.data : undefined;
 
     return (
         <section class="flex flex-col text-sm">
@@ -56,7 +50,11 @@ export function ReviewsPanel({ mockupId, token }: { mockupId: string; token: str
                 <p class="border-stone-100 border-t px-5 py-4 text-stone-500">
                     Nobody has opened the share link yet.
                 </p>
-            ) : null}
+            ) : (
+                <div class="px-5 pb-4">
+                    <LoadStatus resource={resource} />
+                </div>
+            )}
         </section>
     );
 }

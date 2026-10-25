@@ -1,12 +1,13 @@
 import { IconExternalLink, IconRefresh } from '@tabler/icons-preact';
 import { useId, useState } from 'preact/hooks';
 import type { Mockup } from '../../shared/api/projects.ts';
-import { api, errorMessage } from '../lib/api.ts';
+import { api } from '../lib/api.ts';
+import { useAction } from '../lib/form.ts';
 import { shareState } from '../lib/share.ts';
 import { Button } from '../ui/Button.tsx';
 import { CopyField } from '../ui/CopyField.tsx';
 import { FormError } from '../ui/FormError.tsx';
-import { buttonClass } from '../ui/styles.ts';
+import { buttonClass, INPUT_CLASS } from '../ui/styles.ts';
 
 /** `datetime-local` works in local time without a zone; convert both ways. */
 function toLocalInput(iso: string | null) {
@@ -19,11 +20,13 @@ function Checkbox({
     label,
     hint,
     checked,
+    disabled,
     onChange,
 }: {
     label: string;
     hint: string;
     checked: boolean;
+    disabled: boolean;
     onChange: (checked: boolean) => void;
 }) {
     return (
@@ -32,6 +35,7 @@ function Checkbox({
                 type="checkbox"
                 class="mt-0.5 size-4 accent-stone-900"
                 checked={checked}
+                disabled={disabled}
                 onChange={(e) => onChange(e.currentTarget.checked)}
             />
             <span>
@@ -42,6 +46,8 @@ function Checkbox({
     );
 }
 
+type Settings = Partial<Pick<Mockup, 'shareEnabled' | 'shareExpiresAt' | 'readOnly'>>;
+
 /** Share link and its settings for one mockup. */
 export function SharePanel({
     mockup,
@@ -50,28 +56,34 @@ export function SharePanel({
     mockup: Mockup;
     onChange: (mockup: Mockup) => void;
 }) {
-    const [error, setError] = useState<string>();
+    // One change at a time, so two quick toggles cannot be saved out of order.
+    const { error, pending, run } = useAction();
+    // Shown while saving, so a control does not flip back until the server answers.
+    const [saving, setSaving] = useState<Settings>({});
+    const shown = { ...mockup, ...saving };
     const expiryId = useId();
 
-    async function run(request: () => Promise<Mockup>) {
-        setError(undefined);
-        try {
-            onChange(await request());
-        } catch (err) {
-            setError(errorMessage(err));
-        }
-    }
+    const apply = (request: () => Promise<Mockup>) =>
+        run(async () => {
+            try {
+                onChange(await request());
+            } finally {
+                setSaving({});
+            }
+        });
 
-    const save = (changes: Partial<Pick<Mockup, 'shareEnabled' | 'shareExpiresAt' | 'readOnly'>>) =>
-        run(() => api.patch<Mockup>(`/mockups/${mockup.id}`, changes));
+    function save(changes: Settings) {
+        setSaving(changes);
+        apply(() => api.patch<Mockup>(`/mockups/${mockup.id}`, changes));
+    }
 
     function regenerate() {
         if (confirm('Create a new link? The current link will stop working for everyone.')) {
-            void run(() => api.post<Mockup>(`/mockups/${mockup.id}/share/regenerate`));
+            apply(() => api.post<Mockup>(`/mockups/${mockup.id}/share/regenerate`));
         }
     }
 
-    const state = shareState(mockup);
+    const state = shareState(shown);
 
     return (
         <section class="flex flex-col gap-4 p-5">
@@ -90,7 +102,7 @@ export function SharePanel({
                     <IconExternalLink size={16} />
                     Open link
                 </a>
-                <Button variant="ghost" onClick={regenerate}>
+                <Button variant="ghost" disabled={pending} onClick={regenerate}>
                     <IconRefresh size={16} />
                     New link
                 </Button>
@@ -98,14 +110,16 @@ export function SharePanel({
             <Checkbox
                 label="Link enabled"
                 hint="When off, only you can open the mockup."
-                checked={mockup.shareEnabled}
-                onChange={(shareEnabled) => void save({ shareEnabled })}
+                checked={shown.shareEnabled}
+                disabled={pending}
+                onChange={(shareEnabled) => save({ shareEnabled })}
             />
             <Checkbox
                 label="Read-only"
                 hint="Reviewers can see comments but not add new ones."
-                checked={mockup.readOnly}
-                onChange={(readOnly) => void save({ readOnly })}
+                checked={shown.readOnly}
+                disabled={pending}
+                onChange={(readOnly) => save({ readOnly })}
             />
             <div class="flex flex-col gap-1.5">
                 <label class="font-medium text-sm" for={expiryId}>
@@ -115,17 +129,22 @@ export function SharePanel({
                     <input
                         id={expiryId}
                         type="datetime-local"
-                        value={toLocalInput(mockup.shareExpiresAt)}
+                        value={toLocalInput(shown.shareExpiresAt)}
+                        disabled={pending}
                         onChange={(e) => {
                             const value = e.currentTarget.value;
-                            void save({
+                            save({
                                 shareExpiresAt: value ? new Date(value).toISOString() : null,
                             });
                         }}
-                        class="min-w-0 flex-1 rounded-md border border-stone-300 px-3 py-2 text-sm"
+                        class={`min-w-0 flex-1 ${INPUT_CLASS}`}
                     />
-                    {mockup.shareExpiresAt ? (
-                        <Button variant="ghost" onClick={() => void save({ shareExpiresAt: null })}>
+                    {shown.shareExpiresAt ? (
+                        <Button
+                            variant="ghost"
+                            disabled={pending}
+                            onClick={() => save({ shareExpiresAt: null })}
+                        >
                             Clear
                         </Button>
                     ) : null}

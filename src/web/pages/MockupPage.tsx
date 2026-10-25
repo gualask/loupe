@@ -1,5 +1,4 @@
 import { IconMessages } from '@tabler/icons-preact';
-import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import type { Mockup, Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
@@ -8,34 +7,30 @@ import { MockupFrame } from '../components/MockupFrame.tsx';
 import { ReviewsPanel } from '../components/ReviewsPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api } from '../lib/api.ts';
+import { useResource } from '../lib/resource.ts';
 import { shareToken } from '../lib/share.ts';
+import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
 import { buttonClass } from '../ui/styles.ts';
 
 export function MockupPage() {
     const { params } = useRoute();
-    const [mockup, setMockup] = useState<Mockup | null>();
-    const [project, setProject] = useState<Project>();
+    const resource = useResource(`/mockups/${params.id}`, api.get<Mockup>);
+    // Only for the breadcrumb, which shows a placeholder until (or unless) it loads.
+    const project = useResource(
+        resource.status === 'ready' ? `/projects/${resource.data.projectId}` : null,
+        api.get<Project>,
+    );
 
-    useEffect(() => {
-        api.get<Mockup>(`/mockups/${params.id}`).then(
-            (m) => {
-                setMockup(m);
-                api.get<Project>(`/projects/${m.projectId}`).then(setProject, () => undefined);
-            },
-            () => setMockup(null),
-        );
-    }, [params.id]);
-
-    if (mockup === undefined) return <AppShell>{null}</AppShell>;
-    if (mockup === null) {
+    if (resource.status !== 'ready') {
         return (
             <AppShell>
-                <p class="text-stone-500">Mockup not found.</p>
+                <LoadStatus resource={resource} missing="Mockup not found." />
             </AppShell>
         );
     }
 
+    const mockup = resource.data;
     const token = shareToken(mockup);
 
     return (
@@ -46,7 +41,7 @@ export function MockupPage() {
                         { href: '/', label: 'Workspace' },
                         {
                             href: `/projects/${mockup.projectId}`,
-                            label: project?.name ?? 'Project',
+                            label: project.status === 'ready' ? project.data.name : 'Project',
                         },
                     ]}
                     title={mockup.name}
@@ -68,7 +63,7 @@ export function MockupPage() {
                         />
                     </div>
                     <div class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white lg:min-h-0 lg:overflow-y-auto">
-                        <SharePanel mockup={mockup} onChange={setMockup} />
+                        <SharePanel mockup={mockup} onChange={(m) => resource.update(() => m)} />
                         <ReviewsPanel mockupId={mockup.id} token={token} />
                         <FilePanel mockup={mockup} />
                     </div>

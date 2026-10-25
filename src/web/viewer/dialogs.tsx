@@ -1,10 +1,12 @@
 import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import type { Review } from '../../shared/api/reviews.ts';
-import { errorMessage } from '../lib/api.ts';
+import { useAction, useFormSubmit } from '../lib/form.ts';
+import { VERDICT_LABELS } from '../lib/review.ts';
 import { Button } from '../ui/Button.tsx';
 import { Dialog } from '../ui/Dialog.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { INPUT_CLASS } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
 
 /**
@@ -19,18 +21,8 @@ export function IdentityDialog({
     onClose: () => void;
 }) {
     const [name, setName] = useState('');
-    const [error, setError] = useState<string>();
-    const [busy, setBusy] = useState(false);
-
-    async function submit(displayName: string) {
-        setBusy(true);
-        try {
-            await onSubmit(displayName);
-        } catch (err) {
-            setError(errorMessage(err));
-            setBusy(false);
-        }
-    }
+    const { error, pending, run } = useAction();
+    const submit = (displayName: string) => run(() => onSubmit(displayName));
 
     return (
         <Dialog title="Welcome to the review" onClose={onClose}>
@@ -38,7 +30,7 @@ export function IdentityDialog({
                 class="flex flex-col gap-4"
                 onSubmit={(e) => {
                     e.preventDefault();
-                    void submit(name);
+                    submit(name);
                 }}
             >
                 <TextField
@@ -50,10 +42,10 @@ export function IdentityDialog({
                 />
                 <FormError message={error} />
                 <div class="flex justify-end gap-2">
-                    <Button variant="ghost" disabled={busy} onClick={() => void submit('')}>
+                    <Button variant="ghost" disabled={pending} onClick={() => submit('')}>
                         Skip
                     </Button>
-                    <Button type="submit" disabled={busy || !name.trim()}>
+                    <Button type="submit" disabled={pending || !name.trim()}>
                         Continue
                     </Button>
                 </div>
@@ -63,8 +55,8 @@ export function IdentityDialog({
 }
 
 const VERDICTS = [
-    { value: 'approved', label: 'Approved', hint: 'Good to go as it is.' },
-    { value: 'changes_requested', label: 'Changes requested', hint: 'See my comments.' },
+    { value: 'approved', hint: 'Good to go as it is.' },
+    { value: 'changes_requested', hint: 'See my comments.' },
 ] as const;
 
 export function ReviewDialog({
@@ -78,18 +70,14 @@ export function ReviewDialog({
 }) {
     const [verdict, setVerdict] = useState(review?.verdict ?? null);
     const [summary, setSummary] = useState(review?.summary ?? '');
-    const [busy, setBusy] = useState(false);
-
-    async function submit(e: Event) {
-        e.preventDefault();
-        setBusy(true);
+    // Rejections are reported by the review space, so the dialog only closes on success.
+    const { pending, submit } = useFormSubmit(async () => {
         if (await onSubmit({ verdict, summary })) onClose();
-        else setBusy(false);
-    }
+    });
 
     return (
         <Dialog title="Finish your review" onClose={onClose}>
-            <form class="flex flex-col gap-4" onSubmit={(e) => void submit(e)}>
+            <form class="flex flex-col gap-4" onSubmit={submit}>
                 <fieldset class="flex flex-col gap-2">
                     <legend class="sr-only">Verdict</legend>
                     {VERDICTS.map((option) => (
@@ -105,7 +93,9 @@ export function ReviewDialog({
                                 onChange={() => setVerdict(option.value)}
                             />
                             <span>
-                                <span class="block font-medium">{option.label}</span>
+                                <span class="block font-medium">
+                                    {VERDICT_LABELS[option.value]}
+                                </span>
                                 <span class="text-stone-500">{option.hint}</span>
                             </span>
                         </label>
@@ -118,14 +108,14 @@ export function ReviewDialog({
                         maxLength={5000}
                         value={summary}
                         onInput={(e) => setSummary(e.currentTarget.value)}
-                        class="rounded-md border border-stone-300 px-3 py-2 font-normal outline-none focus:border-stone-500 focus:ring-2 focus:ring-stone-200"
+                        class={`font-normal ${INPUT_CLASS}`}
                     />
                 </label>
                 <div class="flex justify-end gap-2">
                     <Button variant="ghost" onClick={onClose}>
                         Cancel
                     </Button>
-                    <Button type="submit" disabled={busy || !verdict}>
+                    <Button type="submit" disabled={pending || !verdict}>
                         Submit review
                     </Button>
                 </div>

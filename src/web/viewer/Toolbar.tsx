@@ -12,6 +12,7 @@ import {
 import type { ComponentChildren, RefObject } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Review } from '../../shared/api/reviews.ts';
+import { VERDICT_LABELS } from '../lib/review.ts';
 import type { SaveState } from './session.ts';
 
 function ToolButton({
@@ -79,8 +80,8 @@ function clampOffset(next: Offset, current: Offset, rect: DOMRect): Offset {
 }
 
 function reviewLabel(review: Review | null) {
-    if (review?.status !== 'submitted') return 'Finish review';
-    return review.verdict === 'approved' ? 'Approved' : 'Changes requested';
+    if (review?.status !== 'submitted' || !review.verdict) return 'Finish review';
+    return VERDICT_LABELS[review.verdict];
 }
 
 /** Floating, draggable toolbar with the review actions (docs/SPEC.md §5). */

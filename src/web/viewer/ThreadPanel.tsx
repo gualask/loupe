@@ -1,7 +1,7 @@
 import { IconMessage, IconX } from '@tabler/icons-preact';
 import type { Thread } from '../../shared/api/reviews.ts';
 import { authorColor } from '../lib/colors.ts';
-import { formatRelative } from '../lib/format.ts';
+import { formatRelative, plural } from '../lib/format.ts';
 
 export type ThreadFilter = 'open' | 'mine' | 'resolved' | 'all';
 
@@ -49,11 +49,7 @@ function ThreadItem({
                     </span>
                     <span class="line-clamp-2 text-sm text-stone-600">{first?.body}</span>
                     <span class="mt-1 flex gap-2 text-stone-500 text-xs empty:hidden">
-                        {replies > 0 ? (
-                            <span>
-                                {replies} {replies === 1 ? 'reply' : 'replies'}
-                            </span>
-                        ) : null}
+                        {replies > 0 ? <span>{plural(replies, 'reply', 'replies')}</span> : null}
                         {thread.status === 'resolved' ? (
                             <span class="text-emerald-700">Resolved</span>
                         ) : null}

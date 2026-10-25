@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'preact/hooks';
+import type { TargetedEvent } from 'preact';
+import { useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 import type { AccountTokenInfo, User } from '../../shared/api/auth.ts';
-import { api, errorMessage } from '../lib/api.ts';
+import { api } from '../lib/api.ts';
+import { useFormSubmit } from '../lib/form.ts';
+import { useResource } from '../lib/resource.ts';
 import { currentUser } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { CenteredCard } from '../ui/CenteredCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { CenteredLoadStatus } from '../ui/LoadStatus.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
 const TITLES: Record<AccountTokenInfo['kind'], string> = {
@@ -19,48 +23,33 @@ export function AccountLinkPage() {
     const { params } = useRoute();
     const { route } = useLocation();
     const token = params.token ?? '';
-    const [info, setInfo] = useState<AccountTokenInfo | null>();
+    const resource = useResource(`/auth/tokens/${token}`, api.get<AccountTokenInfo>);
     const [form, setForm] = useState({ username: '', displayName: '', password: '' });
-    const [error, setError] = useState<string>();
-    const [pending, setPending] = useState(false);
+    const { error, pending, submit } = useFormSubmit(async () => {
+        const reset = resource.status === 'ready' && resource.data.kind === 'reset';
+        const body = reset ? { password: form.password } : form;
+        currentUser.value = await api.post<User>(`/auth/tokens/${token}`, body);
+        route('/', true);
+    });
 
-    useEffect(() => {
-        api.get<AccountTokenInfo>(`/auth/tokens/${token}`).then(setInfo, () => setInfo(null));
-    }, [token]);
-
-    async function submit(e: Event) {
-        e.preventDefault();
-        setPending(true);
-        setError(undefined);
-        try {
-            const body = info?.kind === 'reset' ? { password: form.password } : form;
-            currentUser.value = await api.post<User>(`/auth/tokens/${token}`, body);
-            route('/', true);
-        } catch (err) {
-            setError(errorMessage(err));
-        } finally {
-            setPending(false);
-        }
-    }
-
-    if (info === undefined) return null;
-    if (info === null) {
+    if (resource.status !== 'ready') {
         return (
-            <CenteredCard title="Link not valid">
-                <p class="text-sm text-stone-600">
-                    This link is invalid, expired or already used. Ask an admin for a new one.
-                </p>
-            </CenteredCard>
+            <CenteredLoadStatus
+                resource={resource}
+                missingTitle="Link not valid"
+                missing="This link is invalid, expired or already used. Ask an admin for a new one."
+            />
         );
     }
+    const info = resource.data;
 
-    const set = (field: keyof typeof form) => (e: Event) =>
-        setForm({ ...form, [field]: (e.currentTarget as HTMLInputElement).value });
+    const set = (field: keyof typeof form) => (e: TargetedEvent<HTMLInputElement>) =>
+        setForm({ ...form, [field]: e.currentTarget.value });
     const signedIn = currentUser.value;
 
     return (
         <CenteredCard title={TITLES[info.kind]}>
-            <form class="flex flex-col gap-4" onSubmit={(e) => void submit(e)}>
+            <form class="flex flex-col gap-4" onSubmit={submit}>
                 {/* E.g. an admin opening an invite link they just created, to check it. */}
                 {signedIn ? (
                     <p class="rounded-md bg-amber-50 p-3 text-amber-800 text-sm">

@@ -1,15 +1,17 @@
 import { IconFolder, IconPlus } from '@tabler/icons-preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import type { Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
-import { api, errorMessage } from '../lib/api.ts';
-import { formatDate } from '../lib/format.ts';
+import { api } from '../lib/api.ts';
+import { formatDate, plural } from '../lib/format.ts';
+import { useResource } from '../lib/resource.ts';
 import { currentUser } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { FormCard } from '../ui/FormCard.tsx';
-import { FormError } from '../ui/FormError.tsx';
+import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
+import { INPUT_CLASS } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
 
 function NewProjectForm({ onCancel }: { onCancel: () => void }) {
@@ -56,8 +58,7 @@ function ProjectCard({ project }: { project: Project }) {
                 <p class="line-clamp-2 text-sm text-stone-600">{project.description}</p>
             ) : null}
             <p class="mt-auto text-stone-500 text-xs">
-                {project.mockupCount} {project.mockupCount === 1 ? 'mockup' : 'mockups'} · created{' '}
-                {formatDate(project.createdAt)}
+                {plural(project.mockupCount, 'mockup')} · created {formatDate(project.createdAt)}
                 {showOwner ? ` · ${project.owner.displayName}` : ''}
             </p>
         </a>
@@ -83,7 +84,7 @@ function WorkspacePicker({
             aria-label="Workspace"
             value={value}
             onChange={(e) => onChange(e.currentTarget.value)}
-            class="rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
+            class={INPUT_CLASS}
         >
             <option value="">My workspace</option>
             <option value="all">All workspaces</option>
@@ -99,13 +100,9 @@ function WorkspacePicker({
 export function HomePage() {
     const { path, query, route } = useLocation();
     const user = currentUser.value;
-    const [projects, setProjects] = useState<Project[]>();
-    const [error, setError] = useState<string>();
+    const resource = useResource('/projects', api.get<Project[]>);
+    const projects = resource.status === 'ready' ? resource.data : undefined;
     const [creating, setCreating] = useState(false);
-
-    useEffect(() => {
-        api.get<Project[]>('/projects').then(setProjects, (err) => setError(errorMessage(err)));
-    }, []);
 
     const owner = user?.role === 'admin' ? (query.owner ?? '') : '';
     const shown = projects?.filter((p) =>
@@ -138,7 +135,7 @@ export function HomePage() {
                     }
                 />
                 {creating ? <NewProjectForm onCancel={() => setCreating(false)} /> : null}
-                <FormError message={error} />
+                <LoadStatus resource={resource} />
                 {shown?.length === 0 && !creating ? (
                     <div class="rounded-xl border border-stone-300 border-dashed p-10 text-center">
                         <p class="font-medium">No projects yet</p>

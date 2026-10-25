@@ -5,13 +5,15 @@ import type { Mockup, MockupActivity, Project, ProjectDetail } from '../../share
 import { AppShell } from '../components/AppShell.tsx';
 import { MockupBadges } from '../components/MockupBadges.tsx';
 import { UploadDropzone } from '../components/UploadDropzone.tsx';
-import { api, errorMessage } from '../lib/api.ts';
-import { useFormSubmit } from '../lib/form.ts';
-import { formatBytes, formatDate, formatRelative } from '../lib/format.ts';
+import { api } from '../lib/api.ts';
+import { useAction, useFormSubmit } from '../lib/form.ts';
+import { formatBytes, formatDate, formatRelative, plural } from '../lib/format.ts';
+import { useResource } from '../lib/resource.ts';
 import { Button } from '../ui/Button.tsx';
 import { FormCard } from '../ui/FormCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
+import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
 import { INPUT_CLASS } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
@@ -73,7 +75,7 @@ type MockupItem = ProjectDetail['mockups'][number];
 function RenameRow({ mockup, onDone }: { mockup: MockupItem; onDone: (mockup?: Mockup) => void }) {
     const [name, setName] = useState(mockup.name);
     const input = useRef<HTMLInputElement>(null);
-    const { error, submit } = useFormSubmit(async () => {
+    const { error, pending, submit } = useFormSubmit(async () => {
         onDone(await api.patch<Mockup>(`/mockups/${mockup.id}`, { name }));
     });
 
@@ -95,7 +97,9 @@ function RenameRow({ mockup, onDone }: { mockup: MockupItem; onDone: (mockup?: M
                     }}
                     class={`w-full max-w-md ${INPUT_CLASS}`}
                 />
-                <Button type="submit">Save</Button>
+                <Button type="submit" disabled={pending}>
+                    Save
+                </Button>
                 <Button variant="ghost" onClick={() => onDone()}>
                     Cancel
                 </Button>
@@ -157,69 +161,54 @@ function MockupRow({
 export function ProjectPage() {
     const { params } = useRoute();
     const { route } = useLocation();
-    const [project, setProject] = useState<ProjectDetail | null>();
+    const resource = useResource(`/projects/${params.id}`, api.get<ProjectDetail>);
     const [editing, setEditing] = useState(false);
     const [renamingId, setRenamingId] = useState<string>();
-    const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState<string>();
+    const upload = useAction();
+    const deletion = useAction();
 
-    useEffect(() => {
-        api.get<ProjectDetail>(`/projects/${params.id}`).then(setProject, () => setProject(null));
-    }, [params.id]);
+    if (resource.status !== 'ready') {
+        return (
+            <AppShell>
+                <LoadStatus resource={resource} missing="Project not found." />
+            </AppShell>
+        );
+    }
+    const project = resource.data;
 
-    async function upload(file: File) {
-        if (!project) return;
-        setUploading(true);
-        setError(undefined);
-        try {
+    const uploadFile = (file: File) =>
+        upload.run(async () => {
             const form = new FormData();
             form.set('file', file);
             const mockup = await api.post<Mockup>(`/projects/${project.id}/mockups`, form);
             route(`/mockups/${mockup.id}`);
-        } catch (err) {
-            setError(errorMessage(err));
-            setUploading(false);
-        }
-    }
+        });
 
-    async function remove() {
-        if (!project) return;
+    function remove() {
         const count = project.mockups.length;
-        const warning = count ? ` Its ${count} mockup(s) and all their comments will be lost.` : '';
+        const warning = count
+            ? ` Its ${plural(count, 'mockup')} and all their comments will be lost.`
+            : '';
         if (!confirm(`Delete "${project.name}"?${warning}`)) return;
-        try {
+        deletion.run(async () => {
             await api.delete(`/projects/${project.id}`);
             route('/');
-        } catch (err) {
-            setError(errorMessage(err));
-        }
+        });
     }
 
     const updateMockups = (change: (mockups: MockupItem[]) => MockupItem[]) =>
-        setProject((p) => p && { ...p, mockups: change(p.mockups) });
+        resource.update((p) => ({ ...p, mockups: change(p.mockups) }));
 
-    async function removeMockup(mockup: MockupItem) {
+    function removeMockup(mockup: MockupItem) {
         if (!confirm(`Delete "${mockup.name}" and all its comments?`)) return;
-        setError(undefined);
-        try {
+        deletion.run(async () => {
             await api.delete(`/mockups/${mockup.id}`);
             updateMockups((list) => list.filter((m) => m.id !== mockup.id));
-        } catch (err) {
-            setError(errorMessage(err));
-        }
+        });
     }
 
     const renamed = (updated: Mockup) =>
         updateMockups((list) => list.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
-
-    if (project === undefined) return <AppShell>{null}</AppShell>;
-    if (project === null) {
-        return (
-            <AppShell>
-                <p class="text-stone-500">Project not found.</p>
-            </AppShell>
-        );
-    }
 
     return (
         <AppShell>
@@ -236,7 +225,7 @@ export function ProjectPage() {
                                     <IconPencil size={16} />
                                     Edit
                                 </Button>
-                                <Button variant="ghost" onClick={() => void remove()}>
+                                <Button variant="ghost" onClick={remove}>
                                     <IconTrash size={16} />
                                     Delete
                                 </Button>
@@ -248,17 +237,17 @@ export function ProjectPage() {
                     <EditProjectForm
                         project={project}
                         onDone={(updated) => {
-                            if (updated) setProject({ ...project, ...updated });
+                            if (updated) resource.update((p) => ({ ...p, ...updated }));
                             setEditing(false);
                         }}
                     />
                 ) : null}
                 <UploadDropzone
-                    busy={uploading}
+                    busy={upload.pending}
                     compact={project.mockups.length > 0}
-                    onFile={(file) => void upload(file)}
+                    onFile={uploadFile}
                 />
-                <FormError message={error} />
+                <FormError message={upload.error ?? deletion.error} />
                 {project.mockups.length ? (
                     <div class="overflow-hidden rounded-xl border border-stone-200 bg-white">
                         <div
@@ -286,7 +275,7 @@ export function ProjectPage() {
                                         key={mockup.id}
                                         mockup={mockup}
                                         onRename={() => setRenamingId(mockup.id)}
-                                        onDelete={() => void removeMockup(mockup)}
+                                        onDelete={() => removeMockup(mockup)}
                                     />
                                 ),
                             )}

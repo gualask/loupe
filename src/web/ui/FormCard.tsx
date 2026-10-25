@@ -11,11 +11,11 @@ export function FormCard({
     children,
 }: {
     submitLabel: string;
-    onSubmit: () => Promise<void>;
+    onSubmit: () => Promise<unknown>;
     onCancel: () => void;
     children: ComponentChildren;
 }) {
-    const { error, submit } = useFormSubmit(onSubmit);
+    const { error, pending, submit } = useFormSubmit(onSubmit);
 
     return (
         <form
@@ -25,7 +25,9 @@ export function FormCard({
             {children}
             <FormError message={error} />
             <div class="flex gap-2">
-                <Button type="submit">{submitLabel}</Button>
+                <Button type="submit" disabled={pending}>
+                    {submitLabel}
+                </Button>
                 <Button variant="ghost" onClick={onCancel}>
                     Cancel
                 </Button>

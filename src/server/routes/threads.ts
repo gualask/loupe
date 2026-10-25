@@ -53,10 +53,9 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
         if (!actor) throw apiError(401, 'viewer_required', 'Choose a name before commenting.');
         if (actor.kind === 'viewer') {
             if (row.mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
-            if (viewerChanges.isBlocked(actor.viewer.id)) {
+            if (!viewerChanges.take(actor.viewer.id)) {
                 throw apiError(429, 'too_many_requests', 'Too many changes, retry in a minute.');
             }
-            viewerChanges.record(actor.viewer.id);
         }
         return { row, actor };
     }

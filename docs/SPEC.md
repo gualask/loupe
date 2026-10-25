@@ -90,7 +90,7 @@ No email server is required. Every account flow is a **single-use link** that ex
 - **Request size**: API bodies are limited to 64 KB (`413 payload_too_large`); mockup uploads
   have their own limit.
 - **Clean-up**: an account link is deleted when used; expired sessions and links are deleted at
-  startup.
+  startup and then once a day.
 - **Roadmap**: optional SMTP to email invite/reset links (v1.x); OIDC single sign-on (later).
 
 ## 4. Mockup viewing
@@ -196,9 +196,12 @@ text match → selector match whose text changed (a copy edit should not detach 
 
 Comments are discrete actions, so there is no keystroke autosave. Every action (create, reply,
 edit, delete, resolve) is sent immediately with optimistic UI and a small status indicator:
-"Saving…" → "Saved ✓", or "Offline — retrying" with automatic retry. Clients generate thread and
-comment ids, so a retried request is answered with what it already created. Unsent replies and
-general comments are kept in `localStorage` per thread and restored on reload.
+"Saving…" → "Saved ✓", or "Offline — retrying" with automatic retry. Actions are sent one at a
+time, in order, so a reply never reaches the server before its thread. Clients generate thread
+and comment ids, so a retried request is answered with what it already created. When the server
+rejects an action, the error is shown, its text goes back into its box, and the threads are
+reloaded once no other action is pending. Unsent replies and general comments are kept in
+`localStorage` per thread until the server has saved them, and restored on reload.
 
 ### 5.2 Real time
 

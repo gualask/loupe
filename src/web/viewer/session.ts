@@ -74,6 +74,12 @@ export function createReviewSession(
     const error = signal<string>();
     let key = initialKey;
     let pending = 0;
+    // Changes are sent one at a time, in order: a reply must not reach the server before its
+    // thread, even when both were retried while offline.
+    let queue: Promise<unknown> = Promise.resolve();
+    // Set by a rejected change; the server state is reloaded once nothing else is pending, so
+    // the reload does not drop changes that are still queued.
+    let resync = false;
 
     const me = computed(() => shared.value.me);
     /** Whether changes are accepted here at all; a viewer may first have to choose a name. */
@@ -96,37 +102,48 @@ export function createReviewSession(
         threads.value = await api.get<Thread[]>(`${base}/threads`, headers());
     }
 
-    /** Sends a change, retrying network failures; API errors resync from the server. */
-    async function perform<T>(send: () => Promise<T>): Promise<T | undefined> {
-        pending++;
-        saveState.value = 'saving';
+    /** Sends one change, retrying network failures; undefined when the server rejects it. */
+    async function attempt<T>(send: () => Promise<T>): Promise<T | undefined> {
         let delay = 1000;
-        try {
-            for (;;) {
-                try {
-                    return await send();
-                } catch (err) {
-                    if (err instanceof ApiError) {
-                        // An editor's session ended: sign in again, then come back here.
-                        if (err.status === 401 && me.value?.kind === 'editor') {
-                            const here = location.pathname + location.search;
-                            location.assign(`/login?next=${encodeURIComponent(here)}`);
-                            return undefined;
-                        }
-                        error.value = errorMessage(err);
-                        await refresh().catch(() => undefined);
+        for (;;) {
+            try {
+                return await send();
+            } catch (err) {
+                if (err instanceof ApiError) {
+                    // An editor's session ended: sign in again, then come back here.
+                    if (err.status === 401 && me.value?.kind === 'editor') {
+                        const here = location.pathname + location.search;
+                        location.assign(`/login?next=${encodeURIComponent(here)}`);
                         return undefined;
                     }
-                    saveState.value = 'offline';
-                    await new Promise((resolve) => setTimeout(resolve, delay));
-                    delay = Math.min(delay * 2, MAX_RETRY_MS);
-                    saveState.value = 'saving';
+                    error.value = errorMessage(err);
+                    resync = true;
+                    return undefined;
                 }
+                saveState.value = 'offline';
+                await new Promise((resolve) => setTimeout(resolve, delay));
+                delay = Math.min(delay * 2, MAX_RETRY_MS);
+                saveState.value = 'saving';
             }
-        } finally {
-            pending--;
-            if (!pending) saveState.value = error.value ? 'idle' : 'saved';
         }
+    }
+
+    /** Queues a change after the pending ones; API errors resync from the server. */
+    function perform<T>(send: () => Promise<T>): Promise<T | undefined> {
+        pending++;
+        // Queued behind a change that is waiting for the network: still offline.
+        if (saveState.value !== 'offline') saveState.value = 'saving';
+        const result = queue.then(() => attempt(send));
+        queue = result;
+        return result.finally(async () => {
+            pending--;
+            if (pending) return;
+            if (resync) {
+                resync = false;
+                await refresh().catch(() => undefined);
+            }
+            saveState.value = error.value ? 'idle' : 'saved';
+        });
     }
 
     function newComment(threadId: string, body: string): Comment {
@@ -155,6 +172,13 @@ export function createReviewSession(
             threads.value = threads.value.filter((t) => t.id !== event.id);
         } else if (event.type === 'presence') presence.value = event.participants;
         else if (event.type === 'review') setReview(event.review);
+    }
+
+    /** Applies the server's copy of a saved thread; resolves to whether the change was saved. */
+    async function applySaved(saved: Promise<Thread | undefined>) {
+        const thread = await saved;
+        if (thread) upsert(thread);
+        return !!thread;
     }
 
     let closeStream: (() => void) | undefined;
@@ -205,22 +229,25 @@ export function createReviewSession(
                 createdAt: comment.createdAt,
                 comments: [comment],
             });
-            void perform(() =>
-                api.post<Thread>(`${base}/threads`, { id, ...input, body }, headers()),
-            ).then((thread) => thread && upsert(thread));
-            return id;
+            return applySaved(
+                perform(() =>
+                    api.post<Thread>(`${base}/threads`, { id, ...input, body }, headers()),
+                ),
+            );
         },
 
         reply(threadId: string, body: string) {
             const comment = newComment(threadId, body);
             patchThread(threadId, (t) => ({ ...t, comments: [...t.comments, comment] }));
-            void perform(() =>
-                api.post<Thread>(
-                    `${base}/threads/${threadId}/comments`,
-                    { id: comment.id, body },
-                    headers(),
+            return applySaved(
+                perform(() =>
+                    api.post<Thread>(
+                        `${base}/threads/${threadId}/comments`,
+                        { id: comment.id, body },
+                        headers(),
+                    ),
                 ),
-            ).then((thread) => thread && upsert(thread));
+            );
         },
 
         edit(comment: Comment, body: string) {
@@ -231,9 +258,11 @@ export function createReviewSession(
                     c.id === comment.id ? { ...c, body, editedAt } : c,
                 ),
             }));
-            void perform(() =>
-                api.patch<Thread>(`${base}/comments/${comment.id}`, { body }, headers()),
-            ).then((thread) => thread && upsert(thread));
+            return applySaved(
+                perform(() =>
+                    api.patch<Thread>(`${base}/comments/${comment.id}`, { body }, headers()),
+                ),
+            );
         },
 
         remove(comment: Comment) {

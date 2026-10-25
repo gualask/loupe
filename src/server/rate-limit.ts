@@ -21,14 +21,18 @@ export function createWindowLimiter({ max, windowMs }: { max: number; windowMs: 
     }
 
     return {
-        isBlocked(key: string) {
-            return (current(key)?.count ?? 0) >= max;
-        },
-        record(key: string) {
+        /**
+         * Records an event unless the key has reached its limit; returns whether it was allowed.
+         * Checking and recording are one step, so no await can slip between them and let
+         * parallel requests all pass.
+         */
+        take(key: string) {
             sweep();
             const entry = current(key);
+            if (entry && entry.count >= max) return false;
             if (entry) entry.count += 1;
             else counts.set(key, { count: 1, resetAt: Date.now() + windowMs });
+            return true;
         },
         reset(key: string) {
             counts.delete(key);

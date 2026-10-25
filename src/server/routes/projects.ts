@@ -65,7 +65,8 @@ export function projectRoutes({ db, config }: AppDeps) {
         return row;
     }
 
-    const cleanUpFiles = () => deleteUnreferencedFiles(config.dataDir, referencedFileHashes(db));
+    const cleanUpFiles = () =>
+        deleteUnreferencedFiles(config.dataDir, () => referencedFileHashes(db));
 
     return new Hono<AppEnv>()
         .get('/projects', (c) => {
@@ -134,21 +135,22 @@ export function projectRoutes({ db, config }: AppDeps) {
 
                 const fallbackName = file.name.replace(/\.html?$/i, '') || 'Untitled mockup';
                 const name = (typeof body.name === 'string' && body.name.trim()) || fallbackName;
-                const sha256 = await storeMockupFile(config.dataDir, bytes);
-                const id = insertMockup(
-                    db,
-                    {
-                        projectId: row.project.id,
-                        name: name.slice(0, 120),
-                        shareToken: randomToken(),
-                        createdBy: signedInUser(c).id,
-                    },
-                    {
-                        sha256,
-                        sizeBytes: bytes.byteLength,
-                        originalFilename: file.name,
-                        externalRefs: findExternalRefs(html),
-                    },
+                const id = await storeMockupFile(config.dataDir, bytes, (sha256) =>
+                    insertMockup(
+                        db,
+                        {
+                            projectId: row.project.id,
+                            name: name.slice(0, 120),
+                            shareToken: randomToken(),
+                            createdBy: signedInUser(c).id,
+                        },
+                        {
+                            sha256,
+                            sizeBytes: bytes.byteLength,
+                            originalFilename: file.name,
+                            externalRefs: findExternalRefs(html),
+                        },
+                    ),
                 );
                 return c.json(toMockup(config, managedMockup(c, id)), 201);
             },

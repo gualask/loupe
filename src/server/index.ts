@@ -9,9 +9,16 @@ import { deleteExpiredSessions } from './db/sessions.ts';
 const config = loadConfig();
 const db = openDataDb(config.dataDir);
 
-// Expired sessions and account links would otherwise accumulate.
-deleteExpiredSessions(db);
-deleteExpiredAccountTokens(db);
+// Expired sessions and account links are refused anyway, but would otherwise accumulate. Once a
+// day is plenty: a run takes milliseconds, and the timer does not keep the process alive.
+const CLEAN_UP_MS = 24 * 60 * 60 * 1000;
+function deleteExpired() {
+    deleteExpiredSessions(db);
+    deleteExpiredAccountTokens(db);
+}
+deleteExpired();
+setInterval(deleteExpired, CLEAN_UP_MS).unref();
+
 const app = createApp({ db, config, bridgeFile: './dist/bridge/bridge.js' });
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {

@@ -36,7 +36,8 @@ const VIEWPORT_HINT_PX = 100;
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 const DRAFT_PIN = 'draft';
 
-type Composing = { kind: 'pin'; anchor: PinAnchor } | { kind: 'general' };
+/** What is being written; `body` refills the box after the server rejected it. */
+type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & { body?: string };
 type DialogName = 'identity' | 'review' | 'help';
 
 const panelCoversMockup = () => matchMedia(OVERLAY_PANEL_QUERY).matches;
@@ -271,14 +272,21 @@ export function ReviewSpace({
                     </div>
                     <Composer
                         placeholder="Add a comment…"
+                        initial={composing.body}
                         draftKey={
                             composing.kind === 'general'
                                 ? `loupe:draft:${shared.mockupId}:general`
                                 : undefined
                         }
                         onSubmit={(body) => {
-                            session.createThread(composing, body);
+                            const draft = composing;
                             setComposing(null);
+                            const saved = session.createThread(draft, body);
+                            // Rejected (e.g. rate limited): reopen it rather than lose the text.
+                            void saved.then((ok) => {
+                                if (!ok) setComposing((current) => current ?? { ...draft, body });
+                            });
+                            return saved;
                         }}
                         onCancel={() => setComposing(null)}
                     />

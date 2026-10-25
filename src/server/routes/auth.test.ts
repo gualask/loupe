@@ -172,6 +172,20 @@ describe('login and logout', () => {
         expect(res.status).toBe(429);
     });
 
+    it('counts failed attempts sent in parallel', async () => {
+        const t = createTestApp();
+        await setUpAdmin(t);
+        const client = t.client();
+        const attempts = Array.from({ length: 15 }, () =>
+            client.post('/api/auth/login', { username: 'admin', password: 'nope' }),
+        );
+        const statuses = (await Promise.all(attempts)).map((res) => res.status);
+        expect(Object.groupBy(statuses, String)).toEqual({
+            401: Array(10).fill(401),
+            429: Array(5).fill(429),
+        });
+    });
+
     it('rejects cross-site form posts', async () => {
         const t = createTestApp();
         const res = await t.app.request('/api/auth/logout', {

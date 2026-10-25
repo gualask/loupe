@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { updateSchema } from './update.ts';
 
 const roleSchema = z.enum(['admin', 'editor']);
 export type Role = z.infer<typeof roleSchema>;
@@ -33,10 +34,7 @@ export const resetRequestSchema = z.object({ password: passwordSchema });
 
 export const inviteRequestSchema = z.object({ role: roleSchema });
 
-export const updateUserRequestSchema = z
-    .object({ role: roleSchema, disabled: z.boolean() })
-    .partial()
-    .refine((v) => v.role !== undefined || v.disabled !== undefined, 'Nothing to update');
+export const updateUserRequestSchema = updateSchema({ role: roleSchema, disabled: z.boolean() });
 
 export type User = {
     id: string;

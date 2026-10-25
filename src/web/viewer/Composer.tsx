@@ -4,7 +4,8 @@ import { storage } from '../lib/storage.ts';
 
 /**
  * Comment box: Enter sends, Shift+Enter adds a line, Esc cancels. With `draftKey`, unsent text
- * survives a reload.
+ * survives a reload. `onSubmit` resolves to whether the server saved the text: the draft is kept
+ * until it has, and put back in the box if it was rejected.
  */
 export function Composer({
     placeholder,
@@ -18,7 +19,7 @@ export function Composer({
     draftKey?: string;
     initial?: string;
     submitLabel?: string;
-    onSubmit: (body: string) => void;
+    onSubmit: (body: string) => Promise<boolean>;
     onCancel?: () => void;
 }) {
     const [text, setText] = useState(() => (draftKey && storage.get(draftKey)) || initial);
@@ -38,8 +39,15 @@ export function Composer({
     function submit() {
         const body = text.trim();
         if (!body) return;
-        onSubmit(body);
-        update('');
+        setText('');
+        void onSubmit(body).then((ok) => {
+            if (!ok) {
+                setText((current) => current || body);
+                return;
+            }
+            // Unless something new was typed in the meantime.
+            if (draftKey && storage.get(draftKey)?.trim() === body) storage.remove(draftKey);
+        });
     }
 
     function onKeyDown(event: KeyboardEvent) {

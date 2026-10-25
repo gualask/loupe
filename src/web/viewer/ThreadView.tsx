@@ -30,7 +30,8 @@ function IconButton({
 }
 
 function CommentItem({ comment, session }: { comment: Comment; session: ReviewSession }) {
-    const [editing, setEditing] = useState(false);
+    // The text being edited, or null when not editing.
+    const [editing, setEditing] = useState<string | null>(null);
     const me = session.me.value;
     const own = !!me && me.kind === comment.author.kind && me.id === comment.author.id;
     const canEdit = own && session.canWrite.value && !comment.deleted;
@@ -50,7 +51,7 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
                     {/* Revealed on hover; always shown on touch screens, which cannot hover. */}
                     <span class="ml-auto flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                         {canEdit ? (
-                            <IconButton label="Edit" onClick={() => setEditing(true)}>
+                            <IconButton label="Edit" onClick={() => setEditing(comment.body)}>
                                 <IconPencil size={15} />
                             </IconButton>
                         ) : null}
@@ -66,17 +67,21 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
                         ) : null}
                     </span>
                 </div>
-                {editing ? (
+                {editing !== null && !comment.deleted ? (
                     <div class="mt-1">
                         <Composer
                             placeholder="Edit comment"
-                            initial={comment.body}
+                            initial={editing}
                             submitLabel="Save"
                             onSubmit={(body) => {
-                                session.edit(comment, body);
-                                setEditing(false);
+                                setEditing(null);
+                                const saved = session.edit(comment, body);
+                                void saved.then((ok) => {
+                                    if (!ok) setEditing((current) => current ?? body);
+                                });
+                                return saved;
                             }}
-                            onCancel={() => setEditing(false)}
+                            onCancel={() => setEditing(null)}
                         />
                     </div>
                 ) : comment.deleted ? (

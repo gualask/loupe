@@ -39,11 +39,10 @@ export function shareApiRoutes({ db }: AppDeps) {
         .post('/:token/viewers', async (c) => {
             const { mockup } = sharedMockup(db, c);
             if (mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
-            if (registrations.isBlocked(mockup.id)) {
+            if (!registrations.take(mockup.id)) {
                 throw apiError(429, 'too_many_requests', 'Too many new reviewers, retry later.');
             }
             const { displayName } = await parseJson(c, registerViewerRequestSchema);
-            registrations.record(mockup.id);
             const key = randomToken();
             const viewer = insertViewer(db, {
                 mockupId: mockup.id,

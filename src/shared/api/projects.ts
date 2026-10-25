@@ -1,24 +1,27 @@
 import { z } from 'zod';
 import type { Author, Review } from './reviews.ts';
+import { updateSchema } from './update.ts';
 
 const nameSchema = z.string().trim().min(1, 'Required').max(120, 'At most 120 characters');
+const descriptionSchema = z.string().trim().max(500);
 
 export const createProjectRequestSchema = z.object({
     name: nameSchema,
-    description: z.string().trim().max(500).default(''),
+    description: descriptionSchema.default(''),
 });
 
-export const updateProjectRequestSchema = createProjectRequestSchema.partial();
+export const updateProjectRequestSchema = updateSchema({
+    name: nameSchema,
+    description: descriptionSchema,
+});
 
-export const updateMockupRequestSchema = z
-    .object({
-        name: nameSchema,
-        shareEnabled: z.boolean(),
-        /** ISO date-time, or null for no expiry. */
-        shareExpiresAt: z.iso.datetime({ offset: true }).nullable(),
-        readOnly: z.boolean(),
-    })
-    .partial();
+export const updateMockupRequestSchema = updateSchema({
+    name: nameSchema,
+    shareEnabled: z.boolean(),
+    /** ISO date-time, or null for no expiry. */
+    shareExpiresAt: z.iso.datetime({ offset: true }).nullable(),
+    readOnly: z.boolean(),
+});
 
 export type Project = {
     id: string;

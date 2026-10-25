@@ -18,21 +18,19 @@ import type { AppDeps, AppEnv } from '../types.ts';
 
 export function authRoutes(deps: AppDeps) {
     const { db } = deps;
-    // Keyed by username: behind a reverse proxy every client may share the same address.
-    const loginFailures = createWindowLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+    // Keyed by username: behind a reverse proxy every client may share the same address. Every
+    // attempt counts until one succeeds, which also counts attempts sent in parallel.
+    const loginAttempts = createWindowLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
     return new Hono<AppEnv>()
         .post('/login', async (c) => {
             const { username, password } = await parseJson(c, loginRequestSchema);
-            if (loginFailures.isBlocked(username)) {
+            if (!loginAttempts.take(username)) {
                 throw apiError(429, 'too_many_attempts', 'Too many failed attempts, retry later.');
             }
             const user = await checkCredentials(db, username, password);
-            if (!user) {
-                loginFailures.record(username);
-                throw apiError(401, 'invalid_credentials', 'Wrong username or password.');
-            }
-            loginFailures.reset(username);
+            if (!user) throw apiError(401, 'invalid_credentials', 'Wrong username or password.');
+            loginAttempts.reset(username);
             startSession(c, deps, user.id);
             return c.json(toUser(user));
         })

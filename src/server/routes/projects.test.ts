@@ -50,8 +50,11 @@ describe('projects', () => {
 
     it('renames and deletes a project', async () => {
         const { editor, project } = await editorWithMockup();
+        await editor.patch(`/api/projects/${project.id}`, { description: 'Q4' });
         const renamed = await editor.patch(`/api/projects/${project.id}`, { name: 'Store' });
-        expect(renamed.body).toMatchObject({ name: 'Store', mockupCount: 1 });
+        expect(renamed.body).toMatchObject({ name: 'Store', description: 'Q4', mockupCount: 1 });
+        const empty = await editor.patch(`/api/projects/${project.id}`, {});
+        expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
         expect((await editor.delete(`/api/projects/${project.id}`)).status).toBe(204);
         expect((await editor.get('/api/projects')).body).toEqual([]);
     });
@@ -86,6 +89,8 @@ describe('mockup upload', () => {
         expect(renamed.body).toEqual({ ...mockup, name: 'Checkout v2' });
         const blank = await editor.patch(`/api/mockups/${mockup.id}`, { name: ' ' });
         expect(blank).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
+        const empty = await editor.patch(`/api/mockups/${mockup.id}`, {});
+        expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
     });
 
     it('rejects files that are not HTML', async () => {

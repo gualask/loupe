@@ -10,7 +10,7 @@ import {
     IconMessage,
 } from '@tabler/icons-preact';
 import type { ComponentChildren, RefObject } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Review } from '../../shared/api/reviews.ts';
 import type { SaveState } from './session.ts';
 
@@ -62,6 +62,22 @@ function SaveStatus({ state }: { state: SaveState }) {
     );
 }
 
+type Offset = { x: number; y: number };
+
+// Space kept between the toolbar and the edges of the window.
+const EDGE = 8;
+
+/** `next`, limited so that the toolbar, now at `rect` with offset `current`, stays on screen. */
+function clampOffset(next: Offset, current: Offset, rect: DOMRect): Offset {
+    // Where the toolbar would be without any offset.
+    const left = rect.left - current.x;
+    const top = rect.top - current.y;
+    return {
+        x: Math.min(Math.max(next.x, EDGE - left), innerWidth - EDGE - rect.width - left),
+        y: Math.min(Math.max(next.y, EDGE - top), innerHeight - EDGE - rect.height - top),
+    };
+}
+
 function reviewLabel(review: Review | null) {
     if (review?.status !== 'submitted') return 'Finish review';
     return review.verdict === 'approved' ? 'Approved' : 'Changes requested';
@@ -95,8 +111,24 @@ export function Toolbar({
     onFinish: () => void;
     onHelp: () => void;
 }) {
-    const [offset, setOffset] = useState({ x: 0, y: 0 });
-    const drag = useRef<{ x: number; y: number } | null>(null);
+    const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
+    const drag = useRef<Offset | null>(null);
+
+    /** Moves the toolbar to `next`, or as close as it can get while staying on screen. */
+    function moveTo(next: (current: Offset) => Offset) {
+        setOffset((current) => {
+            const rect = toolbarRef.current?.getBoundingClientRect();
+            return rect ? clampOffset(next(current), current, rect) : current;
+        });
+    }
+
+    // A smaller window must not leave the toolbar out of reach.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: moveTo only reads the ref
+    useEffect(() => {
+        const keepOnScreen = () => moveTo((current) => current);
+        window.addEventListener('resize', keepOnScreen);
+        return () => window.removeEventListener('resize', keepOnScreen);
+    }, []);
 
     function onPointerDown(event: PointerEvent) {
         drag.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
@@ -104,9 +136,8 @@ export function Toolbar({
     }
 
     function onPointerMove(event: PointerEvent) {
-        if (drag.current) {
-            setOffset({ x: event.clientX - drag.current.x, y: event.clientY - drag.current.y });
-        }
+        const start = drag.current;
+        if (start) moveTo(() => ({ x: event.clientX - start.x, y: event.clientY - start.y }));
     }
 
     return (

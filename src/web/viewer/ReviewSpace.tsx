@@ -54,10 +54,13 @@ export function ReviewSpace({
     token,
     shared: initial,
     viewerKey,
+    onUnavailable,
 }: {
     token: string;
     shared: SharedMockup;
     viewerKey: string | null;
+    /** The link stopped giving access while open. */
+    onUnavailable: () => void;
 }) {
     // The session is created once per link; later changes arrive through it.
     // biome-ignore lint/correctness/useExhaustiveDependencies: initial values only
@@ -66,6 +69,10 @@ export function ReviewSpace({
         session.connect();
         return session.disconnect;
     }, [session]);
+    const unavailable = session.unavailable.value;
+    useEffect(() => {
+        if (unavailable) onUnavailable();
+    }, [unavailable, onUnavailable]);
 
     const { path, query, route } = useLocation();
     const frame = useRef<HTMLIFrameElement>(null);
@@ -90,8 +97,10 @@ export function ReviewSpace({
     const [positions, setPositions] = useState(new Map<string, PinPosition>());
 
     const labels = useMemo(() => {
+        // A pin not saved yet shows the next number, which the server normally confirms.
+        let next = Math.max(0, ...threads.map((t) => t.number ?? 0));
         const pins = threads.filter((t) => t.kind === 'pin');
-        return new Map(pins.map((t, i) => [t.id, String(i + 1)]));
+        return new Map(pins.map((t) => [t.id, String(t.number ?? ++next)]));
     }, [threads]);
 
     const viewerFilter = query.viewer;

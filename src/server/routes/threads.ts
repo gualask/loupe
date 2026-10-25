@@ -22,6 +22,7 @@ import { apiError, notFound, parseJson } from '../http.ts';
 import { createWindowLimiter } from '../rate-limit.ts';
 import {
     authorIds,
+    findSharedMockup,
     isAuthor,
     type ShareActor,
     type SharedMockupRow,
@@ -35,7 +36,8 @@ import type { AppDeps, AppEnv } from '../types.ts';
 // A retried creation reusing an id that belongs to something else.
 const CONFLICT = 'This conflicts with something that already exists. Reload and retry.';
 
-// Keeps idle connections open through proxies that drop silent ones.
+// Keeps idle connections open through proxies that drop silent ones, and is when an open stream
+// notices that its link was disabled, regenerated or has expired.
 const HEARTBEAT_MS = 25_000;
 
 /** Threads, comments, reviews and the event stream of a share link, mounted under /api/s. */
@@ -201,10 +203,16 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
                 const leave = hub.join(row.version.id, participant, (event) => {
                     stream.writeSSE({ data: JSON.stringify(event) }).catch(() => undefined);
                 });
-                const heartbeat = setInterval(() => {
-                    stream.write(': heartbeat\n\n').catch(() => undefined);
-                }, HEARTBEAT_MS);
-                await new Promise<void>((resolve) => stream.onAbort(resolve));
+                let heartbeat: ReturnType<typeof setInterval> | undefined;
+                // Until the client leaves, or the link stops giving access to this version: the
+                // stream then ends, and the client finds the link unavailable when reconnecting.
+                await new Promise<void>((resolve) => {
+                    stream.onAbort(resolve);
+                    heartbeat = setInterval(() => {
+                        if (findSharedMockup(db, c)?.version.id !== row.version.id) resolve();
+                        else stream.write(': heartbeat\n\n').catch(() => undefined);
+                    }, HEARTBEAT_MS);
+                });
                 clearInterval(heartbeat);
                 leave();
             });

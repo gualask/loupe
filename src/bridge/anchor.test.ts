@@ -57,6 +57,12 @@ describe('resolveAnchor', () => {
         expect(resolveAnchor(anchor)?.textContent).toBe('Second   paragraph');
     });
 
+    it('matches text with the innermost element of its first occurrence', () => {
+        // "Product" also starts the text of the header's <nav>, and appears again in the footer.
+        const el = resolveAnchor({ ...base, selector: '#missing', text: 'Product' });
+        expect(el).toBe(document.querySelector('header nav a'));
+    });
+
     it('keeps the selector match when the text changed everywhere', () => {
         const el = resolveAnchor({ ...base, selector: '#logo', text: 'Old name' });
         expect(el).toBe(document.querySelector('#logo'));

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PinAnchor } from '../../shared/anchor.ts';
 import { createTestApp, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
 
@@ -31,6 +31,10 @@ async function sharedMockup() {
 
     return { t, admin, editor, editorId, mockup: mockup.body, token, base, viewer };
 }
+
+afterEach(() => {
+    vi.useRealTimers();
+});
 
 describe('viewers', () => {
     it('registers viewers with a color in order of arrival', async () => {
@@ -94,6 +98,7 @@ describe('threads', () => {
         expect(created.body).toEqual({
             id,
             kind: 'pin',
+            number: 1,
             anchor: ANCHOR,
             status: 'open',
             resolvedAt: null,
@@ -117,7 +122,7 @@ describe('threads', () => {
             kind: 'general',
             body: 'Nice overall',
         });
-        expect(general.body).toMatchObject({ kind: 'general', anchor: null });
+        expect(general.body).toMatchObject({ kind: 'general', number: null, anchor: null });
 
         // Anyone with the link reads the threads, even before choosing a name.
         const listed = await t.client().get(`${base}/threads`);
@@ -154,6 +159,27 @@ describe('threads', () => {
             body: 'Hi',
         });
         expect(invalid).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
+    });
+
+    it('numbers pins in order and never reuses the number of a deleted one', async () => {
+        const { base, viewer } = await sharedMockup();
+        const alice = await viewer('Alice');
+        const pin = () =>
+            alice.client.post(`${base}/threads`, {
+                id: crypto.randomUUID(),
+                kind: 'pin',
+                anchor: ANCHOR,
+                body: 'Here',
+            });
+
+        const first = await pin();
+        const second = await pin();
+        await alice.client.delete(`${base}/comments/${second.body.comments[0].id}`);
+        const third = await pin();
+
+        expect([first.body.number, third.body.number]).toEqual([1, 3]);
+        const listed = await alice.client.get(`${base}/threads`);
+        expect(listed.body.map((t: { number: number }) => t.number)).toEqual([1, 3]);
     });
 
     it('lets only editors resolve and reopen threads', async () => {
@@ -388,6 +414,35 @@ describe('event stream', () => {
         expect(await next()).toMatchObject({ type: 'thread', thread: { author: bob.viewer } });
 
         await reader.cancel();
+    });
+    it('ends open streams once the link is disabled or regenerated', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+        const { t, editor, mockup, base, viewer } = await sharedMockup();
+        const alice = await viewer('Alice');
+        const open = async () => {
+            const res = await t.app.request(`${base}/events`, {
+                headers: { 'x-loupe-viewer': alice.key },
+            });
+            const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
+            if (!reader) throw new Error('expected a stream');
+            await reader.read(); // presence
+            return reader;
+        };
+        const heartbeat = async (reader: Awaited<ReturnType<typeof open>>) => {
+            await vi.advanceTimersByTimeAsync(25_000);
+            return reader.read();
+        };
+
+        const first = await open();
+        expect(await heartbeat(first)).toEqual({ done: false, value: ': heartbeat\n\n' });
+        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
+        expect((await heartbeat(first)).done).toBe(true);
+
+        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: true });
+        const second = await open();
+        await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
+        expect((await heartbeat(second)).done).toBe(true);
+        expect((await t.app.request(`${base}/events`)).status).toBe(404);
     });
 });
 

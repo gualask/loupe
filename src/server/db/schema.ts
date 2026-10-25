@@ -93,6 +93,8 @@ export const mockupVersions = sqliteTable(
         sizeBytes: integer('size_bytes').notNull(),
         originalFilename: text('original_filename').notNull(),
         externalRefs: text('external_refs', { mode: 'json' }).$type<string[]>().notNull(),
+        // Pins ever placed on this version, deleted ones included: the last pin number used.
+        pinCount: integer('pin_count').notNull().default(0),
         uploadedBy: text('uploaded_by')
             .notNull()
             .references(() => users.id),
@@ -146,6 +148,8 @@ export const threads = sqliteTable(
             .notNull()
             .references(() => mockupVersions.id, { onDelete: 'cascade' }),
         kind: text('kind', { enum: ['pin', 'general'] }).notNull(),
+        // Pins only: 1, 2, 3… per version, never reused, so "pin 3" keeps meaning the same pin.
+        number: integer('number'),
         anchor: text('anchor', { mode: 'json' }).$type<PinAnchor>(),
         status: text('status', { enum: ['open', 'resolved'] })
             .notNull()
@@ -158,7 +162,10 @@ export const threads = sqliteTable(
         authorUserId: text('author_user_id').references(() => users.id, { onDelete: 'set null' }),
         createdAt: createdAt(),
     },
-    (t) => [index('threads_version_idx').on(t.versionId)],
+    (t) => [
+        index('threads_version_idx').on(t.versionId),
+        uniqueIndex('threads_number_idx').on(t.versionId, t.number),
+    ],
 );
 
 export const comments = sqliteTable(

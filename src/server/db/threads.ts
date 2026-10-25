@@ -1,7 +1,7 @@
 import { count, eq, inArray, max, type SQL, sql } from 'drizzle-orm';
 import type { PinAnchor } from '../../shared/anchor.ts';
 import type { Db } from './client.ts';
-import { comments, threads, users, viewers } from './schema.ts';
+import { comments, mockupVersions, threads, users, viewers } from './schema.ts';
 
 type ThreadRow = typeof threads.$inferSelect;
 type CommentRow = typeof comments.$inferSelect;
@@ -57,7 +57,7 @@ export function findThread(db: Db, id: string) {
 
 type AuthorIds = { authorViewerId: string | null; authorUserId: string | null };
 
-/** Creates a thread together with its first comment. */
+/** Creates a thread together with its first comment; a pin gets the next number. */
 export function insertThread(
     db: Db,
     thread: { id: string; versionId: string; kind: 'pin' | 'general'; anchor: PinAnchor | null },
@@ -65,8 +65,17 @@ export function insertThread(
     author: AuthorIds,
 ) {
     db.transaction((tx) => {
+        const number =
+            thread.kind === 'pin'
+                ? tx
+                      .update(mockupVersions)
+                      .set({ pinCount: sql`${mockupVersions.pinCount} + 1` })
+                      .where(eq(mockupVersions.id, thread.versionId))
+                      .returning({ n: mockupVersions.pinCount })
+                      .get()?.n
+                : undefined;
         tx.insert(threads)
-            .values({ ...thread, ...author })
+            .values({ ...thread, number, ...author })
             .run();
         tx.insert(comments)
             .values({ ...comment, threadId: thread.id, ...author })

@@ -47,10 +47,10 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
 | `account_tokens` | `id`, `token_hash`, `kind` (`setup`/`invite`/`reset`), `role` (invite), `user_id` (reset), `created_at`, `expires_at` |
 | `projects` | `id`, `owner_id`, `name`, `description`, `created_at` |
 | `mockups` | `id`, `project_id`, `name`, `share_token`, `share_enabled`, `share_expires_at`, `read_only`, `current_version_id`, `created_by`, `created_at` |
-| `mockup_versions` | `id`, `mockup_id`, `number`, `sha256`, `size_bytes`, `original_filename`, `external_refs` (JSON), `uploaded_by`, `created_at` |
+| `mockup_versions` | `id`, `mockup_id`, `number`, `sha256`, `size_bytes`, `original_filename`, `external_refs` (JSON), `pin_count`, `uploaded_by`, `created_at` |
 | `viewers` | `id`, `mockup_id`, `key_hash`, `display_name`, `color_index`, `created_at`, `last_seen_at` |
 | `reviews` | `id`, `version_id`, `viewer_id`, `status` (`in_progress`/`submitted`), `verdict` (`approved`/`changes_requested`), `summary`, `submitted_at` |
-| `threads` | `id`, `version_id`, `kind` (`pin`/`general`), `anchor` (JSON, pins only), `status`, `resolved_by`, `resolved_at`, `author_viewer_id` \| `author_user_id`, `created_at` |
+| `threads` | `id`, `version_id`, `kind` (`pin`/`general`), `number` (pins only), `anchor` (JSON, pins only), `status`, `resolved_by`, `resolved_at`, `author_viewer_id` \| `author_user_id`, `created_at` |
 | `comments` | `id`, `thread_id`, `author_viewer_id` \| `author_user_id`, `body`, `created_at`, `edited_at`, `deleted_at` |
 
 IDs are random UUIDs (`crypto.randomUUID()`). Secrets (share tokens, viewer keys, account tokens,
@@ -170,6 +170,10 @@ Selector strategy: unique `id` → `data-*` test/automation attributes → short
 text match → selector match whose text changed (a copy edit should not detach the pin) →
 `point`. Pins that fall back to `point` are listed as **orphaned** in the side panel.
 
+Pins are numbered 1, 2, 3… per version in order of creation. A number is never reused: the
+version counts every pin placed (`pin_count`), so deleting pin 2 leaves pin 3 as it was and the
+next pin is 4. Until the server confirms a new pin, the client shows it with the next number.
+
 ## 5. Viewer experience
 
 - **Floating toolbar** (draggable): Pin · General comment · Show/hide pins · save status ·
@@ -212,6 +216,9 @@ Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The c
 stream with `fetch`, so it can send the viewer key, reconnects with backoff, and refetches the
 threads on every (re)connection instead of replaying missed events. The stream sends a heartbeat every 25 seconds
 and `X-Accel-Buffering: no`, so proxies neither drop it as idle nor hold events back.
+At every heartbeat the server checks the link again: once it is disabled, regenerated or
+expired, open streams end, so a revoked link stops receiving events within 25 seconds. A 4xx
+answer on reconnection is final: the client stops retrying and shows the link as unavailable.
 
 ## 6. Editor experience
 

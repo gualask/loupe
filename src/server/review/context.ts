@@ -16,14 +16,19 @@ const TOUCH_INTERVAL_MS = 60 * 1000;
 export type SharedMockupRow = NonNullable<ReturnType<typeof findMockupByShareToken>>;
 
 /**
- * The mockup behind a share token. Viewers need the link to be enabled and not expired; the
- * editors who manage the mockup can always open it, e.g. to preview it before sharing.
+ * The mockup behind a share token, if the request may open it. Viewers need the link to be
+ * enabled and not expired; the editors who manage the mockup can always open it, e.g. to
+ * preview it before sharing.
  */
-export function sharedMockup(db: Db, c: Context<AppEnv>) {
+export function findSharedMockup(db: Db, c: Context<AppEnv>) {
     const row = findMockupByShareToken(db, c.req.param('token') ?? '');
-    if (!row || !(isShared(row.mockup) || canManage(c.var.user, row.ownerId))) {
-        throw apiError(404, 'not_found', 'This link is not available.');
-    }
+    return row && (isShared(row.mockup) || canManage(c.var.user, row.ownerId)) ? row : undefined;
+}
+
+/** Like findSharedMockup, but answers 404 when the link is not available. */
+export function sharedMockup(db: Db, c: Context<AppEnv>) {
+    const row = findSharedMockup(db, c);
+    if (!row) throw apiError(404, 'not_found', 'This link is not available.');
     return row;
 }
 

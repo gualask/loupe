@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "3ad9cce5-0973-450f-aac5-a35200bdc580",
+  "id": "ae22f23d-b31a-43a1-9b33-5d02b019ca24",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -263,6 +263,16 @@
       "notNull": true,
       "autoincrement": false,
       "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mockup_versions",
+      "name": "pin_count",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
       "generated": null,
       "entityType": "columns"
     },
@@ -598,6 +608,16 @@
     },
     {
       "table": "threads",
+      "name": "number",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "threads",
       "name": "anchor",
       "type": "text",
       "notNull": false,
@@ -908,6 +928,24 @@
         }
       ],
       "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "threads",
+      "name": "threads_number_idx",
+      "columns": [
+        {
+          "value": "version_id",
+          "isExpression": false
+        },
+        {
+          "value": "number",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
       "where": null,
       "origin": "manual",
       "entityType": "indexes"

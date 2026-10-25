@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createTestApp, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
@@ -132,6 +132,20 @@ describe('share links', () => {
         expect(res.body).toContain(
             '<head><script>window.loupeBridge = "<\\/script>";</script><title>Checkout</title>',
         );
+    });
+
+    it('serves a rebuilt bridge without a restart', async () => {
+        const { t, mockup } = await editorWithMockup();
+        const content = `/s/${tokenFromUrl(mockup.shareUrl)}/content`;
+        const before = await t.app.request(content);
+        const bridgeFile = path.join(t.config.dataDir, 'bridge.js');
+        writeFileSync(bridgeFile, 'window.rebuilt = true;');
+        // A later modification time, as a rebuild would leave.
+        utimesSync(bridgeFile, new Date(), new Date(Date.now() + 1000));
+
+        const after = await t.app.request(content);
+        expect(await after.text()).toContain('<head><script>window.rebuilt = true;</script>');
+        expect(after.headers.get('etag')).not.toBe(before.headers.get('etag'));
     });
 
     it('lets browsers revalidate their copy, while still checking access', async () => {

@@ -72,6 +72,8 @@ export function createReviewSession(
     const presence = signal<Author[]>([]);
     const saveState = signal<SaveState>('idle');
     const error = signal<string>();
+    /** Set when the link stops giving access, e.g. disabled, regenerated or expired. */
+    const unavailable = signal(false);
     let key = initialKey;
     let pending = 0;
     // Changes are sent one at a time, in order: a reply must not reach the server before its
@@ -190,6 +192,9 @@ export function createReviewSession(
             // Events missed while disconnected are recovered by refetching.
             onOpen: () => void refresh().catch(() => undefined),
             onEvent: handleEvent,
+            onRefused: () => {
+                unavailable.value = true;
+            },
         });
     }
 
@@ -199,6 +204,7 @@ export function createReviewSession(
         presence,
         saveState,
         error,
+        unavailable,
         me,
         mayWrite,
         canWrite,
@@ -222,6 +228,8 @@ export function createReviewSession(
             upsert({
                 id,
                 kind: input.kind,
+                // Numbered by the server.
+                number: null,
                 anchor: input.kind === 'pin' ? input.anchor : null,
                 status: 'open',
                 resolvedAt: null,

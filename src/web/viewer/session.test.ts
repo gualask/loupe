@@ -54,6 +54,7 @@ function fakeServer() {
             const thread: Thread = {
                 id: body.id,
                 kind: body.kind,
+                number: null,
                 anchor: null,
                 status: 'open',
                 resolvedAt: null,

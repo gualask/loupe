@@ -31,6 +31,7 @@ CREATE TABLE `mockup_versions` (
 	`size_bytes` integer NOT NULL,
 	`original_filename` text NOT NULL,
 	`external_refs` text NOT NULL,
+	`pin_count` integer DEFAULT 0 NOT NULL,
 	`uploaded_by` text NOT NULL,
 	`created_at` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
 	CONSTRAINT `fk_mockup_versions_mockup_id_mockups_id_fk` FOREIGN KEY (`mockup_id`) REFERENCES `mockups`(`id`) ON DELETE CASCADE,
@@ -87,6 +88,7 @@ CREATE TABLE `threads` (
 	`id` text PRIMARY KEY,
 	`version_id` text NOT NULL,
 	`kind` text NOT NULL,
+	`number` integer,
 	`anchor` text,
 	`status` text DEFAULT 'open' NOT NULL,
 	`resolved_by` text,
@@ -128,4 +130,5 @@ CREATE INDEX `projects_owner_idx` ON `projects` (`owner_id`);--> statement-break
 CREATE UNIQUE INDEX `reviews_version_viewer_idx` ON `reviews` (`version_id`,`viewer_id`);--> statement-breakpoint
 CREATE INDEX `sessions_user_idx` ON `sessions` (`user_id`);--> statement-breakpoint
 CREATE INDEX `threads_version_idx` ON `threads` (`version_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `threads_number_idx` ON `threads` (`version_id`,`number`);--> statement-breakpoint
 CREATE INDEX `viewers_mockup_idx` ON `viewers` (`mockup_id`);

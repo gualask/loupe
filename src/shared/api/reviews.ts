@@ -51,6 +51,8 @@ export type Comment = {
 export type Thread = {
     id: string;
     kind: 'pin' | 'general';
+    /** Pins only: their number on this version, kept when other pins are deleted. */
+    number: number | null;
     anchor: PinAnchor | null;
     status: 'open' | 'resolved';
     resolvedAt: string | null;

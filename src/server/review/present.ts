@@ -23,6 +23,7 @@ export function toThread(thread: ThreadWithComments): Thread {
     return {
         id: row.id,
         kind: row.kind,
+        number: row.number,
         anchor: row.anchor,
         status: row.status,
         resolvedAt: row.resolvedAt?.toISOString() ?? null,

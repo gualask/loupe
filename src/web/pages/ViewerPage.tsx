@@ -27,5 +27,13 @@ export function ViewerPage() {
             </CenteredCard>
         );
     }
-    return <ReviewSpace key={token} token={token} shared={loaded.shared} viewerKey={loaded.key} />;
+    return (
+        <ReviewSpace
+            key={token}
+            token={token}
+            shared={loaded.shared}
+            viewerKey={loaded.key}
+            onUnavailable={() => setLoaded(null)}
+        />
+    );
 }

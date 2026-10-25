@@ -65,14 +65,27 @@ export function computeAnchor(el: Element, clientX: number, clientY: number): Pi
     };
 }
 
-/** The innermost element whose text starts with the snippet. */
+/**
+ * The innermost element whose text starts with the snippet, in the first subtree that has one.
+ * An element's text contains its descendants' text, so subtrees without the snippet are skipped
+ * whole: the search visits the few branches that contain it, not the whole document.
+ */
 function findByText(text: string) {
-    const candidates = [...document.body.querySelectorAll('*')].filter(
-        (el) => !(el instanceof HTMLScriptElement || el instanceof HTMLStyleElement),
-    );
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
+        acceptNode(node) {
+            if (node instanceof HTMLScriptElement || node instanceof HTMLStyleElement) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            const content = normalizedText(node as Element);
+            if (!content.includes(text)) return NodeFilter.FILTER_REJECT;
+            return content.startsWith(text) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+        },
+    });
     let found: Element | undefined;
-    for (const el of candidates) {
-        if (normalizedText(el).startsWith(text) && (!found || found.contains(el))) found = el;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        // Past the first match's subtree: nothing further in can be inside it.
+        if (found && !found.contains(node)) break;
+        found = node as Element;
     }
     return found;
 }

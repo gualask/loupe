@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PinAnchor } from '../../shared/anchor.ts';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import type { Author, Thread } from '../../shared/api/reviews.ts';
 import { createReviewSession } from './session.ts';
@@ -15,6 +16,28 @@ const SHARED: SharedMockup = {
     canModerate: false,
     review: null,
 };
+
+const ANCHOR: PinAnchor = {
+    selector: '#buy',
+    offset: { x: 0.5, y: 0.5 },
+    point: { x: 10, y: 20 },
+    viewport: { width: 1280, height: 800 },
+};
+
+/** The browser's localStorage, holding `stored`. */
+function fakeStorage(stored: Record<string, string> = {}) {
+    const items = new Map(Object.entries(stored));
+    vi.stubGlobal('localStorage', {
+        get length() {
+            return items.size;
+        },
+        key: (index: number) => [...items.keys()][index] ?? null,
+        getItem: (name: string) => items.get(name) ?? null,
+        setItem: (name: string, value: string) => items.set(name, value),
+        removeItem: (name: string) => items.delete(name),
+    });
+    return items;
+}
 
 /** A fake API server: records requests and answers like Loupe, or fails like a lost network. */
 function fakeServer() {
@@ -157,22 +180,70 @@ describe('versions', () => {
         expect(server.requests).toEqual(['POST /api/s/tok/threads', 'GET /api/s/tok/threads']);
         expect(session.threads.value).toEqual([]);
     });
+
+    it('keeps the text of a rejected pin in the general comment box, for after the reload', async () => {
+        const items = fakeStorage({ 'loupe:draft:m1:general': 'Typed before' });
+        const server = fakeServer();
+        const session = createReviewSession('tok', SHARED, 'key');
+        server.state.versionChanged = true;
+
+        expect(await session.createThread({ kind: 'pin', anchor: ANCHOR }, 'Too small')).toBe(
+            false,
+        );
+        expect(Object.fromEntries(items)).toEqual({
+            'loupe:draft:m1:general': 'Typed before\n\nToo small',
+            'loupe:kept:m1': 'yes',
+        });
+        expect(session.keptText.value).toBe(false);
+    });
+
+    it('offers unsent text of the previous version in the general comment box', async () => {
+        const items = fakeStorage({
+            'loupe:draft:m1:general': 'Too small',
+            'loupe:kept:m1': 'yes',
+            'loupe:draft:m1:old-thread': 'A reply on version 1',
+            'loupe:draft:m1:t1': 'A reply on this version',
+            'loupe:draft:m2:old-thread': 'Another mockup',
+        });
+        const server = fakeServer();
+        server.threads.set('t1', {
+            id: 't1',
+            kind: 'general',
+            number: null,
+            anchor: null,
+            status: 'open',
+            resolvedAt: null,
+            author: ME,
+            createdAt: new Date().toISOString(),
+            comments: [],
+        });
+        const session = createReviewSession('tok', SHARED, 'key');
+        session.connect();
+        await vi.advanceTimersByTimeAsync(0);
+        session.disconnect();
+
+        expect(session.keptText.value).toBe(true);
+        expect(Object.fromEntries(items)).toEqual({
+            'loupe:draft:m1:general': 'Too small\n\nA reply on version 1',
+            'loupe:draft:m1:t1': 'A reply on this version',
+            'loupe:draft:m2:old-thread': 'Another mockup',
+        });
+    });
 });
 
 describe('viewer identity', () => {
     /** A browser that has not commented yet, with its own storage and a server that names it. */
     function newcomer(stored: Record<string, string> = {}) {
-        const items = new Map(Object.entries(stored));
-        vi.stubGlobal('localStorage', {
-            getItem: (name: string) => items.get(name) ?? null,
-            setItem: (name: string, value: string) => items.set(name, value),
-            removeItem: (name: string) => items.delete(name),
-        });
+        const items = fakeStorage(stored);
         const registered: string[] = [];
         vi.stubGlobal(
             'fetch',
             vi.fn(async (url: string, init: RequestInit = {}) => {
                 if (url.endsWith('/events')) return new Response(new ReadableStream());
+                if (url.endsWith('/viewers/me')) {
+                    const { displayName } = JSON.parse(String(init.body));
+                    return Response.json({ ...ME, displayName });
+                }
                 if (url.endsWith('/viewers')) {
                     const { displayName } = JSON.parse(String(init.body));
                     registered.push(displayName);
@@ -214,6 +285,14 @@ describe('viewer identity', () => {
         const { session } = newcomer({ 'loupe:name-hint': 'dismissed' });
         await session.join();
         expect(session.nameHint.value).toBe(false);
+        session.disconnect();
+    });
+
+    it('renames rather than joins again when a join is under way', async () => {
+        const { registered, session } = newcomer();
+        await Promise.all([session.join(), session.setName('Gino')]);
+        expect(registered).toEqual(['']);
+        expect(session.me.value?.displayName).toBe('Gino');
         session.disconnect();
     });
 

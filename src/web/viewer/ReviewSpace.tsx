@@ -13,7 +13,7 @@ import { ErrorToast } from './ErrorToast.tsx';
 import { Popover } from './Popover.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
-import { createReviewSession } from './session.ts';
+import { createReviewSession, draftName } from './session.ts';
 import { type ThreadFilter, ThreadPanel } from './ThreadPanel.tsx';
 import { ThreadView } from './ThreadView.tsx';
 import { Toolbar } from './Toolbar.tsx';
@@ -23,8 +23,14 @@ const VIEWPORT_HINT_PX = 100;
 // Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 
-/** What is being written; `body` refills the box after the server rejected it. */
-type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & { body?: string };
+/**
+ * What is being written; `body` refills the box after the server rejected it, `notice` explains
+ * text already in it.
+ */
+type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & {
+    body?: string;
+    notice?: string;
+};
 type DialogName = 'name' | 'review' | 'help';
 
 const panelCoversMockup = () => matchMedia(OVERLAY_PANEL_QUERY).matches;
@@ -83,6 +89,19 @@ export function ReviewSpace({
     const [positions, setPositions] = useState(new Map<string, PinPosition>());
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
+
+    // Comments that could not be sent before the reload wait in the general comment box.
+    const keptText = session.keptText.value;
+    useEffect(() => {
+        if (!keptText) return;
+        session.keptText.value = false;
+        if (me && mayWrite) {
+            setComposing({
+                kind: 'general',
+                notice: 'Unsent comments from the previous version. Send, edit or discard them.',
+            });
+        }
+    }, [keptText, me, mayWrite, session]);
 
     const viewerFilter = query.viewer;
     const listed = threads.filter((t) => {
@@ -240,12 +259,15 @@ export function ReviewSpace({
                             <IconX size={16} />
                         </button>
                     </div>
+                    {composing.notice ? (
+                        <p class="max-w-72 text-amber-800 text-xs">{composing.notice}</p>
+                    ) : null}
                     <Composer
                         placeholder="Add a comment…"
                         initial={composing.body}
                         draftKey={
                             composing.kind === 'general'
-                                ? `loupe:draft:${shared.mockupId}:general`
+                                ? draftName(shared.mockupId, 'general')
                                 : undefined
                         }
                         onSubmit={(body) => {
@@ -253,8 +275,11 @@ export function ReviewSpace({
                             setComposing(null);
                             const saved = session.createThread(draft, body);
                             // Rejected (e.g. rate limited): reopen it rather than lose the text.
+                            // On a newer version the session keeps it for after the reload.
                             void saved.then((ok) => {
-                                if (!ok) setComposing((current) => current ?? { ...draft, body });
+                                if (!ok && !session.outdated.value) {
+                                    setComposing((current) => current ?? { ...draft, body });
+                                }
                             });
                             return saved;
                         }}
@@ -277,7 +302,6 @@ export function ReviewSpace({
                     hint={viewportHint(openThread)}
                     session={session}
                     onClose={() => setOpenId(null)}
-                    onNeedIdentity={() => withIdentity(() => undefined)}
                 />
             </Popover>
         );
@@ -312,7 +336,7 @@ export function ReviewSpace({
                     role="status"
                     class="flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-100 px-4 py-2 text-amber-900 text-sm"
                 >
-                    A new version of this mockup is available.
+                    A new version of this mockup is available. Unsent comments are kept.
                     <button
                         type="button"
                         onClick={() => location.reload()}
@@ -387,6 +411,7 @@ export function ReviewSpace({
             {dialog === 'review' ? (
                 <ReviewDialog
                     review={shared.review}
+                    outdated={session.outdated.value}
                     onSubmit={session.submitReview}
                     onClose={() => setDialog(null)}
                 />

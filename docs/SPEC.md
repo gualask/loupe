@@ -145,8 +145,8 @@ mockup code cannot tamper with it.
 - Opening a share link asks for nothing: anyone can read the mockup and its threads. The first
   change (pin, comment, reply, review) registers the viewer under a generated name such as
   "Anonymous Fox", or under the name they chose on an earlier mockup.
-- Viewers change their name from the header at any time; the new name shows on all their threads
-  and comments. The chosen name is remembered by the browser (`localStorage`) and used when they
+- Viewers change their name from the header while the mockup accepts comments; the new name shows
+  on all their threads and comments. The chosen name is remembered by the browser (`localStorage`) and used when they
   join other mockups. Names need not be unique.
 - After a viewer joins under a generated name, a hint next to their name invites them, once per
   browser, to add their own; closing it or choosing a name stops it for good.
@@ -239,8 +239,10 @@ the client can reload them after a rejected change. Open streams of an older ver
 next heartbeat, and the reconnection is refused the same way.
 
 On `version_changed` the review space stops accepting changes and shows "A new version of this
-mockup is available · Reload" instead of an error; a rejected comment goes back into its box, so
-its text is not lost. Reloading the page shows the current version, with the same viewer.
+mockup is available · Reload" instead of an error. Reloading the page shows the current version,
+with the same viewer. Unsent text is not lost: the text of a rejected pin and the reply drafts of
+threads the new version no longer lists are moved into the general comment draft, which opens
+after the reload with a note saying where the text comes from.
 
 ## 6. Editor experience
 
@@ -253,11 +255,13 @@ its text is not lost. Reloading the page shows the current version, with the sam
 - **New version**: from the mockup page, upload the next file with the same checks. It becomes
   the current version on the same share link; viewers keep their identity, and threads, reviews
   and activity counts start again from zero. Threads of earlier versions stay stored but are not
-  shown in the MVP.
+  shown in the MVP, so the upload asks for confirmation when the current version has comments
+  or submitted reviews. A file identical to the current version is refused (`409 same_file`).
 - **Share settings** per mockup: copy link, enable/disable, regenerate (old link stops working),
   optional expiry, read-only mode (comments visible, no new ones).
-- **Reviews**: per mockup and for the current version, a list grouped by viewer (color, name, thread counts open/resolved,
-  verdict, last activity). Selecting a viewer opens the mockup filtered to their pins.
+- **Reviews**: per mockup and for the current version, a list grouped by viewer (color, name,
+  thread counts open/resolved, verdict, last activity). Viewers of earlier versions stay listed,
+  without feedback until they review the current one. Selecting a viewer opens the mockup filtered to their pins.
 - **Moderation**: reply to any thread, resolve/reopen, delete any comment.
 
 Pages, share links and account links tell an item that does not exist (404) from one that could

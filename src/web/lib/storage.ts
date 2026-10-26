@@ -15,6 +15,16 @@ export const storage = {
             // Not persisted.
         }
     },
+    /** Names of the stored items starting with `prefix`. */
+    names(prefix: string) {
+        try {
+            return Array.from({ length: localStorage.length }, (_, i) =>
+                localStorage.key(i),
+            ).filter((name): name is string => !!name?.startsWith(prefix));
+        } catch {
+            return [];
+        }
+    },
     remove(name: string) {
         try {
             localStorage.removeItem(name);

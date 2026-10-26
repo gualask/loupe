@@ -507,6 +507,7 @@ describe('versions', () => {
     it('starts a new version without threads or reviews, keeping the viewers', async () => {
         const { editor, mockup, base, viewer, uploadVersion } = await sharedMockup();
         const alice = await viewer('Alice');
+        const bob = await viewer('Bob');
         await alice.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'pin',
@@ -514,6 +515,11 @@ describe('versions', () => {
             body: 'Bigger',
         });
         await alice.client.put(`${base}/review`, { verdict: 'changes_requested' });
+        await bob.client.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'general',
+            body: 'Looks good',
+        });
 
         await uploadVersion();
         expect((await alice.client.get(base)).body).toMatchObject({
@@ -530,14 +536,25 @@ describe('versions', () => {
         });
         // Pins are numbered per version.
         expect(created.body).toMatchObject({ number: 1, author: alice.viewer });
-        expect((await editor.get(`/api/mockups/${mockup.id}/reviews`)).body).toEqual([
-            {
-                viewer: alice.viewer,
-                review: expect.objectContaining({ status: 'in_progress', verdict: null }),
-                threads: { open: 1, resolved: 0 },
-                lastSeenAt: expect.any(String),
-            },
-        ]);
+        // Reviewers of earlier versions stay listed, without feedback on this one yet.
+        const reviewers = (await editor.get(`/api/mockups/${mockup.id}/reviews`)).body;
+        expect(reviewers).toHaveLength(2);
+        expect(reviewers).toEqual(
+            expect.arrayContaining([
+                {
+                    viewer: alice.viewer,
+                    review: expect.objectContaining({ status: 'in_progress', verdict: null }),
+                    threads: { open: 1, resolved: 0 },
+                    lastSeenAt: expect.any(String),
+                },
+                {
+                    viewer: bob.viewer,
+                    review: null,
+                    threads: { open: 0, resolved: 0 },
+                    lastSeenAt: expect.any(String),
+                },
+            ]),
+        );
     });
 
     it('refuses changes to an older version, but keeps its threads readable', async () => {

@@ -271,6 +271,13 @@ describe('mockup versions', () => {
         const { editor: other } = await inviteEditor(t, admin, 'fran');
         expect((await other.post(url, htmlFile())).status).toBe(404);
         expect((await t.client().post(url, htmlFile())).status).toBe(401);
+        expect(await editor.post(url, htmlFile())).toMatchObject({
+            status: 409,
+            body: {
+                error: 'same_file',
+                message: 'This file is the same as the current version.',
+            },
+        });
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.version.number).toBe(1);
     });
 });

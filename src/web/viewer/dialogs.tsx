@@ -61,10 +61,13 @@ const VERDICTS = [
 
 export function ReviewDialog({
     review,
+    outdated,
     onSubmit,
     onClose,
 }: {
     review: Review | null;
+    /** A newer version was uploaded: the review goes to that one, after a reload. */
+    outdated: boolean;
     onSubmit: (input: { verdict: Review['verdict']; summary: string }) => Promise<boolean>;
     onClose: () => void;
 }) {
@@ -111,13 +114,22 @@ export function ReviewDialog({
                         class={`font-normal ${INPUT_CLASS}`}
                     />
                 </label>
+                {outdated ? (
+                    <p class="text-amber-800 text-sm">
+                        A new version of this mockup is available. Reload to review it.
+                    </p>
+                ) : null}
                 <div class="flex justify-end gap-2">
                     <Button variant="ghost" onClick={onClose}>
                         Cancel
                     </Button>
-                    <Button type="submit" disabled={pending || !verdict}>
-                        Submit review
-                    </Button>
+                    {outdated ? (
+                        <Button onClick={() => location.reload()}>Reload</Button>
+                    ) : (
+                        <Button type="submit" disabled={pending || !verdict}>
+                            Submit review
+                        </Button>
+                    )}
                 </div>
             </form>
         </Dialog>

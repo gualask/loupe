@@ -6,7 +6,7 @@ import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
 import { Composer } from './Composer.tsx';
-import type { ReviewSession } from './session.ts';
+import { draftName, type ReviewSession } from './session.ts';
 
 function CommentItem({ comment, session }: { comment: Comment; session: ReviewSession }) {
     // The text being edited, or null when not editing.
@@ -82,7 +82,6 @@ export function ThreadView({
     hint,
     session,
     onClose,
-    onNeedIdentity,
 }: {
     thread: Thread;
     label: string;
@@ -90,9 +89,8 @@ export function ThreadView({
     hint?: string;
     session: ReviewSession;
     onClose: () => void;
-    onNeedIdentity: () => void;
 }) {
-    const { canModerate, readOnly, mockupId } = session.shared.value;
+    const { canModerate, mockupId } = session.shared.value;
     const resolved = thread.status === 'resolved';
 
     return (
@@ -123,23 +121,22 @@ export function ThreadView({
                 ))}
             </ol>
             <footer class="border-stone-100 border-t px-3 py-2.5">
-                {session.canWrite.value ? (
+                {session.outdated.value ? (
+                    <p class="text-stone-500 text-xs">
+                        A new version is available. Reload to reply.
+                    </p>
+                ) : session.mayWrite.value ? (
                     <Composer
                         placeholder="Reply…"
-                        draftKey={`loupe:draft:${mockupId}:${thread.id}`}
-                        onSubmit={(body) => session.reply(thread.id, body)}
+                        draftKey={draftName(mockupId, thread.id)}
+                        // A first reply joins the review, like a first pin.
+                        onSubmit={async (body) =>
+                            (await session.join()) && session.reply(thread.id, body)
+                        }
                         onCancel={onClose}
                     />
-                ) : readOnly ? (
-                    <p class="text-stone-500 text-xs">This mockup is read-only.</p>
                 ) : (
-                    <button
-                        type="button"
-                        onClick={onNeedIdentity}
-                        class="text-sm text-stone-700 underline underline-offset-2"
-                    >
-                        Choose a name to reply
-                    </button>
+                    <p class="text-stone-500 text-xs">This mockup is read-only.</p>
                 )}
             </footer>
         </div>

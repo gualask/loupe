@@ -27,6 +27,11 @@ const linkMockupName = (token: string) => `loupe:link:${token}`;
 const NAME_KEY = 'loupe:name';
 // Set once the viewer closed the hint inviting them to choose a name, or chose one.
 const NAME_HINT_KEY = 'loupe:name-hint';
+// Set when unsent text was moved to the general comment box, to offer it after the reload.
+const keptTextName = (mockupId: string) => `loupe:kept:${mockupId}`;
+
+/** Unsent text of a box: the general comment box (`general`) or a thread's reply box. */
+export const draftName = (mockupId: string, box: string) => `loupe:draft:${mockupId}:${box}`;
 
 /**
  * Loads a share link as the current browser sees it: editors through their session, viewers
@@ -83,6 +88,8 @@ export function createReviewSession(
     const outdated = signal(false);
     /** Whether to invite the viewer to replace the generated name they were given. */
     const nameHint = signal(false);
+    /** Set when the general comment box holds text that could not be sent before a reload. */
+    const keptText = signal(false);
     let key = initialKey;
     let joining: Promise<boolean> | undefined;
     let pending = 0;
@@ -115,8 +122,43 @@ export function createReviewSession(
         if (thread) upsert(change(thread));
     }
 
+    let recovered = false;
     async function refresh() {
         threads.value = await api.get<Thread[]>(`${base}/threads`, headers());
+        // Not from a space left on an older version: its threads are not the current ones.
+        if (!recovered && !outdated.value) {
+            recovered = true;
+            recoverDrafts();
+        }
+    }
+
+    /** Keeps text that cannot be sent from here in the general comment box, for after a reload. */
+    function keepText(text: string) {
+        const general = draftName(shared.value.mockupId, 'general');
+        const kept = storage.get(general)?.trim();
+        storage.set(general, kept ? `${kept}\n\n${text}` : text);
+        storage.set(keptTextName(shared.value.mockupId), 'yes');
+    }
+
+    /**
+     * Moves the reply drafts of threads that are no longer listed, e.g. those of the previous
+     * version, into the general comment box, and reports text kept there before the reload.
+     */
+    function recoverDrafts() {
+        const { mockupId } = shared.value;
+        const prefix = draftName(mockupId, '');
+        const listed = new Set(threads.value.map((t) => t.id));
+        for (const name of storage.names(prefix)) {
+            const box = name.slice(prefix.length);
+            if (box === 'general' || listed.has(box)) continue;
+            const text = storage.get(name)?.trim();
+            storage.remove(name);
+            if (text) keepText(text);
+        }
+        if (storage.get(keptTextName(mockupId))) {
+            storage.remove(keptTextName(mockupId));
+            keptText.value = true;
+        }
     }
 
     /** Sends one change, retrying network failures; undefined when the server rejects it. */
@@ -238,6 +280,7 @@ export function createReviewSession(
         unavailable,
         outdated,
         nameHint,
+        keptText,
         me,
         mayWrite,
         canWrite,
@@ -268,6 +311,8 @@ export function createReviewSession(
 
         /** Sets the viewer's name, registering them if needed, and remembers it for next time. */
         async setName(displayName: string) {
+            // A join under way would otherwise register a second viewer.
+            await joining;
             if (me.value?.kind === 'viewer') {
                 const viewer = await api.patch<Author>(
                     `${base}/viewers/me`,
@@ -306,7 +351,15 @@ export function createReviewSession(
                 perform(() =>
                     api.post<Thread>(`${base}/threads`, { id, ...input, body }, headers()),
                 ),
-            );
+            ).then((saved) => {
+                // A new pin's text has no draft of its own: keep it for after the reload. The
+                // general comment box keeps its draft until the comment is saved.
+                if (!saved && outdated.value) {
+                    if (input.kind === 'pin') keepText(body);
+                    else storage.set(keptTextName(shared.value.mockupId), 'yes');
+                }
+                return saved;
+            });
         },
 
         reply(threadId: string, body: string) {

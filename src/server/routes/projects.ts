@@ -163,13 +163,21 @@ export function projectRoutes({ db, config }: AppDeps) {
             .post('/mockups/:id/versions', uploadLimit, async (c) => {
                 const { mockup } = managedMockup(c, c.req.param('id'));
                 const { bytes, version } = await readUpload(c);
-                await storeMockupFile(config.dataDir, bytes, (sha256) =>
+                await storeMockupFile(config.dataDir, bytes, (sha256) => {
+                    // Re-uploading the current file would only hide its comments.
+                    if (managedMockup(c, mockup.id).version.sha256 === sha256) {
+                        throw apiError(
+                            409,
+                            'same_file',
+                            'This file is the same as the current version.',
+                        );
+                    }
                     insertVersion(db, mockup.id, {
                         sha256,
                         ...version,
                         uploadedBy: signedInUser(c).id,
-                    }),
-                );
+                    });
+                });
                 return c.json(toMockup(config, managedMockup(c, mockup.id)), 201);
             })
             .get('/mockups/:id', (c) =>

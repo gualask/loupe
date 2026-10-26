@@ -64,7 +64,7 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
     function writer(c: Context<AppEnv>) {
         const row = currentVersion(c);
         const actor = shareActor(db, c, row);
-        if (!actor) throw apiError(401, 'viewer_required', 'Choose a name before commenting.');
+        if (!actor) throw apiError(401, 'viewer_required', 'Join the review before commenting.');
         if (actor.kind === 'viewer') {
             if (row.mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
             if (!viewerChanges.take(actor.viewer.id)) {

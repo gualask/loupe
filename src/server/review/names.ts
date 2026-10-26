@@ -21,7 +21,7 @@ const ANIMALS = [
     'Wombat',
 ];
 
-/** Name for a viewer who skipped choosing one, such as "Anonymous Fox". */
+/** Name for a viewer who has not chosen one, such as "Anonymous Fox". */
 export function anonymousName() {
     return `Anonymous ${ANIMALS[randomInt(ANIMALS.length)]}`;
 }

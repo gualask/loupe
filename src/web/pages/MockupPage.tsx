@@ -31,6 +31,7 @@ export function MockupPage() {
     }
 
     const mockup = resource.data;
+    const replaceMockup = (updated: Mockup) => resource.update(() => updated);
     const token = shareToken(mockup);
 
     return (
@@ -65,13 +66,13 @@ export function MockupPage() {
                         />
                     </div>
                     <div class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white lg:min-h-0 lg:overflow-y-auto">
-                        <SharePanel mockup={mockup} onChange={(m) => resource.update(() => m)} />
+                        <SharePanel mockup={mockup} onChange={replaceMockup} />
                         <ReviewsPanel
                             key={mockup.version.number}
                             mockupId={mockup.id}
                             token={token}
                         />
-                        <FilePanel mockup={mockup} onChange={(m) => resource.update(() => m)} />
+                        <FilePanel mockup={mockup} onChange={replaceMockup} />
                     </div>
                 </div>
             </div>

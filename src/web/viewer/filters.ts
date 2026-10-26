@@ -1,4 +1,4 @@
-import type { Author, Thread } from '../../shared/api/reviews.ts';
+import { type Author, sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 
 export type ThreadFilter = 'open' | 'mine' | 'resolved' | 'all';
 
@@ -11,7 +11,7 @@ export function filterThreads(
         if (viewerId && t.author.id !== viewerId) return false;
         if (filter === 'open') return t.status === 'open';
         if (filter === 'resolved') return t.status === 'resolved';
-        if (filter === 'mine') return !!me && t.author.kind === me.kind && t.author.id === me.id;
+        if (filter === 'mine') return !!me && sameAuthor(t.author, me);
         return true;
     });
 }

@@ -134,11 +134,11 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
     return (
         <Dialog title="Keyboard shortcuts" onClose={onClose}>
             <dl class="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
-                {SHORTCUTS.map(([key, action]) => (
-                    <Fragment key={key}>
+                {Object.values(SHORTCUTS).map(({ label, action }) => (
+                    <Fragment key={label}>
                         <dt>
                             <kbd class="rounded border border-stone-300 bg-stone-50 px-1.5 py-0.5 font-mono text-xs">
-                                {key}
+                                {label}
                             </kbd>
                         </dt>
                         <dd class="text-stone-700">{action}</dd>

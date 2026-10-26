@@ -2,7 +2,7 @@ import type { Review, ReviewerSummary } from '../../shared/api/reviews.ts';
 import { api } from '../lib/api.ts';
 import { formatRelative } from '../lib/format.ts';
 import { useResource } from '../lib/resource.ts';
-import { VERDICT_LABELS } from '../lib/review.ts';
+import { formatThreadCounts, VERDICT_LABELS } from '../lib/review.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { Avatar } from './Avatar.tsx';
@@ -37,7 +37,7 @@ export function ReviewsPanel({ mockupId, token }: { mockupId: string; token: str
                                 <span class="min-w-32 flex-1">
                                     <span class="block font-medium">{viewer.displayName}</span>
                                     <span class="text-stone-500 text-xs">
-                                        {threads.open} open · {threads.resolved} resolved · seen{' '}
+                                        {formatThreadCounts(threads.open, threads.resolved)} · seen{' '}
                                         {formatRelative(lastSeenAt)}
                                     </span>
                                 </span>

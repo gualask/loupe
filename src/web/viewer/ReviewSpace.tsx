@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import type { Thread } from '../../shared/api/reviews.ts';
-import type { BridgeMessage, PinPosition } from '../../shared/bridge-protocol.ts';
+import type { BridgeMessage, PinPosition, ShortcutKey } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { useBridge } from './bridge.ts';
 import { HelpDialog, NameDialog, ReviewDialog } from './dialogs.tsx';
@@ -136,7 +136,7 @@ export function ReviewSpace({
         }
     }
 
-    function shortcut(key: string) {
+    function shortcut(key: ShortcutKey) {
         if (dialog) return;
         if (key === 'Escape') {
             if (inspecting) setInspecting(false);
@@ -145,7 +145,7 @@ export function ReviewSpace({
         } else if (key === 'p') startPin();
         else if (key === 'c') startComment();
         else if (key === 'h') setPinsHidden((hidden) => !hidden);
-        else if (key === '?') setDialog('help');
+        else setDialog('help');
     }
 
     function onBridgeMessage(message: BridgeMessage) {

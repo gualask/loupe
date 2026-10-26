@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { Db } from '../db/client.ts';
+import type { MockupRow } from '../db/mockups.ts';
 import { apiError } from '../http.ts';
 import { createWindowLimiter } from '../rate-limit.ts';
 import type { AppEnv } from '../types.ts';
@@ -9,6 +10,11 @@ import { shareActor, sharedMockup, shownVersion } from './context.ts';
  * Access to the current version of a share link, for its event stream and every change. One
  * instance serves all share-link routes, so a viewer's changes count against one limit.
  */
+/** Refuses a viewer's change to a read-only mockup; its editors may still change it. */
+export function checkWritable(mockup: MockupRow) {
+    if (mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
+}
+
 export function createShareAccess(db: Db) {
     // Far above a person typing comments; stops scripts flooding a mockup.
     const viewerChanges = createWindowLimiter({ max: 30, windowMs: 60 * 1000 });
@@ -38,7 +44,7 @@ export function createShareAccess(db: Db) {
         const actor = shareActor(db, c, row);
         if (!actor) throw apiError(401, 'viewer_required', 'Join the review before commenting.');
         if (actor.kind === 'viewer') {
-            if (row.mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
+            checkWritable(row.mockup);
             if (!viewerChanges.take(actor.viewer.id)) {
                 throw apiError(429, 'too_many_requests', 'Too many changes, retry in a minute.');
             }

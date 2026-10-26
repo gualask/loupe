@@ -6,12 +6,12 @@ import { storage } from '../lib/storage.ts';
 
 // The viewer key belongs to the mockup, so it survives a regenerated link. Remembering which
 // mockup a link opens lets the first request already carry the key.
-const viewerKeyName = (mockupId: string) => `loupe:viewer:${mockupId}`;
-const linkMockupName = (token: string) => `loupe:link:${token}`;
+const viewerKeyName = (mockupId: string) => `viewer:${mockupId}`;
+const linkMockupName = (token: string) => `link:${token}`;
 // The name a viewer chose, used again on the next mockups they comment on.
-const NAME_KEY = 'loupe:name';
+const NAME_KEY = 'name';
 // Set once the viewer closed the hint inviting them to choose a name, or chose one.
-const NAME_HINT_KEY = 'loupe:name-hint';
+const NAME_HINT_KEY = 'name-hint';
 
 /**
  * Loads a share link as the current browser sees it: editors through their session, viewers

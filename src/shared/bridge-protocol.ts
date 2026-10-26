@@ -3,6 +3,10 @@
 import { z } from 'zod';
 import { type PinAnchor, pinAnchorSchema } from './anchor.ts';
 
+/** Keys the review space handles as shortcuts, also when pressed inside the mockup. */
+export const SHORTCUT_KEYS = ['p', 'c', 'h', '?', 'Escape'] as const;
+export type ShortcutKey = (typeof SHORTCUT_KEYS)[number];
+
 /** Where a pin marker currently is, in the iframe's viewport coordinates. */
 const pinPositionSchema = z.object({
     id: z.string(),
@@ -27,7 +31,7 @@ export const bridgeMessageSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('loupe:pin-clicked'), id: z.string() }),
     z.object({ type: z.literal('loupe:positions'), positions: z.array(pinPositionSchema) }),
     /** A shortcut key pressed while the mockup had focus. */
-    z.object({ type: z.literal('loupe:key'), key: z.string().max(20) }),
+    z.object({ type: z.literal('loupe:key'), key: z.enum(SHORTCUT_KEYS) }),
 ]);
 
 export type BridgeMessage = z.infer<typeof bridgeMessageSchema>;

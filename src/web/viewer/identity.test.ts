@@ -1,22 +1,8 @@
 import { signal } from '@preact/signals';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SharedMockup } from '../../shared/api/projects.ts';
-import type { Author } from '../../shared/api/reviews.ts';
-import { fakeStorage } from '../test-utils.ts';
+import { ANN, fakeStorage, SHARED } from '../test-utils.ts';
 import { createIdentity } from './identity.ts';
-
-const ANN: Author = { kind: 'viewer', id: 'v1', displayName: 'Ann', colorIndex: 0 };
-
-const SHARED: SharedMockup = {
-    mockupId: 'm1',
-    name: 'Checkout',
-    readOnly: false,
-    version: 1,
-    contentUrl: '/s/tok/content',
-    me: null,
-    canModerate: false,
-    review: null,
-};
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -36,7 +22,7 @@ function newcomer({ stored = {}, mayAct = true } = {}) {
             return Response.json({ key: 'k', viewer }, { status: 201 });
         }),
     );
-    const shared = signal(SHARED);
+    const shared = signal<SharedMockup>({ ...SHARED, me: null });
     const onJoined = vi.fn();
     const onError = vi.fn();
     const identity = createIdentity({

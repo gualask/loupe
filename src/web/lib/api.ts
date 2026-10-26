@@ -55,6 +55,12 @@ export const api = {
     put: <T>(path: string, body?: unknown, headers?: Headers) =>
         request<T>('PUT', path, body, headers),
     delete: (path: string, headers?: Headers) => request<void>('DELETE', path, undefined, headers),
+    /** Posts `file` as the `file` field of a multipart form, as a file input would. */
+    upload: <T>(path: string, file: File) => {
+        const form = new FormData();
+        form.set('file', file);
+        return request<T>('POST', path, form);
+    },
 };
 
 /** A message suitable for showing next to a form. */

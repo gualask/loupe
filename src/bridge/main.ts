@@ -5,12 +5,15 @@ import type {
     BridgeMessage,
     BridgePin,
     PinPosition,
+    ShortcutKey,
 } from '../shared/bridge-protocol.ts';
 import { computeAnchor, resolveAnchor } from './anchor.ts';
 import { createMarkers } from './markers.ts';
 import { createOverlay } from './overlay.ts';
 
-const SHORTCUT_KEYS = new Set(['p', 'c', 'h', '?', 'Escape']);
+// Every shortcut of the review space, which the type keeps in step with the protocol.
+const FORWARDED: Record<ShortcutKey, true> = { p: true, c: true, h: true, '?': true, Escape: true };
+const isShortcut = (key: string): key is ShortcutKey => Object.hasOwn(FORWARDED, key);
 // Catches layout changes that fire no event, such as CSS animations.
 const POLL_MS = 1000;
 
@@ -105,7 +108,7 @@ function start() {
                 return;
             }
             const plain = !(event.metaKey || event.ctrlKey || event.altKey);
-            if (plain && SHORTCUT_KEYS.has(event.key) && !isEditable(event.target)) {
+            if (plain && isShortcut(event.key) && !isEditable(event.target)) {
                 post({ type: 'loupe:key', key: event.key });
             }
         },

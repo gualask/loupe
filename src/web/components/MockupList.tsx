@@ -4,6 +4,7 @@ import type { Mockup, MockupActivity } from '../../shared/api/projects.ts';
 import { api } from '../lib/api.ts';
 import { useFormSubmit } from '../lib/form.ts';
 import { formatBytes, formatDate, formatRelative } from '../lib/format.ts';
+import { formatThreadCounts } from '../lib/review.ts';
 import { Button } from '../ui/Button.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
@@ -17,7 +18,7 @@ function Activity({ activity }: { activity: MockupActivity }) {
         <span class="flex flex-col text-xs">
             <span class="flex items-center gap-1.5 text-stone-700">
                 <IconMessage size={14} class="text-stone-400" />
-                {activity.openThreads} open · {activity.resolvedThreads} resolved
+                {formatThreadCounts(activity.openThreads, activity.resolvedThreads)}
             </span>
             <span class="text-stone-500">last {formatRelative(activity.lastActivityAt)}</span>
         </span>

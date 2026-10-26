@@ -68,9 +68,7 @@ export function ProjectPage() {
 
     const uploadFile = (file: File) =>
         upload.run(async () => {
-            const form = new FormData();
-            form.set('file', file);
-            const mockup = await api.post<Mockup>(`/projects/${project.id}/mockups`, form);
+            const mockup = await api.upload<Mockup>(`/projects/${project.id}/mockups`, file);
             route(`/mockups/${mockup.id}`);
         });
 

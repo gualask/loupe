@@ -4,9 +4,9 @@ import type { ReviewSession } from './session.ts';
 
 // Unsent text of a mockup's comment boxes, kept by the browser until the server saves it
 // (docs/SPEC.md §5.1).
-const draftPrefix = (mockupId: string) => `loupe:draft:${mockupId}:`;
+const draftPrefix = (mockupId: string) => `draft:${mockupId}:`;
 // Set when the next load should offer the general comment box's text, e.g. after a new version.
-const offerName = (mockupId: string) => `loupe:draft-offer:${mockupId}`;
+const offerName = (mockupId: string) => `draft-offer:${mockupId}`;
 
 export const generalDraft = (mockupId: string) => `${draftPrefix(mockupId)}general`;
 export const replyDraft = (mockupId: string, threadId: string) =>

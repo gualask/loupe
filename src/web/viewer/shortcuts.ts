@@ -1,13 +1,17 @@
 import { useEffect, useRef } from 'preact/hooks';
+import { SHORTCUT_KEYS, type ShortcutKey } from '../../shared/bridge-protocol.ts';
 
-/** Keyboard shortcuts of the review space, as the help lists them. */
-export const SHORTCUTS = [
-    ['P', 'Place a pin'],
-    ['C', 'Write a general comment'],
-    ['H', 'Show or hide pins'],
-    ['Esc', 'Cancel or close'],
-    ['?', 'Show this help'],
-] as const;
+/** What each shortcut does, as the help lists it, with the key as shown. */
+export const SHORTCUTS: Record<ShortcutKey, { label: string; action: string }> = {
+    p: { label: 'P', action: 'Place a pin' },
+    c: { label: 'C', action: 'Write a general comment' },
+    h: { label: 'H', action: 'Show or hide pins' },
+    Escape: { label: 'Esc', action: 'Cancel or close' },
+    '?': { label: '?', action: 'Show this help' },
+};
+
+const isShortcut = (key: string): key is ShortcutKey =>
+    (SHORTCUT_KEYS as readonly string[]).includes(key);
 
 function isTyping(target: EventTarget | null) {
     return (
@@ -17,16 +21,16 @@ function isTyping(target: EventTarget | null) {
 }
 
 /**
- * Calls `onKey` with the keys pressed without modifiers outside text fields. Inside the mockup the
- * bridge forwards them in the same way (`loupe:key`).
+ * Calls `onKey` with the shortcut keys pressed without modifiers outside text fields. Inside the
+ * mockup the bridge forwards them in the same way (`loupe:key`).
  */
-export function useShortcuts(onKey: (key: string) => void) {
+export function useShortcuts(onKey: (key: ShortcutKey) => void) {
     const handler = useRef(onKey);
     handler.current = onKey;
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
             if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
-            handler.current(event.key);
+            if (isShortcut(event.key)) handler.current(event.key);
         }
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);

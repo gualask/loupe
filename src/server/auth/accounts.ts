@@ -33,8 +33,9 @@ const TOKEN_TTL: Record<AccountTokenRow['kind'], number> = {
     reset: 24 * HOUR,
 };
 
-const INVALID_LINK = 'This link is invalid, expired or already used.';
-const WRONG_LINK = 'This link cannot be used here.';
+const invalidLink = () =>
+    apiError(404, 'invalid_token', 'This link is invalid, expired or already used.');
+const wrongLink = () => apiError(400, 'wrong_token_kind', 'This link cannot be used here.');
 
 // Verified when the username does not exist, so response time does not reveal valid usernames.
 const DUMMY_PASSWORD_HASH = await hashPassword(randomToken());
@@ -70,7 +71,7 @@ export function issueSetupLinkIfNeeded(db: Db, config: Config) {
 
 function usableToken(db: Db, secret: string) {
     const row = findUsableAccountToken(db, sha256(secret));
-    if (!row) throw apiError(404, 'invalid_token', INVALID_LINK);
+    if (!row) throw invalidLink();
     return row;
 }
 
@@ -83,7 +84,7 @@ export function describeAccountToken(db: Db, secret: string): AccountTokenInfo {
             return { kind: 'invite', role: row.role ?? 'editor' };
         case 'reset': {
             const user = row.userId ? findUserById(db, row.userId) : undefined;
-            if (!user) throw apiError(404, 'invalid_token', INVALID_LINK);
+            if (!user) throw invalidLink();
             return { kind: 'reset', username: user.username };
         }
     }
@@ -98,7 +99,7 @@ export async function redeemAccountLink(
     const passwordHash = await hashPassword(input.password);
     return db.transaction(() => {
         const token = usableToken(db, secret);
-        if (token.kind === 'reset') throw apiError(400, 'wrong_token_kind', WRONG_LINK);
+        if (token.kind === 'reset') throw wrongLink();
         if (token.kind === 'setup' && countUsers(db) > 0) {
             throw apiError(409, 'already_set_up', 'Loupe is already set up. Sign in instead.');
         }
@@ -122,7 +123,7 @@ export async function redeemResetLink(db: Db, secret: string, input: { password:
     return db.transaction(() => {
         const token = usableToken(db, secret);
         const user = token.kind === 'reset' && token.userId && findUserById(db, token.userId);
-        if (!user) throw apiError(400, 'wrong_token_kind', WRONG_LINK);
+        if (!user) throw wrongLink();
         if (user.disabledAt) throw apiError(403, 'account_disabled', 'This account is disabled.');
         const updated = updateUser(db, user.id, { passwordHash });
         deleteUserSessions(db, user.id);

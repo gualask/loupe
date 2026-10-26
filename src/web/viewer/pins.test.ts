@@ -1,25 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Author, Thread } from '../../shared/api/reviews.ts';
 import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
 import { authorColor } from '../lib/colors.ts';
+import { ANN, thread } from '../test-utils.ts';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
-
-const ANN: Author = { kind: 'viewer', id: 'v1', displayName: 'Ann', colorIndex: 0 };
-
-function thread(id: string, changes: Partial<Thread> = {}): Thread {
-    return {
-        id,
-        kind: 'pin',
-        number: null,
-        anchor: PIN_ANCHOR,
-        status: 'open',
-        resolvedAt: null,
-        author: ANN,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        comments: [],
-        ...changes,
-    };
-}
 
 describe('pinLabels', () => {
     it('keeps server numbers and numbers unsaved pins after the highest one', () => {

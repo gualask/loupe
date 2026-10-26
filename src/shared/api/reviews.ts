@@ -49,6 +49,14 @@ export type Author =
     | { kind: 'viewer'; id: string; displayName: string; colorIndex: number }
     | { kind: 'editor'; id: string; displayName: string };
 
+/** Whether two authors are the same person. */
+export function sameAuthor(a: Author, b: Author) {
+    return a.kind === b.kind && a.id === b.id;
+}
+
+/** Tells authors apart, e.g. as a list key. */
+export const authorKey = (author: Author) => `${author.kind}:${author.id}`;
+
 export type Comment = {
     id: string;
     threadId: string;

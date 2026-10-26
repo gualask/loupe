@@ -1,6 +1,6 @@
 import { IconCheck, IconPencil, IconRotate, IconTrash, IconX } from '@tabler/icons-preact';
 import { useState } from 'preact/hooks';
-import type { Comment, Thread } from '../../shared/api/reviews.ts';
+import { type Comment, sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import { AuthorName, Avatar } from '../components/Avatar.tsx';
 import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
@@ -14,7 +14,7 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
     // The text being edited, or null when not editing.
     const [editing, setEditing] = useState<string | null>(null);
     const me = session.me.value;
-    const own = !!me && me.kind === comment.author.kind && me.id === comment.author.id;
+    const own = !!me && sameAuthor(me, comment.author);
     const canEdit = own && session.canWrite.value && !comment.deleted;
     const canDelete =
         !comment.deleted && session.canWrite.value && (own || session.shared.value.canModerate);

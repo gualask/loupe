@@ -1,20 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SharedMockup } from '../../shared/api/projects.ts';
-import type { Author, ShareEvent, Thread } from '../../shared/api/reviews.ts';
+import type { ShareEvent, Thread } from '../../shared/api/reviews.ts';
+import { ANN, comment, SHARED, thread } from '../test-utils.ts';
 import { createReviewSession } from './session.ts';
-
-const ME: Author = { kind: 'viewer', id: 'v1', displayName: 'Ann', colorIndex: 0 };
-
-const SHARED: SharedMockup = {
-    mockupId: 'm1',
-    name: 'Checkout',
-    readOnly: false,
-    version: 1,
-    contentUrl: '/s/tok/content',
-    me: ME,
-    canModerate: false,
-    review: null,
-};
 
 /** A fake API server: records requests and answers like Loupe, or fails like a lost network. */
 function fakeServer() {
@@ -63,42 +50,18 @@ function fakeServer() {
             if (method === 'GET') return Response.json([...threads.values()]);
             const [, threadId] = /threads\/([^/]+)\/comments$/.exec(url) ?? [];
             if (threadId) {
-                const thread = threads.get(threadId);
-                if (!thread) return Response.json({ error: 'not_found' }, { status: 404 });
-                thread.comments.push({
-                    id: body.id,
-                    threadId,
-                    author: ME,
-                    body: body.body,
-                    createdAt: new Date().toISOString(),
-                    editedAt: null,
-                    deleted: false,
-                });
-                return Response.json(thread, { status: 201 });
+                const existing = threads.get(threadId);
+                if (!existing) return Response.json({ error: 'not_found' }, { status: 404 });
+                existing.comments.push(comment(threadId, body.body, { id: body.id }));
+                return Response.json(existing, { status: 201 });
             }
-            const thread: Thread = {
-                id: body.id,
+            const created = thread(body.id, {
                 kind: body.kind,
-                number: null,
-                anchor: null,
-                status: 'open',
-                resolvedAt: null,
-                author: ME,
-                createdAt: new Date().toISOString(),
-                comments: [
-                    {
-                        id: crypto.randomUUID(),
-                        threadId: body.id,
-                        author: ME,
-                        body: body.body,
-                        createdAt: new Date().toISOString(),
-                        editedAt: null,
-                        deleted: false,
-                    },
-                ],
-            };
-            threads.set(thread.id, thread);
-            return Response.json(thread, { status: 201 });
+                anchor: body.anchor ?? null,
+                comments: [comment(body.id, body.body)],
+            });
+            threads.set(created.id, created);
+            return Response.json(created, { status: 201 });
         }),
     );
     return { threads, requests, state };
@@ -184,9 +147,9 @@ describe('events', () => {
         const server = fakeServer();
         const session = createReviewSession('tok', SHARED, 'key');
         await session.createThread({ kind: 'general' }, 'Hi');
-        const renamed = { ...ME, displayName: 'Annie' };
+        const renamed = { ...ANN, displayName: 'Annie' };
         server.state.events = [
-            { type: 'presence', participants: [ME] },
+            { type: 'presence', participants: [ANN] },
             { type: 'viewer', viewer: renamed },
         ];
 

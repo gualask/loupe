@@ -121,18 +121,17 @@ export async function inviteEditor(t: TestApp, admin: Client, username = 'eddie'
 }
 
 /**
- * An editor's mockup with its share link, plus helpers to join it as new viewers and to upload
- * its next version.
+ * An editor's mockup uploaded from `file`, with its share link, plus helpers to join it as new
+ * viewers and to upload its next version.
  */
-export async function createSharedMockup() {
+export async function createSharedMockup(
+    file = htmlFile('<!doctype html><main>Hi</main>', 'home.html'),
+) {
     const t = createTestApp();
     const admin = await setUpAdmin(t);
     const { editor, editorId } = await inviteEditor(t, admin);
     const project = await editor.post('/api/projects', { name: 'Shop' });
-    const mockup = await editor.post(
-        `/api/projects/${project.body.id}/mockups`,
-        htmlFile('<!doctype html><main>Hi</main>', 'home.html'),
-    );
+    const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, file);
     const token = tokenFromUrl(mockup.body.shareUrl);
     const base = `/api/s/${token}`;
 
@@ -153,7 +152,18 @@ export async function createSharedMockup() {
         expect(res.status).toBe(201);
     }
 
-    return { t, admin, editor, editorId, mockup: mockup.body, token, base, viewer, uploadVersion };
+    return {
+        t,
+        admin,
+        editor,
+        editorId,
+        project: project.body,
+        mockup: mockup.body,
+        token,
+        base,
+        viewer,
+        uploadVersion,
+    };
 }
 
 /** Reads the events of an open stream, one message at a time. */

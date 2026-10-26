@@ -7,11 +7,13 @@ import {
     type Comment,
     type Review,
     type ShareEvent,
+    sameAuthor,
     type Thread,
     VERSION_HEADER,
 } from '../../shared/api/reviews.ts';
 import { ApiError, api, errorMessage } from '../lib/api.ts';
 import { openEventStream } from '../lib/event-stream.ts';
+import { loginPath } from '../lib/session.ts';
 import { createChangeQueue } from './changes.ts';
 import { createIdentity } from './identity.ts';
 
@@ -88,8 +90,7 @@ export function createReviewSession(
         onRejected: (err) => {
             // An editor's session ended: sign in again, then come back here.
             if (err.status === 401 && me.value?.kind === 'editor') {
-                const here = location.pathname + location.search;
-                location.assign(`/login?next=${encodeURIComponent(here)}`);
+                location.assign(loginPath(location.pathname + location.search));
             } else if (err.code === 'version_changed') {
                 // A newer version is shown as a notice to reload rather than as an error.
                 outdated.value = true;
@@ -123,8 +124,7 @@ export function createReviewSession(
 
     /** Shows a viewer's new name wherever they appear. */
     function showName(viewer: Extract<Author, { kind: 'viewer' }>) {
-        const named = (author: Author) =>
-            author.kind === 'viewer' && author.id === viewer.id ? viewer : author;
+        const named = (author: Author) => (sameAuthor(author, viewer) ? viewer : author);
         threads.value = threads.value.map((thread) => ({
             ...thread,
             author: named(thread.author),

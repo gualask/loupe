@@ -2,6 +2,9 @@ import { signal } from '@preact/signals';
 import type { User } from '../../shared/api/auth.ts';
 import { ApiError, api, handleSignedOut } from './api.ts';
 
+/** The login page, which brings the user back to `next` once signed in. */
+export const loginPath = (next: string) => `/login?next=${encodeURIComponent(next)}`;
+
 /** `undefined` while loading, `null` when signed out. */
 export const currentUser = signal<User | null | undefined>(undefined);
 

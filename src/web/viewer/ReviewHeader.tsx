@@ -7,7 +7,7 @@ import {
     IconZoomScan,
 } from '@tabler/icons-preact';
 import type { ComponentChildren } from 'preact';
-import type { Author } from '../../shared/api/reviews.ts';
+import { type Author, authorKey } from '../../shared/api/reviews.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { Badge } from '../ui/Badge.tsx';
 import { HEADER_BUTTON } from './styles.ts';
@@ -84,7 +84,7 @@ export function ReviewHeader({
                 {myName}
                 <div class="flex -space-x-1.5" title="People here now">
                     {presence.slice(0, MAX_AVATARS).map((author) => (
-                        <Avatar key={`${author.kind}:${author.id}`} author={author} size={26} />
+                        <Avatar key={authorKey(author)} author={author} size={26} />
                     ))}
                     {presence.length > MAX_AVATARS ? (
                         <span class="grid size-[26px] place-items-center rounded-full bg-stone-200 text-[11px] ring-2 ring-white">

@@ -1,4 +1,4 @@
-import type { Author, ShareEvent } from '../../shared/api/reviews.ts';
+import { type Author, authorKey, type ShareEvent, sameAuthor } from '../../shared/api/reviews.ts';
 
 type Member = { participant: Author | null; send: (event: ShareEvent) => void };
 
@@ -23,7 +23,7 @@ export function createHub() {
     function publishPresence(room: string) {
         const participants = new Map<string, Author>();
         for (const { participant } of rooms.get(room) ?? []) {
-            if (participant) participants.set(`${participant.kind}:${participant.id}`, participant);
+            if (participant) participants.set(authorKey(participant), participant);
         }
         publish(room, { type: 'presence', participants: [...participants.values()] });
     }
@@ -47,10 +47,7 @@ export function createHub() {
      */
     function updateParticipant(room: string, participant: Author) {
         for (const member of rooms.get(room) ?? []) {
-            if (
-                member.participant?.kind === participant.kind &&
-                member.participant.id === participant.id
-            ) {
+            if (member.participant && sameAuthor(member.participant, participant)) {
                 member.participant = participant;
             }
         }

@@ -47,9 +47,7 @@ export function FilePanel({
             if (!confirmed) return;
             setSending(true);
             try {
-                const form = new FormData();
-                form.set('file', file);
-                onChange(await api.post<Mockup>(`/mockups/${mockup.id}/versions`, form));
+                onChange(await api.upload<Mockup>(`/mockups/${mockup.id}/versions`, file));
             } finally {
                 setSending(false);
             }

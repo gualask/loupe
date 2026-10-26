@@ -18,14 +18,7 @@ const MOCKUP = `<!doctype html>
 
 const checkoutFile = () => htmlFile(MOCKUP, 'checkout.html');
 
-async function editorWithMockup() {
-    const t = createTestApp();
-    const admin = await setUpAdmin(t);
-    const { editor } = await inviteEditor(t, admin);
-    const project = await editor.post('/api/projects', { name: 'Shop' });
-    const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, checkoutFile());
-    return { t, admin, editor, project: project.body, mockup: mockup.body };
-}
+const editorWithMockup = () => createSharedMockup(checkoutFile());
 
 describe('projects', () => {
     it('creates and lists projects per owner, all of them for admins', async () => {

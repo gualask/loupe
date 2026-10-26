@@ -12,7 +12,7 @@ import { sharedMockup } from '../review/context.ts';
 import type { Hub } from '../review/hub.ts';
 import { anonymousName } from '../review/names.ts';
 import { viewerAuthor } from '../review/present.ts';
-import type { ShareAccess } from '../review/share-access.ts';
+import { checkWritable, type ShareAccess } from '../review/share-access.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 /** Viewer registration and names on a share link, mounted under /api/s. */
@@ -23,7 +23,7 @@ export function viewerRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
     return new Hono<AppEnv>()
         .post('/:token/viewers', async (c) => {
             const { mockup } = sharedMockup(db, c);
-            if (mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
+            checkWritable(mockup);
             if (!registrations.take(mockup.id)) {
                 throw apiError(429, 'too_many_requests', 'Too many new reviewers, retry later.');
             }

@@ -31,8 +31,13 @@ import { toReview, toThread } from '../review/present.ts';
 import type { ShareAccess } from '../review/share-access.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
-// A retried creation reusing an id that belongs to something else.
-const CONFLICT = 'This conflicts with something that already exists. Reload and retry.';
+/** A retried creation reusing an id that belongs to something else. */
+const conflict = () =>
+    apiError(
+        409,
+        'conflict',
+        'This conflicts with something that already exists. Reload and retry.',
+    );
 
 /** Threads, comments and reviews of a share link, mounted under /api/s. */
 export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: ShareAccess }) {
@@ -42,6 +47,15 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
         const thread = findThread(db, id);
         if (!thread || thread.versionId !== row.version.id) throw notFound();
         return thread;
+    }
+
+    /** A comment of the link's current version, unless deleted. */
+    function commentOf(row: SharedMockupRow, id: string) {
+        const found = findComment(db, id);
+        if (!found || found.versionId !== row.version.id || found.comment.deletedAt) {
+            throw notFound();
+        }
+        return found;
     }
 
     function loadThread(id: string) {
@@ -90,7 +104,7 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
             if (existing) {
                 // A retried request: answer with the thread it already created.
                 if (existing.versionId !== row.version.id || !isAuthor(actor, existing)) {
-                    throw apiError(409, 'conflict', CONFLICT);
+                    throw conflict();
                 }
                 return c.json(loadThread(existing.id));
             }
@@ -125,7 +139,7 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
             const existing = findComment(db, input.id);
             if (existing) {
                 if (existing.comment.threadId !== thread.id || !isAuthor(actor, existing.comment)) {
-                    throw apiError(409, 'conflict', CONFLICT);
+                    throw conflict();
                 }
                 return c.json(loadThread(thread.id));
             }
@@ -135,10 +149,7 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
         })
         .patch('/:token/comments/:id', async (c) => {
             const { row, actor } = writer(c);
-            const found = findComment(db, c.req.param('id'));
-            if (!found || found.versionId !== row.version.id || found.comment.deletedAt) {
-                throw notFound();
-            }
+            const found = commentOf(row, c.req.param('id'));
             if (!isAuthor(actor, found.comment)) {
                 throw apiError(403, 'forbidden', 'You can only edit your own comments.');
             }
@@ -148,10 +159,7 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
         })
         .delete('/:token/comments/:id', (c) => {
             const { row, actor } = writer(c);
-            const found = findComment(db, c.req.param('id'));
-            if (!found || found.versionId !== row.version.id || found.comment.deletedAt) {
-                throw notFound();
-            }
+            const found = commentOf(row, c.req.param('id'));
             if (actor.kind !== 'editor' && !isAuthor(actor, found.comment)) {
                 throw apiError(403, 'forbidden', 'You can only delete your own comments.');
             }

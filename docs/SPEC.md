@@ -11,8 +11,8 @@ Status: pre-release. This document describes the MVP and the planned roadmap.
 | Role | Account | Capabilities |
 |---|---|---|
 | **Admin** | yes | Everything an editor can do, on every workspace. Invites editors and admins, generates password-reset links, disables accounts. |
-| **Editor** | yes | Owns a workspace: creates projects, uploads mockups, manages share links, reads and resolves reviews. Is responsible for the content of the mockups they upload. |
-| **Viewer** | no | Anonymous. Reaches a mockup through its share link, places pins, writes comments, submits a review. |
+| **Editor** | yes | Owns a workspace: creates projects, uploads mockups and their new versions, manages share links, reads and resolves reviews. Is responsible for the content of the mockups they upload. |
+| **Viewer** | no | Anonymous. Reaches a mockup through its share link, places pins, writes comments, submits a review, may choose a display name. |
 
 Only admins and editors have accounts. Viewers are identified per browser (see §4.3).
 
@@ -27,10 +27,12 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
 ```
 
 - **Project**: a named container of mockups inside an editor's workspace.
-- **Mockup**: a reviewable design with a share link. Holds one or more versions; the MVP exposes
-  only one version per mockup, but the schema is version-aware from day one.
-- **MockupVersion**: an uploaded HTML file (stored on disk, addressed by SHA-256).
-- **Viewer**: an anonymous participant of a single mockup, with display name and color.
+- **Mockup**: a reviewable design with a share link. Holds one or more versions, numbered 1, 2,
+  3…; the link always shows the latest, called the current version.
+- **MockupVersion**: an uploaded HTML file (stored on disk, addressed by SHA-256). Threads and
+  reviews belong to a version, so a new version starts without them; earlier versions keep theirs.
+- **Viewer**: an anonymous participant of a single mockup, with display name and color. A viewer
+  belongs to the mockup, not to a version, so they keep their identity across versions.
 - **Review**: the set of a viewer's threads on a version, plus an optional verdict.
 - **Thread**: either a **pin** (anchored to a DOM element) or a **general** comment. Has a status
   (`open` / `resolved`).
@@ -140,8 +142,14 @@ mockup code cannot tamper with it.
 
 ### 4.3 Viewer identity
 
-- On first visit to a share link the viewer is asked for a name (optional). Skipping assigns a
-  generated name such as "Anonymous Fox".
+- Opening a share link asks for nothing: anyone can read the mockup and its threads. The first
+  change (pin, comment, reply, review) registers the viewer under a generated name such as
+  "Anonymous Fox", or under the name they chose on an earlier mockup.
+- Viewers change their name from the header at any time; the new name shows on all their threads
+  and comments. The chosen name is remembered by the browser (`localStorage`) and used when they
+  join other mockups. Names need not be unique.
+- After a viewer joins under a generated name, a hint next to their name invites them, once per
+  browser, to add their own; closing it or choosing a name stops it for good.
 - The browser stores a secret **viewer key** per mockup in `localStorage` and sends it in the
   `X-Loupe-Viewer` header; the server stores its hash. The key authorizes editing and deleting
   the viewer's own comments. Without a key, the threads can still be read.
@@ -150,7 +158,7 @@ mockup code cannot tamper with it.
   "Editor" badge.
 - Identity is self-declared and unverified; this is documented in the UI.
 - **Abuse limits** (in memory): at most 60 new viewers per mockup per 10 minutes, and 30 changes
-  (threads, comments, edits, deletions, reviews) per viewer per minute. Editors are not limited.
+  (threads, comments, edits, deletions, reviews, renames) per viewer per minute. Editors are not limited.
   Exceeding a limit answers `429 too_many_requests`.
 
 ### 4.4 Pin anchors
@@ -178,8 +186,8 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 
 - **Floating toolbar** (draggable): Pin · General comment · Show/hide pins · save status ·
   "Finish review" · shortcuts help.
-- **Header**: mockup name, viewport switcher, presence avatars and the side-panel toggle.
-  Editors also get a link back to the mockup page.
+- **Header**: mockup name, viewport switcher, the viewer's own name (to change it, §4.3),
+  presence avatars and the side-panel toggle. Editors also get a link back to the mockup page.
 - **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
   marked. Editors can open it filtered to one viewer (`?viewer=<id>`).
 - **Narrow screens** (below 768 px, e.g. phones): the side panel covers the mockup instead of
@@ -222,6 +230,18 @@ expired, open streams end, so a revoked link stops receiving events within 25 se
 answer on reconnection is final: the client stops retrying and loads the link again, which then
 shows it as unavailable (or offers to retry if the server cannot be reached).
 
+### 5.3 New versions
+
+The review space sends the number of the version it shows in the `X-Loupe-Version` header.
+Changes and the event stream are accepted only for the current version; for an older one the
+server answers `409 version_changed`. Reading the threads of the version shown still works, so
+the client can reload them after a rejected change. Open streams of an older version end at the
+next heartbeat, and the reconnection is refused the same way.
+
+On `version_changed` the review space stops accepting changes and shows "A new version of this
+mockup is available · Reload" instead of an error; a rejected comment goes back into its box, so
+its text is not lost. Reloading the page shows the current version, with the same viewer.
+
 ## 6. Editor experience
 
 - **Workspace**: list of own projects (admins can switch to any user's workspace).
@@ -230,9 +250,13 @@ shows it as unavailable (or offers to retry if the server cannot be reached).
 - **Upload**: drag & drop an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
   self-contained.
+- **New version**: from the mockup page, upload the next file with the same checks. It becomes
+  the current version on the same share link; viewers keep their identity, and threads, reviews
+  and activity counts start again from zero. Threads of earlier versions stay stored but are not
+  shown in the MVP.
 - **Share settings** per mockup: copy link, enable/disable, regenerate (old link stops working),
   optional expiry, read-only mode (comments visible, no new ones).
-- **Reviews**: per mockup, a list grouped by viewer (color, name, thread counts open/resolved,
+- **Reviews**: per mockup and for the current version, a list grouped by viewer (color, name, thread counts open/resolved,
   verdict, last activity). Selecting a viewer opens the mockup filtered to their pins.
 - **Moderation**: reply to any thread, resolve/reopen, delete any comment.
 
@@ -277,12 +301,14 @@ GET  /api/admin/users                           PATCH /api/admin/users/:id
 GET|POST         /api/projects                  GET|PATCH|DELETE /api/projects/:id (with mockups)
 POST             /api/projects/:id/mockups      GET|PATCH|DELETE /api/mockups/:id
 POST             /api/mockups/:id/share/regenerate
-POST             /api/mockups/:id/versions      (v1.x)
+POST             /api/mockups/:id/versions      upload the next version
 GET              /api/mockups/:id/reviews
 
-# Share-link scope (viewers and editors); viewer key in X-Loupe-Viewer header
+# Share-link scope (viewers and editors); viewer key in X-Loupe-Viewer header, version shown
+# in X-Loupe-Version (§5.3)
 GET  /api/s/:token                              mockup metadata + current version
 POST /api/s/:token/viewers                      register viewer (name) → viewer key
+PATCH /api/s/:token/viewers/me                  change the viewer's name
 GET  /api/s/:token/threads                      POST /api/s/:token/threads
 POST /api/s/:token/threads/:id/comments         PATCH|DELETE /api/s/:token/comments/:id
 PATCH /api/s/:token/threads/:id                 resolve/reopen (editor only)
@@ -297,7 +323,8 @@ GET  /s/:token/content                          sandboxed mockup document (bridg
 **MVP**: everything in §§1–8.
 
 **v1.x**
-- Mockup versions: upload v2, carry unresolved pins over by re-anchoring, list orphans.
+- Earlier versions: browse them with their threads, and see in a new version which comments
+  of the previous one were resolved or are still open.
 - Export a review to Markdown / CSV (for GitLab/Jira issues).
 - Webhooks (Slack, Teams, Mattermost) on review submitted.
 - SMTP delivery of invite and reset links.

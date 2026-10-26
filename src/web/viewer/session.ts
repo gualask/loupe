@@ -8,6 +8,7 @@ import {
     type Review,
     type ShareEvent,
     type Thread,
+    VERSION_HEADER,
     VIEWER_KEY_HEADER,
 } from '../../shared/api/reviews.ts';
 import { ApiError, api, errorMessage } from '../lib/api.ts';
@@ -22,6 +23,10 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'offline';
 // mockup a link opens lets the first request already carry the key.
 const viewerKeyName = (mockupId: string) => `loupe:viewer:${mockupId}`;
 const linkMockupName = (token: string) => `loupe:link:${token}`;
+// The name a viewer chose, used again on the next mockups they comment on.
+const NAME_KEY = 'loupe:name';
+// Set once the viewer closed the hint inviting them to choose a name, or chose one.
+const NAME_HINT_KEY = 'loupe:name-hint';
 
 /**
  * Loads a share link as the current browser sees it: editors through their session, viewers
@@ -74,7 +79,12 @@ export function createReviewSession(
     const error = signal<string>();
     /** Set when the link stops giving access, e.g. disabled, regenerated or expired. */
     const unavailable = signal(false);
+    /** Set once a newer version was uploaded: this space shows a file reviewers moved on from. */
+    const outdated = signal(false);
+    /** Whether to invite the viewer to replace the generated name they were given. */
+    const nameHint = signal(false);
     let key = initialKey;
+    let joining: Promise<boolean> | undefined;
     let pending = 0;
     // Changes are sent one at a time, in order: a reply must not reach the server before its
     // thread, even when both were retried while offline.
@@ -84,11 +94,16 @@ export function createReviewSession(
     let resync = false;
 
     const me = computed(() => shared.value.me);
-    /** Whether changes are accepted here at all; a viewer may first have to choose a name. */
-    const mayWrite = computed(() => shared.value.canModerate || !shared.value.readOnly);
+    /** Whether changes are accepted here at all; a viewer may first need an identity. */
+    const mayWrite = computed(
+        () => !outdated.value && (shared.value.canModerate || !shared.value.readOnly),
+    );
     /** Whether this browser can change things right now: writing is open and it has an identity. */
     const canWrite = computed(() => !!me.value && mayWrite.value);
-    const headers = () => (key ? { [VIEWER_KEY_HEADER]: key } : undefined);
+    const headers = (): Record<string, string> => ({
+        [VERSION_HEADER]: String(shared.value.version),
+        ...(key && { [VIEWER_KEY_HEADER]: key }),
+    });
 
     function upsert(thread: Thread) {
         const others = threads.value.filter((t) => t.id !== thread.id);
@@ -118,7 +133,9 @@ export function createReviewSession(
                         location.assign(`/login?next=${encodeURIComponent(here)}`);
                         return undefined;
                     }
-                    error.value = errorMessage(err);
+                    // A newer version is shown as a notice to reload rather than as an error.
+                    if (err.code === 'version_changed') outdated.value = true;
+                    else error.value = errorMessage(err);
                     resync = true;
                     return undefined;
                 }
@@ -144,7 +161,7 @@ export function createReviewSession(
                 resync = false;
                 await refresh().catch(() => undefined);
             }
-            saveState.value = error.value ? 'idle' : 'saved';
+            saveState.value = error.value || outdated.value ? 'idle' : 'saved';
         });
     }
 
@@ -185,15 +202,29 @@ export function createReviewSession(
 
     let closeStream: (() => void) | undefined;
 
+    async function register(displayName: string) {
+        const res = await api.post<RegisteredViewer>(`${base}/viewers`, { displayName });
+        key = res.key;
+        storage.set(viewerKeyName(shared.value.mockupId), res.key);
+        shared.value = { ...shared.value, me: res.viewer };
+        connect();
+    }
+
+    function dismissNameHint() {
+        nameHint.value = false;
+        storage.set(NAME_HINT_KEY, 'dismissed');
+    }
+
     /** (Re)opens the event stream; called again once the viewer has an identity. */
     function connect() {
         closeStream?.();
-        closeStream = openEventStream<ShareEvent>(`/api${base}/events`, headers() ?? {}, {
+        closeStream = openEventStream<ShareEvent>(`/api${base}/events`, headers(), {
             // Events missed while disconnected are recovered by refetching.
             onOpen: () => void refresh().catch(() => undefined),
             onEvent: handleEvent,
-            onRefused: () => {
-                unavailable.value = true;
+            onRefused: (code) => {
+                if (code === 'version_changed') outdated.value = true;
+                else unavailable.value = true;
             },
         });
     }
@@ -205,19 +236,53 @@ export function createReviewSession(
         saveState,
         error,
         unavailable,
+        outdated,
+        nameHint,
         me,
         mayWrite,
         canWrite,
         connect,
         disconnect: () => closeStream?.(),
 
-        async register(displayName: string) {
-            const res = await api.post<RegisteredViewer>(`${base}/viewers`, { displayName });
-            key = res.key;
-            storage.set(viewerKeyName(shared.value.mockupId), res.key);
-            shared.value = { ...shared.value, me: res.viewer };
-            connect();
+        /**
+         * Gives a viewer without an identity one, under the name they chose before or a
+         * generated one; resolves to whether this browser can now act as someone.
+         */
+        join() {
+            if (me.value) return Promise.resolve(true);
+            joining ??= (async () => {
+                const remembered = storage.get(NAME_KEY);
+                try {
+                    await register(remembered ?? '');
+                    if (!remembered && !storage.get(NAME_HINT_KEY)) nameHint.value = true;
+                    return true;
+                } catch (err) {
+                    error.value = errorMessage(err);
+                    return false;
+                } finally {
+                    joining = undefined;
+                }
+            })();
+            return joining;
         },
+
+        /** Sets the viewer's name, registering them if needed, and remembers it for next time. */
+        async setName(displayName: string) {
+            if (me.value?.kind === 'viewer') {
+                const viewer = await api.patch<Author>(
+                    `${base}/viewers/me`,
+                    { displayName },
+                    headers(),
+                );
+                shared.value = { ...shared.value, me: viewer };
+            } else {
+                await register(displayName);
+            }
+            storage.set(NAME_KEY, me.value?.displayName ?? displayName);
+            dismissNameHint();
+        },
+
+        dismissNameHint,
 
         createThread(
             input: { kind: 'pin'; anchor: PinAnchor } | { kind: 'general' },

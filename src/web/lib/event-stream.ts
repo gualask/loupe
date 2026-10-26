@@ -3,13 +3,17 @@ const MAX_RETRY_MS = 30_000;
 /**
  * Reads a Server-Sent Events stream with fetch, so requests can carry headers, and reconnects
  * with backoff. `onOpen` runs on every (re)connection. A 4xx answer (e.g. a disabled link)
- * would not change on retry: the stream then stops and `onRefused` runs. Returns the function
- * that closes it.
+ * would not change on retry: the stream then stops and `onRefused` runs with the API error code.
+ * Returns the function that closes it.
  */
 export function openEventStream<T>(
     url: string,
     headers: Record<string, string>,
-    handlers: { onOpen: () => void; onEvent: (event: T) => void; onRefused: () => void },
+    handlers: {
+        onOpen: () => void;
+        onEvent: (event: T) => void;
+        onRefused: (code: string | undefined) => void;
+    },
 ) {
     let stopped = false;
     let controller: AbortController | undefined;
@@ -17,7 +21,10 @@ export function openEventStream<T>(
     async function readOnce() {
         controller = new AbortController();
         const res = await fetch(url, { headers, signal: controller.signal });
-        if (res.status >= 400 && res.status < 500) return 'refused';
+        if (res.status >= 400 && res.status < 500) {
+            const data = await res.json().catch(() => ({}));
+            return { refused: typeof data.error === 'string' ? data.error : undefined };
+        }
         if (!res.ok || !res.body) throw new Error(`event stream failed: ${res.status}`);
         handlers.onOpen();
         const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -47,9 +54,9 @@ export function openEventStream<T>(
             const started = Date.now();
             const outcome = await readOnce().catch(() => 'failed');
             if (stopped) return;
-            if (outcome === 'refused') {
+            if (typeof outcome === 'object') {
                 stopped = true;
-                handlers.onRefused();
+                handlers.onRefused(outcome.refused);
                 return;
             }
             // A connection that stayed up for a while resets the backoff.

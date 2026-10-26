@@ -56,7 +56,9 @@ export function MockupPage() {
                     side panel scroll, each on its own. */}
                 <div class="grid gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div class="overflow-hidden rounded-xl border border-stone-200 bg-white">
+                        {/* Keyed by version, so a new upload replaces the preview. */}
                         <MockupFrame
+                            key={mockup.version.number}
                             src={`/s/${token}/content`}
                             title={`Preview of ${mockup.name}`}
                             class="h-[70vh] w-full lg:h-full"
@@ -64,8 +66,12 @@ export function MockupPage() {
                     </div>
                     <div class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white lg:min-h-0 lg:overflow-y-auto">
                         <SharePanel mockup={mockup} onChange={(m) => resource.update(() => m)} />
-                        <ReviewsPanel mockupId={mockup.id} token={token} />
-                        <FilePanel mockup={mockup} />
+                        <ReviewsPanel
+                            key={mockup.version.number}
+                            mockupId={mockup.id}
+                            token={token}
+                        />
+                        <FilePanel mockup={mockup} onChange={(m) => resource.update(() => m)} />
                     </div>
                 </div>
             </div>

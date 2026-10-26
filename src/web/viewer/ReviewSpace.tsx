@@ -8,7 +8,7 @@ import type { BridgeMessage, PinPosition } from '../../shared/bridge-protocol.ts
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { useBridge } from './bridge.ts';
 import { Composer } from './Composer.tsx';
-import { HelpDialog, IdentityDialog, ReviewDialog } from './dialogs.tsx';
+import { HelpDialog, NameDialog, ReviewDialog } from './dialogs.tsx';
 import { ErrorToast } from './ErrorToast.tsx';
 import { Popover } from './Popover.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
@@ -25,7 +25,7 @@ const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 
 /** What is being written; `body` refills the box after the server rejected it. */
 type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & { body?: string };
-type DialogName = 'identity' | 'review' | 'help';
+type DialogName = 'name' | 'review' | 'help';
 
 const panelCoversMockup = () => matchMedia(OVERLAY_PANEL_QUERY).matches;
 
@@ -64,7 +64,6 @@ export function ReviewSpace({
     const { path, query, route } = useLocation();
     const frame = useRef<HTMLIFrameElement>(null);
     const toolbar = useRef<HTMLDivElement>(null);
-    const afterIdentity = useRef<(() => void) | null>(null);
 
     const shared = session.shared.value;
     const me = session.me.value;
@@ -80,9 +79,7 @@ export function ReviewSpace({
     // Null fills the window.
     const [viewportWidth, setViewportWidth] = useState<number | null>(null);
     const [panelOpen, setPanelOpen] = useState(() => !panelCoversMockup());
-    const [dialog, setDialog] = useState<DialogName | null>(
-        initial.me || initial.readOnly ? null : 'identity',
-    );
+    const [dialog, setDialog] = useState<DialogName | null>(null);
     const [positions, setPositions] = useState(new Map<string, PinPosition>());
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
@@ -110,15 +107,11 @@ export function ReviewSpace({
         if (panelCoversMockup()) setPanelOpen(false);
     }
 
-    /** Runs an action that needs an identity, asking for a name first if necessary. */
+    /** Runs an action that needs an identity, joining under a generated name if necessary. */
     function withIdentity(action: () => void) {
         if (!mayWrite) return;
-        if (me) {
-            action();
-            return;
-        }
-        afterIdentity.current = action;
-        setDialog('identity');
+        if (me) action();
+        else void session.join().then((joined) => joined && action());
     }
 
     function startPin() {
@@ -303,12 +296,32 @@ export function ReviewSpace({
                 readOnly={shared.readOnly}
                 backHref={isEditor ? `/mockups/${shared.mockupId}` : undefined}
                 viewportWidth={viewportWidth}
+                me={me}
+                canName={mayWrite && me?.kind !== 'editor'}
+                nameHint={session.nameHint.value}
+                onName={() => setDialog('name')}
+                onDismissNameHint={session.dismissNameHint}
                 presence={session.presence.value}
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}
                 onViewport={setViewportWidth}
                 onTogglePanel={() => setPanelOpen((open) => !open)}
             />
+            {session.outdated.value ? (
+                <div
+                    role="status"
+                    class="flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-100 px-4 py-2 text-amber-900 text-sm"
+                >
+                    A new version of this mockup is available.
+                    <button
+                        type="button"
+                        onClick={() => location.reload()}
+                        class="font-semibold underline underline-offset-2"
+                    >
+                        Reload
+                    </button>
+                </div>
+            ) : null}
             <div class="flex min-h-0 flex-1">
                 <main class="flex min-w-0 flex-1 justify-center overflow-auto">
                     <div
@@ -361,19 +374,14 @@ export function ReviewSpace({
                     }}
                 />
             ) : null}
-            {dialog === 'identity' ? (
-                <IdentityDialog
+            {dialog === 'name' ? (
+                <NameDialog
+                    current={me?.displayName ?? ''}
                     onSubmit={async (name) => {
-                        await session.register(name);
-                        setDialog(null);
-                        const action = afterIdentity.current;
-                        afterIdentity.current = null;
-                        action?.();
-                    }}
-                    onClose={() => {
-                        afterIdentity.current = null;
+                        await session.setName(name);
                         setDialog(null);
                     }}
+                    onClose={() => setDialog(null)}
                 />
             ) : null}
             {dialog === 'review' ? (

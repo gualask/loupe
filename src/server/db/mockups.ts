@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, max } from 'drizzle-orm';
 import type { Db } from './client.ts';
 import { mockups, mockupVersions, projects } from './schema.ts';
 
@@ -59,6 +59,41 @@ export function insertMockup(
             .run();
     });
     return mockupId;
+}
+
+export function findVersion(db: Db, mockupId: string, number: number) {
+    return db
+        .select()
+        .from(mockupVersions)
+        .where(and(eq(mockupVersions.mockupId, mockupId), eq(mockupVersions.number, number)))
+        .get();
+}
+
+/** Adds a version after the latest one and makes it current. */
+export function insertVersion(
+    db: Db,
+    mockupId: string,
+    version: Pick<
+        MockupVersionRow,
+        'sha256' | 'sizeBytes' | 'originalFilename' | 'externalRefs' | 'uploadedBy'
+    >,
+) {
+    const versionId = crypto.randomUUID();
+    db.transaction((tx) => {
+        const latest =
+            tx
+                .select({ n: max(mockupVersions.number) })
+                .from(mockupVersions)
+                .where(eq(mockupVersions.mockupId, mockupId))
+                .get()?.n ?? 0;
+        tx.insert(mockupVersions)
+            .values({ id: versionId, mockupId, number: latest + 1, ...version })
+            .run();
+        tx.update(mockups)
+            .set({ currentVersionId: versionId })
+            .where(eq(mockups.id, mockupId))
+            .run();
+    });
 }
 
 export function updateMockup(

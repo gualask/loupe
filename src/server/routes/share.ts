@@ -29,6 +29,7 @@ export function shareApiRoutes({ db }: AppDeps) {
                 mockupId: row.mockup.id,
                 name: row.mockup.name,
                 readOnly: row.mockup.readOnly,
+                version: row.version.number,
                 contentUrl: `/s/${row.mockup.shareToken}/content`,
                 me: actor?.author ?? null,
                 canModerate: actor?.kind === 'editor',

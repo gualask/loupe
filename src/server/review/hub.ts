@@ -41,7 +41,20 @@ export function createHub() {
         };
     }
 
-    return { publish, join };
+    /** Shows a renamed viewer's new name in the presence of a room. */
+    function rename(room: string, viewer: Author) {
+        let present = false;
+        for (const member of rooms.get(room) ?? []) {
+            const { participant } = member;
+            if (participant?.kind === viewer.kind && participant.id === viewer.id) {
+                member.participant = viewer;
+                present = true;
+            }
+        }
+        if (present) publishPresence(room);
+    }
+
+    return { publish, join, rename };
 }
 
 export type Hub = ReturnType<typeof createHub>;

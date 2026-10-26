@@ -9,44 +9,44 @@ import { FormError } from '../ui/FormError.tsx';
 import { INPUT_CLASS } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
 
-/**
- * First visit: the viewer picks a display name, or skips to get a generated one. The parent
- * closes the dialog once `onSubmit` succeeds.
- */
-export function IdentityDialog({
+/** The viewer's display name, shown next to their comments; the parent closes it on success. */
+export function NameDialog({
+    current,
     onSubmit,
     onClose,
 }: {
+    current: string;
     onSubmit: (displayName: string) => Promise<void>;
     onClose: () => void;
 }) {
-    const [name, setName] = useState('');
+    const [name, setName] = useState(current);
     const { error, pending, run } = useAction();
-    const submit = (displayName: string) => run(() => onSubmit(displayName));
 
     return (
-        <Dialog title="Welcome to the review" onClose={onClose}>
+        <Dialog title="Your name" onClose={onClose}>
             <form
                 class="flex flex-col gap-4"
                 onSubmit={(e) => {
                     e.preventDefault();
-                    submit(name);
+                    run(() => onSubmit(name));
                 }}
             >
                 <TextField
-                    label="Your name"
-                    hint="Shown next to your comments to everyone with this link. It is not verified."
+                    label="Name"
+                    hint="Shown next to your comments and pins to everyone with this link. It is not verified."
                     maxLength={60}
                     value={name}
                     onInput={(e) => setName(e.currentTarget.value)}
+                    // Typing replaces the current name, often a generated one.
+                    onFocus={(e) => e.currentTarget.select()}
                 />
                 <FormError message={error} />
                 <div class="flex justify-end gap-2">
-                    <Button variant="ghost" disabled={pending} onClick={() => submit('')}>
-                        Skip
+                    <Button variant="ghost" disabled={pending} onClick={onClose}>
+                        Cancel
                     </Button>
                     <Button type="submit" disabled={pending || !name.trim()}>
-                        Continue
+                        Save
                     </Button>
                 </div>
             </form>

@@ -5,11 +5,13 @@ import {
     createCommentRequestSchema,
     createThreadRequestSchema,
     type Review,
+    renameViewerRequestSchema,
     submitReviewRequestSchema,
     updateCommentRequestSchema,
     updateThreadRequestSchema,
 } from '../../shared/api/reviews.ts';
 import { deleteComment, findComment, insertComment, updateCommentBody } from '../db/comments.ts';
+import { findVersion } from '../db/mockups.ts';
 import { reopenReview, submitReview } from '../db/reviews.ts';
 import {
     findThread,
@@ -18,19 +20,22 @@ import {
     listThreads,
     updateThreadStatus,
 } from '../db/threads.ts';
+import { renameViewer } from '../db/viewers.ts';
 import { apiError, notFound, parseJson } from '../http.ts';
 import { createWindowLimiter } from '../rate-limit.ts';
 import {
     authorIds,
+    checkVersion,
     findSharedMockup,
     isAuthor,
+    olderVersionShown,
     type ShareActor,
     type SharedMockupRow,
     shareActor,
     sharedMockup,
 } from '../review/context.ts';
 import type { Hub } from '../review/hub.ts';
-import { toReview, toThread } from '../review/present.ts';
+import { toReview, toThread, viewerAuthor } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 // A retried creation reusing an id that belongs to something else.
@@ -45,12 +50,19 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
     // Far above a person typing comments; stops scripts flooding a mockup.
     const viewerChanges = createWindowLimiter({ max: 30, windowMs: 60 * 1000 });
 
+    /** The mockup behind the link, if the request is about its current version. */
+    function currentVersion(c: Context<AppEnv>) {
+        const row = sharedMockup(db, c);
+        checkVersion(c, row);
+        return row;
+    }
+
     /**
      * The mockup and actor for a change; read-only mockups accept changes from editors only.
      * Viewers are rate limited, editors are trusted.
      */
     function writer(c: Context<AppEnv>) {
-        const row = sharedMockup(db, c);
+        const row = currentVersion(c);
         const actor = shareActor(db, c, row);
         if (!actor) throw apiError(401, 'viewer_required', 'Choose a name before commenting.');
         if (actor.kind === 'viewer') {
@@ -100,7 +112,12 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
     return new Hono<AppEnv>()
         .get('/:token/threads', (c) => {
             const row = sharedMockup(db, c);
-            return c.json(listThreads(db, row.version.id).map(toThread));
+            // A review space left open on an older version keeps reading its threads.
+            const older = olderVersionShown(c, row);
+            const versionId =
+                older === undefined ? row.version.id : findVersion(db, row.mockup.id, older)?.id;
+            if (!versionId) throw notFound();
+            return c.json(listThreads(db, versionId).map(toThread));
         })
         .post('/:token/threads', async (c) => {
             const { row, actor } = writer(c);
@@ -194,8 +211,30 @@ export function threadRoutes({ db, hub }: AppDeps & { hub: Hub }) {
             publishReview(row, body);
             return c.json(body);
         })
+        .patch('/:token/viewers/me', async (c) => {
+            const { row, actor } = writer(c);
+            if (actor.kind !== 'viewer') {
+                throw apiError(403, 'forbidden', 'Editors use the name of their account.');
+            }
+            const { displayName } = await parseJson(c, renameViewerRequestSchema);
+            const renamed = renameViewer(db, actor.viewer.id, displayName);
+            if (!renamed) throw notFound();
+            const viewer = viewerAuthor(renamed);
+            hub.rename(row.version.id, viewer);
+            // The name is shown on every thread and comment of the viewer.
+            for (const thread of listThreads(db, row.version.id).map(toThread)) {
+                const authors = [
+                    thread.author,
+                    ...thread.comments.map((comment) => comment.author),
+                ];
+                if (authors.some((a) => a.kind === 'viewer' && a.id === viewer.id)) {
+                    hub.publish(row.version.id, { type: 'thread', thread });
+                }
+            }
+            return c.json(viewer);
+        })
         .get('/:token/events', (c) => {
-            const row = sharedMockup(db, c);
+            const row = currentVersion(c);
             const participant = shareActor(db, c, row)?.author ?? null;
             // Reverse proxies such as nginx would otherwise hold events back in their buffer.
             c.header('X-Accel-Buffering', 'no');

@@ -178,6 +178,7 @@ describe('share links', () => {
             mockupId: mockup.id,
             name: 'checkout',
             readOnly: false,
+            version: 1,
             contentUrl: `/s/${token}/content`,
             me: null,
             canModerate: false,
@@ -221,5 +222,55 @@ describe('share links', () => {
         expect((await admin.patch(`/api/mockups/${mockup.id}`, { readOnly: true })).status).toBe(
             200,
         );
+    });
+});
+
+describe('mockup versions', () => {
+    it('serves a new version on the same link', async () => {
+        const { t, editor, project, mockup } = await editorWithMockup();
+        const next = '<!doctype html><button>Pay now</button>';
+        const res = await editor.post(
+            `/api/mockups/${mockup.id}/versions`,
+            htmlFile(next, 'checkout-v2.html'),
+        );
+        expect(res.status).toBe(201);
+        expect(res.body).toEqual({
+            ...mockup,
+            version: {
+                number: 2,
+                originalFilename: 'checkout-v2.html',
+                sizeBytes: new TextEncoder().encode(next).byteLength,
+                externalRefs: [],
+                createdAt: expect.any(String),
+            },
+        });
+
+        const token = tokenFromUrl(mockup.shareUrl);
+        expect((await t.client().get(`/api/s/${token}`)).body).toMatchObject({ version: 2 });
+        expect((await t.client().get(`/s/${token}/content`)).body).toContain('Pay now');
+        const listed = await editor.get(`/api/projects/${project.id}`);
+        expect(listed.body.mockups).toEqual([
+            expect.objectContaining({ id: mockup.id, version: res.body.version }),
+        ]);
+        // Both files stay stored: the first version still references its own.
+        expect(readdirSync(path.join(t.config.dataDir, 'mockups'))).toHaveLength(2);
+    });
+
+    it('checks the file and who uploads it', async () => {
+        const { t, admin, editor, mockup } = await editorWithMockup();
+        const url = `/api/mockups/${mockup.id}/versions`;
+        expect(await editor.post(url, htmlFile('just some text', 'notes.html'))).toMatchObject({
+            status: 400,
+            body: { error: 'not_html' },
+        });
+        const big = `<html><body>${'x'.repeat(1024 * 1024)}</body></html>`;
+        expect(await editor.post(url, htmlFile(big))).toMatchObject({
+            status: 413,
+            body: { error: 'file_too_large' },
+        });
+        const { editor: other } = await inviteEditor(t, admin, 'fran');
+        expect((await other.post(url, htmlFile())).status).toBe(404);
+        expect((await t.client().post(url, htmlFile())).status).toBe(401);
+        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.version.number).toBe(1);
     });
 });

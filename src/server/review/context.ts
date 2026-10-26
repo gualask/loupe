@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { type Author, VIEWER_KEY_HEADER } from '../../shared/api/reviews.ts';
+import { type Author, VERSION_HEADER, VIEWER_KEY_HEADER } from '../../shared/api/reviews.ts';
 import { sha256 } from '../auth/crypto.ts';
 import type { Db } from '../db/client.ts';
 import { findMockupByShareToken } from '../db/mockups.ts';
@@ -30,6 +30,29 @@ export function sharedMockup(db: Db, c: Context<AppEnv>) {
     const row = findSharedMockup(db, c);
     if (!row) throw apiError(404, 'not_found', 'This link is not available.');
     return row;
+}
+
+/**
+ * The number of the version the review space sending the request shows, when it is not the
+ * current one; undefined for the current version or without the header.
+ */
+export function olderVersionShown(c: Context<AppEnv>, row: SharedMockupRow) {
+    const shown = c.req.header(VERSION_HEADER);
+    return shown !== undefined && shown !== String(row.version.number) ? Number(shown) : undefined;
+}
+
+/**
+ * Refuses a request sent from a review space that shows another version than the current one,
+ * e.g. a pin placed on the old file after a new version was uploaded.
+ */
+export function checkVersion(c: Context<AppEnv>, row: SharedMockupRow) {
+    if (olderVersionShown(c, row) !== undefined) {
+        throw apiError(
+            409,
+            'version_changed',
+            'A new version of this mockup is available. Reload to see it.',
+        );
+    }
 }
 
 /** Who is acting on a share link: an editor who manages the mockup, or a registered viewer. */

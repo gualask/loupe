@@ -68,6 +68,8 @@ export type SharedMockup = {
     mockupId: string;
     name: string;
     readOnly: boolean;
+    /** Number of the current version, the one the link shows. */
+    version: number;
     contentUrl: string;
     /** An editor who manages the mockup, the viewer owning the viewer key, or null. */
     me: Author | null;

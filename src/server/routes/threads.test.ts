@@ -29,7 +29,29 @@ async function sharedMockup() {
         return { client, key: res.body.key as string, viewer: res.body.viewer };
     }
 
-    return { t, admin, editor, editorId, mockup: mockup.body, token, base, viewer };
+    /** Uploads the next version of the mockup, on the same link. */
+    async function uploadVersion() {
+        const next = new FormData();
+        next.set('file', new File(['<!doctype html><main>Hello</main>'], 'home-v2.html'));
+        const res = await editor.post(`/api/mockups/${mockup.body.id}/versions`, next);
+        expect(res.status).toBe(201);
+    }
+
+    return { t, admin, editor, editorId, mockup: mockup.body, token, base, viewer, uploadVersion };
+}
+
+/** Reads the events of an open stream, one message at a time. */
+async function openStream(t: ReturnType<typeof createTestApp>, url: string, key: string) {
+    const res = await t.app.request(url, { headers: { 'x-loupe-viewer': key } });
+    const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
+    if (!reader) throw new Error('expected a stream');
+    return {
+        reader,
+        next: async () => {
+            const { value = '' } = await reader.read();
+            return JSON.parse(value.replace(/^data: /, ''));
+        },
+    };
 }
 
 afterEach(() => {
@@ -56,6 +78,7 @@ describe('viewers', () => {
             mockupId: mockup.id,
             name: 'home',
             readOnly: false,
+            version: 1,
             contentUrl: expect.stringMatching(/^\/s\/[\w-]{43}\/content$/),
             me: alice.viewer,
             canModerate: false,
@@ -72,6 +95,40 @@ describe('viewers', () => {
         const stranger = t.client();
         stranger.header('x-loupe-viewer', 'not-a-key');
         expect((await stranger.get(base)).body).toMatchObject({ me: null, canModerate: false });
+    });
+
+    it('lets viewers rename themselves wherever their name shows', async () => {
+        const { t, editor, base, viewer } = await sharedMockup();
+        const alice = await viewer();
+        const bob = await viewer('Bob');
+        const id = crypto.randomUUID();
+        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        const bobStream = await openStream(t, `${base}/events`, bob.key);
+        await bobStream.next(); // presence: Bob
+        const aliceStream = await openStream(t, `${base}/events`, alice.key);
+        await bobStream.next(); // presence: Bob and Alice
+
+        const renamed = await alice.client.patch(`${base}/viewers/me`, {
+            displayName: ' Alice ',
+        });
+        const alicia = { ...alice.viewer, displayName: 'Alice' };
+        expect(renamed).toMatchObject({ status: 200, body: alicia });
+        expect(await bobStream.next()).toEqual({
+            type: 'presence',
+            participants: [bob.viewer, alicia],
+        });
+        expect(await bobStream.next()).toMatchObject({
+            type: 'thread',
+            thread: { id, author: alicia, comments: [{ author: alicia }] },
+        });
+        expect((await alice.client.get(base)).body.me).toEqual(alicia);
+        await Promise.all([bobStream.reader.cancel(), aliceStream.reader.cancel()]);
+
+        const empty = await alice.client.patch(`${base}/viewers/me`, { displayName: ' ' });
+        expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
+        const anonymous = await t.client().patch(`${base}/viewers/me`, { displayName: 'Eve' });
+        expect(anonymous).toMatchObject({ status: 401, body: { error: 'viewer_required' } });
+        expect((await editor.patch(`${base}/viewers/me`, { displayName: 'Ed' })).status).toBe(403);
     });
 
     it('does not accept viewers on read-only mockups', async () => {
@@ -443,6 +500,92 @@ describe('event stream', () => {
         await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
         expect((await heartbeat(second)).done).toBe(true);
         expect((await t.app.request(`${base}/events`)).status).toBe(404);
+    });
+});
+
+describe('versions', () => {
+    it('starts a new version without threads or reviews, keeping the viewers', async () => {
+        const { editor, mockup, base, viewer, uploadVersion } = await sharedMockup();
+        const alice = await viewer('Alice');
+        await alice.client.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'pin',
+            anchor: ANCHOR,
+            body: 'Bigger',
+        });
+        await alice.client.put(`${base}/review`, { verdict: 'changes_requested' });
+
+        await uploadVersion();
+        expect((await alice.client.get(base)).body).toMatchObject({
+            version: 2,
+            me: alice.viewer,
+            review: null,
+        });
+        expect((await alice.client.get(`${base}/threads`)).body).toEqual([]);
+        const created = await alice.client.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'pin',
+            anchor: ANCHOR,
+            body: 'Better',
+        });
+        // Pins are numbered per version.
+        expect(created.body).toMatchObject({ number: 1, author: alice.viewer });
+        expect((await editor.get(`/api/mockups/${mockup.id}/reviews`)).body).toEqual([
+            {
+                viewer: alice.viewer,
+                review: expect.objectContaining({ status: 'in_progress', verdict: null }),
+                threads: { open: 1, resolved: 0 },
+                lastSeenAt: expect.any(String),
+            },
+        ]);
+    });
+
+    it('refuses changes to an older version, but keeps its threads readable', async () => {
+        const { t, base, viewer, uploadVersion } = await sharedMockup();
+        const alice = await viewer('Alice');
+        alice.client.header('x-loupe-version', '1');
+        const first = await alice.client.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'general',
+            body: 'On the first file',
+        });
+
+        await uploadVersion();
+        expect(
+            await alice.client.post(`${base}/threads`, {
+                id: crypto.randomUUID(),
+                kind: 'general',
+                body: 'Still on the first file',
+            }),
+        ).toMatchObject({
+            status: 409,
+            body: {
+                error: 'version_changed',
+                message: 'A new version of this mockup is available. Reload to see it.',
+            },
+        });
+        const stream = await t.app.request(`${base}/events`, {
+            headers: { 'x-loupe-viewer': alice.key, 'x-loupe-version': '1' },
+        });
+        expect(stream.status).toBe(409);
+        expect((await alice.client.get(`${base}/threads`)).body).toEqual([first.body]);
+
+        alice.client.header('x-loupe-version', '2');
+        expect((await alice.client.get(`${base}/threads`)).body).toEqual([]);
+        alice.client.header('x-loupe-version', '7');
+        expect((await alice.client.get(`${base}/threads`)).status).toBe(404);
+    });
+
+    it('ends open streams of the previous version', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+        const { t, base, viewer, uploadVersion } = await sharedMockup();
+        const alice = await viewer('Alice');
+        const { reader, next } = await openStream(t, `${base}/events`, alice.key);
+        await next(); // presence
+
+        await uploadVersion();
+        await vi.advanceTimersByTimeAsync(25_000);
+        expect((await reader.read()).done).toBe(true);
     });
 });
 

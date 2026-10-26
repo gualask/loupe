@@ -9,6 +9,7 @@ const SHARED: SharedMockup = {
     mockupId: 'm1',
     name: 'Checkout',
     readOnly: false,
+    version: 1,
     contentUrl: '/s/tok/content',
     me: ME,
     canModerate: false,
@@ -19,7 +20,7 @@ const SHARED: SharedMockup = {
 function fakeServer() {
     const threads = new Map<string, Thread>();
     const requests: string[] = [];
-    const state = { online: true, rejectNext: 0 };
+    const state = { online: true, rejectNext: 0, versionChanged: false };
 
     vi.stubGlobal(
         'fetch',
@@ -27,6 +28,12 @@ function fakeServer() {
             const method = init.method ?? 'GET';
             if (!state.online) throw new TypeError('Failed to fetch');
             requests.push(`${method} ${url}`);
+            if (state.versionChanged && method !== 'GET') {
+                return Response.json(
+                    { error: 'version_changed', message: 'A new version is available.' },
+                    { status: 409 },
+                );
+            }
             if (state.rejectNext > 0) {
                 state.rejectNext--;
                 return Response.json(
@@ -132,5 +139,90 @@ describe('review session changes', () => {
             'GET /api/s/tok/threads',
         ]);
         expect(session.threads.value.map((t) => t.comments[0]?.body)).toEqual(['Two']);
+    });
+});
+
+describe('versions', () => {
+    it('turns a newer version into a notice to reload instead of an error', async () => {
+        const server = fakeServer();
+        const session = createReviewSession('tok', SHARED, 'key');
+        server.state.versionChanged = true;
+
+        expect(await session.createThread({ kind: 'general' }, 'Late')).toBe(false);
+        expect(session.outdated.value).toBe(true);
+        expect(session.mayWrite.value).toBe(false);
+        expect(session.error.value).toBeUndefined();
+        expect(session.saveState.value).toBe('idle');
+        // Reloaded as the server has them, for the version still shown: without the rejected one.
+        expect(server.requests).toEqual(['POST /api/s/tok/threads', 'GET /api/s/tok/threads']);
+        expect(session.threads.value).toEqual([]);
+    });
+});
+
+describe('viewer identity', () => {
+    /** A browser that has not commented yet, with its own storage and a server that names it. */
+    function newcomer(stored: Record<string, string> = {}) {
+        const items = new Map(Object.entries(stored));
+        vi.stubGlobal('localStorage', {
+            getItem: (name: string) => items.get(name) ?? null,
+            setItem: (name: string, value: string) => items.set(name, value),
+            removeItem: (name: string) => items.delete(name),
+        });
+        const registered: string[] = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string, init: RequestInit = {}) => {
+                if (url.endsWith('/events')) return new Response(new ReadableStream());
+                if (url.endsWith('/viewers')) {
+                    const { displayName } = JSON.parse(String(init.body));
+                    registered.push(displayName);
+                    const viewer = { ...ME, displayName: displayName || 'Anonymous Fox' };
+                    return Response.json({ key: 'k', viewer }, { status: 201 });
+                }
+                return Response.json([]);
+            }),
+        );
+        const session = createReviewSession('tok', { ...SHARED, me: null }, null);
+        return { items, registered, session };
+    }
+
+    it('joins under a generated name once, and invites the viewer to choose one', async () => {
+        const { items, registered, session } = newcomer();
+        const joins = await Promise.all([session.join(), session.join()]);
+        expect(joins).toEqual([true, true]);
+        expect(registered).toEqual(['']);
+        expect(session.me.value?.displayName).toBe('Anonymous Fox');
+        expect(items.get('loupe:viewer:m1')).toBe('k');
+        expect(session.nameHint.value).toBe(true);
+
+        session.dismissNameHint();
+        expect(session.nameHint.value).toBe(false);
+        expect(items.get('loupe:name-hint')).toBe('dismissed');
+        session.disconnect();
+    });
+
+    it('joins under the name chosen on an earlier mockup, without the invitation', async () => {
+        const { registered, session } = newcomer({ 'loupe:name': 'Gino' });
+        await session.join();
+        expect(registered).toEqual(['Gino']);
+        expect(session.me.value?.displayName).toBe('Gino');
+        expect(session.nameHint.value).toBe(false);
+        session.disconnect();
+    });
+
+    it('does not invite again a viewer who dismissed the invitation', async () => {
+        const { session } = newcomer({ 'loupe:name-hint': 'dismissed' });
+        await session.join();
+        expect(session.nameHint.value).toBe(false);
+        session.disconnect();
+    });
+
+    it('remembers a chosen name for the next mockups', async () => {
+        const { items, registered, session } = newcomer();
+        await session.setName('Gino');
+        expect(registered).toEqual(['Gino']);
+        expect(items.get('loupe:name')).toBe('Gino');
+        expect(items.get('loupe:name-hint')).toBe('dismissed');
+        session.disconnect();
     });
 });

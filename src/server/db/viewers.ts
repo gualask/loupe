@@ -46,3 +46,7 @@ export function listViewers(db: Db, mockupId: string) {
         .orderBy(desc(viewers.lastSeenAt))
         .all();
 }
+
+export function renameViewer(db: Db, id: string, displayName: string) {
+    return db.update(viewers).set({ displayName }).where(eq(viewers.id, id)).returning().get();
+}

@@ -137,6 +137,7 @@ function MockupRow({
                         {mockup.name}
                     </a>
                     <p class="truncate text-stone-500 text-xs">
+                        {mockup.version.number > 1 ? `v${mockup.version.number} · ` : ''}
                         {mockup.version.originalFilename} · {formatBytes(mockup.version.sizeBytes)}
                     </p>
                 </div>

@@ -6,14 +6,19 @@ export function UploadDropzone({
     onFile,
     busy,
     compact = false,
+    label = 'Drop an HTML mockup here, or click to choose a file',
+    hint = 'A single self-contained .html file',
 }: {
     onFile: (file: File) => void;
     busy: boolean;
     /** A single line, once the project already lists mockups. */
     compact?: boolean;
+    label?: string;
+    hint?: string;
 }) {
     const input = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
+    const title = busy ? 'Uploading…' : label;
 
     function onDrop(e: DragEvent) {
         e.preventDefault();
@@ -41,10 +46,8 @@ export function UploadDropzone({
                 }`}
             >
                 <IconUpload size={22} class="text-stone-400" />
-                <span class="font-medium text-sm">
-                    {busy ? 'Uploading…' : 'Drop an HTML mockup here, or click to choose a file'}
-                </span>
-                <span class="text-stone-500 text-xs">A single self-contained .html file</span>
+                <span class="font-medium text-sm">{title}</span>
+                <span class="text-stone-500 text-xs">{hint}</span>
             </button>
             <input
                 ref={input}

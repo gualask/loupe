@@ -1,14 +1,38 @@
 import { IconAlertTriangle } from '@tabler/icons-preact';
 import type { Mockup } from '../../shared/api/projects.ts';
+import { api } from '../lib/api.ts';
+import { useAction } from '../lib/form.ts';
 import { formatBytes, formatDateTime } from '../lib/format.ts';
+import { FormError } from '../ui/FormError.tsx';
+import { UploadDropzone } from './UploadDropzone.tsx';
 
-/** The uploaded file of a mockup, with a warning when it is not self-contained. */
-export function FilePanel({ mockup }: { mockup: Mockup }) {
+/**
+ * The current file of a mockup, with a warning when it is not self-contained, and the upload of
+ * the next version.
+ */
+export function FilePanel({
+    mockup,
+    onChange,
+}: {
+    mockup: Mockup;
+    onChange: (mockup: Mockup) => void;
+}) {
     const { version } = mockup;
+    const upload = useAction();
+
+    const uploadVersion = (file: File) =>
+        upload.run(async () => {
+            const form = new FormData();
+            form.set('file', file);
+            onChange(await api.post<Mockup>(`/mockups/${mockup.id}/versions`, form));
+        });
+
     return (
         <section class="flex flex-col gap-3 p-5 text-sm">
             <h2 class="font-semibold">File</h2>
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+                <dt class="text-stone-500">Version</dt>
+                <dd>{version.number}</dd>
                 <dt class="text-stone-500">Name</dt>
                 <dd class="truncate">{version.originalFilename}</dd>
                 <dt class="text-stone-500">Size</dt>
@@ -34,6 +58,14 @@ export function FilePanel({ mockup }: { mockup: Mockup }) {
                     </ul>
                 </div>
             ) : null}
+            <UploadDropzone
+                compact
+                busy={upload.pending}
+                label="Upload a new version"
+                hint="Same link and reviewers; the new version starts without comments."
+                onFile={uploadVersion}
+            />
+            <FormError message={upload.error} />
         </section>
     );
 }

@@ -12,7 +12,8 @@ them, together and in real time. Reviewers need no account, and no email server 
 
 - Pins anchored to page elements, picked with an inspector-style element selector
 - General comments, threads, resolve and reopen
-- Anonymous reviewers with names, colors and live presence
+- Anonymous reviewers, with no sign-up prompt: generated names they can change, colors and live presence
+- New versions on the same link, each starting a fresh round of feedback
 - A review per reviewer, with a verdict: approved or changes requested
 - Share links with expiry, revocation and read-only mode
 - Mockups isolated in a sandbox, so uploaded code cannot reach the app

@@ -4,14 +4,26 @@ import { type PinAnchor, pinAnchorSchema } from '../anchor.ts';
 /** Header carrying the secret viewer key stored by the browser (docs/SPEC.md §4.3). */
 export const VIEWER_KEY_HEADER = 'x-loupe-viewer';
 
+/**
+ * Header carrying the number of the version a review space shows. Requests about another
+ * version than the current one are refused with `version_changed` (docs/SPEC.md §5.3).
+ */
+export const VERSION_HEADER = 'x-loupe-version';
+
 /** Size of the viewer color palette; viewers get colors in order of arrival. */
 export const VIEWER_COLORS = 12;
+
+const displayNameSchema = z.string().trim().max(60, 'At most 60 characters');
 
 const bodySchema = z.string().trim().min(1, 'Required').max(5000, 'At most 5000 characters');
 
 export const registerViewerRequestSchema = z.object({
     /** Empty for a generated name such as "Anonymous Fox". */
-    displayName: z.string().trim().max(60, 'At most 60 characters').default(''),
+    displayName: displayNameSchema.default(''),
+});
+
+export const renameViewerRequestSchema = z.object({
+    displayName: displayNameSchema.min(1, 'Required'),
 });
 
 // Clients generate thread and comment ids, so optimistic updates, retries and real-time events

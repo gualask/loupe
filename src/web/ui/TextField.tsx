@@ -4,7 +4,14 @@ import { INPUT_CLASS } from './styles.ts';
 
 type Props = Pick<
     InputHTMLAttributes<HTMLInputElement>,
-    'value' | 'onInput' | 'required' | 'autocomplete' | 'pattern' | 'minLength' | 'maxLength'
+    | 'value'
+    | 'onInput'
+    | 'onFocus'
+    | 'required'
+    | 'autocomplete'
+    | 'pattern'
+    | 'minLength'
+    | 'maxLength'
 > & {
     label: string;
     hint?: string;

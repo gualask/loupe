@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll } from 'vitest';
+import { afterAll, expect } from 'vitest';
 import { createApp } from './app.ts';
 import { issueSetupLinkIfNeeded } from './auth/accounts.ts';
 import { loadConfig } from './config.ts';
@@ -118,4 +118,55 @@ export async function inviteEditor(t: TestApp, admin: Client, username = 'eddie'
         password: PASSWORD,
     });
     return { editor, editorId: res.body.id as string };
+}
+
+/**
+ * An editor's mockup with its share link, plus helpers to join it as new viewers and to upload
+ * its next version.
+ */
+export async function createSharedMockup() {
+    const t = createTestApp();
+    const admin = await setUpAdmin(t);
+    const { editor, editorId } = await inviteEditor(t, admin);
+    const project = await editor.post('/api/projects', { name: 'Shop' });
+    const mockup = await editor.post(
+        `/api/projects/${project.body.id}/mockups`,
+        htmlFile('<!doctype html><main>Hi</main>', 'home.html'),
+    );
+    const token = tokenFromUrl(mockup.body.shareUrl);
+    const base = `/api/s/${token}`;
+
+    /** A new browser that registers as a viewer and keeps its key. */
+    async function viewer(displayName = '') {
+        const client = t.client();
+        const res = await client.post(`${base}/viewers`, { displayName });
+        client.header('x-loupe-viewer', res.body.key);
+        return { client, key: res.body.key as string, viewer: res.body.viewer };
+    }
+
+    /** Uploads the next version of the mockup, on the same link. */
+    async function uploadVersion() {
+        const res = await editor.post(
+            `/api/mockups/${mockup.body.id}/versions`,
+            htmlFile('<!doctype html><main>Hello</main>', 'home-v2.html'),
+        );
+        expect(res.status).toBe(201);
+    }
+
+    return { t, admin, editor, editorId, mockup: mockup.body, token, base, viewer, uploadVersion };
+}
+
+/** Reads the events of an open stream, one message at a time. */
+export async function openStream(t: TestApp, url: string, key: string) {
+    const res = await t.app.request(url, { headers: { 'x-loupe-viewer': key } });
+    const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
+    if (!reader) throw new Error('expected a stream');
+    return {
+        headers: res.headers,
+        reader,
+        next: async () => {
+            const { value = '' } = await reader.read();
+            return JSON.parse(value.replace(/^data: /, ''));
+        },
+    };
 }

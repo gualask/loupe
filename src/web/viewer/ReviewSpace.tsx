@@ -1,22 +1,23 @@
-import { IconX } from '@tabler/icons-preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import type { PinAnchor } from '../../shared/anchor.ts';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import type { Thread } from '../../shared/api/reviews.ts';
 import type { BridgeMessage, PinPosition } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { useBridge } from './bridge.ts';
-import { Composer } from './Composer.tsx';
 import { HelpDialog, NameDialog, ReviewDialog } from './dialogs.tsx';
-import { gatherDrafts, generalDraft, offerAtNextLoad, setAside } from './drafts.ts';
+import { useDraftRecovery } from './drafts.ts';
 import { ErrorToast } from './ErrorToast.tsx';
+import { filterThreads, type ThreadFilter } from './filters.ts';
+import { MyName } from './MyName.tsx';
+import { NewComment, type NewThread } from './NewComment.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
 import { Popover } from './Popover.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
-import { createReviewSession } from './session.ts';
-import { type ThreadFilter, ThreadPanel } from './ThreadPanel.tsx';
+import { useReviewSession } from './session.ts';
+import { useShortcuts } from './shortcuts.ts';
+import { ThreadPanel } from './ThreadPanel.tsx';
 import { ThreadView } from './ThreadView.tsx';
 import { Toolbar } from './Toolbar.tsx';
 
@@ -25,24 +26,9 @@ const VIEWPORT_HINT_PX = 100;
 // Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 
-/**
- * What is being written; `body` refills the box after the server rejected it, `notice` explains
- * text already in it.
- */
-type Composing = ({ kind: 'pin'; anchor: PinAnchor } | { kind: 'general' }) & {
-    body?: string;
-    notice?: string;
-};
 type DialogName = 'name' | 'review' | 'help';
 
 const panelCoversMockup = () => matchMedia(OVERLAY_PANEL_QUERY).matches;
-
-function isTyping(target: EventTarget | null) {
-    return (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || /^(input|textarea|select)$/.test(target.localName))
-    );
-}
 
 /** The shared review space behind a share link: mockup, pins, threads and presence. */
 export function ReviewSpace({
@@ -57,17 +43,7 @@ export function ReviewSpace({
     /** The link stopped giving access while open. */
     onUnavailable: () => void;
 }) {
-    // The session is created once per link; later changes arrive through it.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: initial values only
-    const session = useMemo(() => createReviewSession(token, initial, viewerKey), [token]);
-    useEffect(() => {
-        session.connect();
-        return session.disconnect;
-    }, [session]);
-    const unavailable = session.unavailable.value;
-    useEffect(() => {
-        if (unavailable) onUnavailable();
-    }, [unavailable, onUnavailable]);
+    const session = useReviewSession(token, initial, viewerKey, onUnavailable);
 
     const { path, query, route } = useLocation();
     const frame = useRef<HTMLIFrameElement>(null);
@@ -80,7 +56,7 @@ export function ReviewSpace({
     const mayWrite = session.mayWrite.value;
 
     const [inspecting, setInspecting] = useState(false);
-    const [composing, setComposing] = useState<Composing | null>(null);
+    const [composing, setComposing] = useState<NewThread | null>(null);
     const [openId, setOpenId] = useState<string | null>(null);
     const [pinsHidden, setPinsHidden] = useState(false);
     const [filter, setFilter] = useState<ThreadFilter>('open');
@@ -92,36 +68,22 @@ export function ReviewSpace({
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
 
-    // A newer version accepts nothing more: placing a pin stops, and the next load offers the
-    // unsent text again.
+    // A replaced version accepts nothing more: placing a pin stops.
     const outdated = session.outdated.value;
     useEffect(() => {
-        if (!outdated) return;
-        setInspecting(false);
-        offerAtNextLoad(shared.mockupId);
-    }, [outdated, shared.mockupId]);
+        if (outdated) setInspecting(false);
+    }, [outdated]);
 
-    // Once the threads are known, text left unsent before the reload is offered again.
-    const loaded = session.loaded.value;
-    // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when the threads load
-    useEffect(() => {
-        if (!loaded || !gatherDrafts(shared.mockupId, new Set(threads.map((t) => t.id)))) return;
-        if (session.canWrite.value) {
-            setComposing({
-                kind: 'general',
-                notice: 'Comments you had not sent yet. Send, edit or discard them.',
-            });
-        }
-    }, [loaded]);
+    useDraftRecovery(session, () => {
+        if (!session.canWrite.value) return;
+        setComposing({
+            target: { kind: 'general' },
+            notice: 'Comments you had not sent yet. Send, edit or discard them.',
+        });
+    });
 
     const viewerFilter = query.viewer;
-    const listed = threads.filter((t) => {
-        if (viewerFilter && t.author.id !== viewerFilter) return false;
-        if (filter === 'open') return t.status === 'open';
-        if (filter === 'resolved') return t.status === 'resolved';
-        if (filter === 'mine') return !!me && t.author.kind === me.kind && t.author.id === me.id;
-        return true;
-    });
+    const listed = filterThreads(threads, { filter, viewerId: viewerFilter, me });
     const openThread = threads.find((t) => t.id === openId);
 
     const pins = bridgePins({
@@ -129,7 +91,10 @@ export function ReviewSpace({
         listed,
         labels,
         openId,
-        draft: composing?.kind === 'pin' && me ? { anchor: composing.anchor, author: me } : null,
+        draft:
+            composing?.target.kind === 'pin' && me
+                ? { anchor: composing.target.anchor, author: me }
+                : null,
     });
 
     /** On narrow screens the panel hides the mockup, so it makes way for pins and popovers. */
@@ -156,7 +121,7 @@ export function ReviewSpace({
             revealMockup();
             setInspecting(false);
             setOpenId(null);
-            setComposing({ kind: 'general' });
+            setComposing({ target: { kind: 'general' } });
         });
     }
 
@@ -187,7 +152,7 @@ export function ReviewSpace({
         if (message.type === 'loupe:picked') {
             setInspecting(false);
             setOpenId(null);
-            setComposing({ kind: 'pin', anchor: message.anchor });
+            setComposing({ target: { kind: 'pin', anchor: message.anchor } });
         } else if (message.type === 'loupe:inspect-cancelled') {
             setInspecting(false);
         } else if (message.type === 'loupe:pin-clicked' && message.id !== DRAFT_PIN) {
@@ -212,16 +177,7 @@ export function ReviewSpace({
         if (ready) send({ type: 'loupe:inspect', enabled: inspecting });
     }, [ready, send, inspecting]);
 
-    const shortcutRef = useRef(shortcut);
-    shortcutRef.current = shortcut;
-    useEffect(() => {
-        function onKeyDown(event: KeyboardEvent) {
-            if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
-            shortcutRef.current(event.key);
-        }
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, []);
+    useShortcuts(shortcut);
 
     /** Where a popover goes: next to its pin, or above the toolbar. */
     function popoverPoint(pinId: string | null) {
@@ -251,52 +207,14 @@ export function ReviewSpace({
 
     let popover = null;
     if (composing) {
-        const point = popoverPoint(composing.kind === 'pin' ? DRAFT_PIN : null);
         popover = (
-            <Popover {...point}>
-                <div class="flex flex-col gap-2 p-3">
-                    <div class="flex items-center justify-between text-sm">
-                        <span class="font-semibold">
-                            {composing.kind === 'pin' ? 'New pin' : 'General comment'}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => setComposing(null)}
-                            aria-label="Cancel (Esc)"
-                            class="rounded p-1 text-stone-500 hover:bg-stone-100"
-                        >
-                            <IconX size={16} />
-                        </button>
-                    </div>
-                    {composing.notice ? (
-                        <p class="max-w-72 text-amber-800 text-xs">{composing.notice}</p>
-                    ) : null}
-                    <Composer
-                        placeholder="Add a comment…"
-                        initial={composing.body}
-                        draftKey={
-                            composing.kind === 'general' ? generalDraft(shared.mockupId) : undefined
-                        }
-                        onSubmit={(body) => {
-                            const draft = composing;
-                            setComposing(null);
-                            const saved = session.createThread(draft, body);
-                            // Rejected (e.g. rate limited): reopen it rather than lose the text.
-                            // A newer version accepts nothing more: a pin's text is set aside for
-                            // after the reload, a general comment's stays in its draft.
-                            void saved.then((ok) => {
-                                if (ok) return;
-                                if (!session.outdated.value) {
-                                    setComposing((current) => current ?? { ...draft, body });
-                                } else if (draft.kind === 'pin') {
-                                    setAside(shared.mockupId, body);
-                                }
-                            });
-                            return saved;
-                        }}
-                        onCancel={() => setComposing(null)}
-                    />
-                </div>
+            <Popover {...popoverPoint(composing.target.kind === 'pin' ? DRAFT_PIN : null)}>
+                <NewComment
+                    thread={composing}
+                    session={session}
+                    onReopen={(thread) => setComposing((current) => current ?? thread)}
+                    onClose={() => setComposing(null)}
+                />
             </Popover>
         );
     } else if (openThread) {
@@ -331,11 +249,16 @@ export function ReviewSpace({
                 readOnly={shared.readOnly}
                 backHref={isEditor ? `/mockups/${shared.mockupId}` : undefined}
                 viewportWidth={viewportWidth}
-                me={me}
-                canName={mayWrite && me?.kind !== 'editor'}
-                nameHint={session.identity.nameHint.value}
-                onName={() => setDialog('name')}
-                onDismissNameHint={session.identity.dismissNameHint}
+                myName={
+                    mayWrite && !isEditor ? (
+                        <MyName
+                            me={me}
+                            hint={session.identity.nameHint.value}
+                            onName={() => setDialog('name')}
+                            onDismissHint={session.identity.dismissNameHint}
+                        />
+                    ) : null
+                }
                 presence={session.presence.value}
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}

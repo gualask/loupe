@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'preact/hooks';
 import { storage } from '../lib/storage.ts';
+import type { ReviewSession } from './session.ts';
 
 // Unsent text of a mockup's comment boxes, kept by the browser until the server saves it
 // (docs/SPEC.md §5.1).
@@ -50,4 +52,26 @@ export function gatherDrafts(mockupId: string, listed: ReadonlySet<string>) {
         }
     }
     return offer && !!storage.get(general)?.trim();
+}
+
+/**
+ * Offers unsent text again after a reload (docs/SPEC.md §5.3): once the review space shows a
+ * replaced version, the next load is asked to offer it; once the threads load, the text kept for
+ * this load is gathered in the general comment box and `onOffer` runs.
+ */
+export function useDraftRecovery(session: ReviewSession, onOffer: () => void) {
+    const { mockupId } = session.shared.value;
+    const outdated = session.outdated.value;
+    useEffect(() => {
+        if (outdated) offerAtNextLoad(mockupId);
+    }, [outdated, mockupId]);
+
+    const offer = useRef(onOffer);
+    offer.current = onOffer;
+    const loaded = session.loaded.value;
+    useEffect(() => {
+        if (!loaded) return;
+        const listed = new Set(session.threads.value.map((t) => t.id));
+        if (gatherDrafts(mockupId, listed)) offer.current();
+    }, [loaded, mockupId, session]);
 }

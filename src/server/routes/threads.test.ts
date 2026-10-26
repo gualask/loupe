@@ -1,146 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
-import { createTestApp, htmlFile, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
-
-async function sharedMockup() {
-    const t = createTestApp();
-    const admin = await setUpAdmin(t);
-    const { editor, editorId } = await inviteEditor(t, admin);
-    const project = await editor.post('/api/projects', { name: 'Shop' });
-    const mockup = await editor.post(
-        `/api/projects/${project.body.id}/mockups`,
-        htmlFile('<!doctype html><main>Hi</main>', 'home.html'),
-    );
-    const token = tokenFromUrl(mockup.body.shareUrl);
-    const base = `/api/s/${token}`;
-
-    /** A new browser that registers as a viewer and keeps its key. */
-    async function viewer(displayName = '') {
-        const client = t.client();
-        const res = await client.post(`${base}/viewers`, { displayName });
-        client.header('x-loupe-viewer', res.body.key);
-        return { client, key: res.body.key as string, viewer: res.body.viewer };
-    }
-
-    /** Uploads the next version of the mockup, on the same link. */
-    async function uploadVersion() {
-        const res = await editor.post(
-            `/api/mockups/${mockup.body.id}/versions`,
-            htmlFile('<!doctype html><main>Hello</main>', 'home-v2.html'),
-        );
-        expect(res.status).toBe(201);
-    }
-
-    return { t, admin, editor, editorId, mockup: mockup.body, token, base, viewer, uploadVersion };
-}
-
-/** Reads the events of an open stream, one message at a time. */
-async function openStream(t: ReturnType<typeof createTestApp>, url: string, key: string) {
-    const res = await t.app.request(url, { headers: { 'x-loupe-viewer': key } });
-    const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
-    if (!reader) throw new Error('expected a stream');
-    return {
-        headers: res.headers,
-        reader,
-        next: async () => {
-            const { value = '' } = await reader.read();
-            return JSON.parse(value.replace(/^data: /, ''));
-        },
-    };
-}
-
-afterEach(() => {
-    vi.useRealTimers();
-});
-
-describe('viewers', () => {
-    it('registers viewers with a color in order of arrival', async () => {
-        const { base, mockup, viewer } = await sharedMockup();
-        const alice = await viewer('Alice');
-        const anonymous = await viewer('  ');
-
-        expect(alice.viewer).toEqual({
-            kind: 'viewer',
-            id: expect.any(String),
-            displayName: 'Alice',
-            colorIndex: 0,
-        });
-        expect(anonymous.viewer).toMatchObject({
-            displayName: expect.stringMatching(/^Anonymous \w+$/),
-            colorIndex: 1,
-        });
-        expect((await alice.client.get(base)).body).toEqual({
-            mockupId: mockup.id,
-            name: 'home',
-            readOnly: false,
-            version: 1,
-            contentUrl: expect.stringMatching(/^\/s\/[\w-]{43}\/content$/),
-            me: alice.viewer,
-            canModerate: false,
-            review: null,
-        });
-    });
-
-    it('identifies editors who manage the mockup and ignores unknown keys', async () => {
-        const { t, editor, editorId, base } = await sharedMockup();
-        expect((await editor.get(base)).body).toMatchObject({
-            me: { kind: 'editor', id: editorId, displayName: 'Eddie' },
-            canModerate: true,
-        });
-        const stranger = t.client();
-        stranger.header('x-loupe-viewer', 'not-a-key');
-        expect((await stranger.get(base)).body).toMatchObject({ me: null, canModerate: false });
-    });
-
-    it('lets viewers rename themselves wherever their name shows', async () => {
-        const { t, editor, base, viewer } = await sharedMockup();
-        const alice = await viewer();
-        const bob = await viewer('Bob');
-        const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
-        const bobStream = await openStream(t, `${base}/events`, bob.key);
-        await bobStream.next(); // presence: Bob
-        const aliceStream = await openStream(t, `${base}/events`, alice.key);
-        await bobStream.next(); // presence: Bob and Alice
-
-        const renamed = await alice.client.patch(`${base}/viewers/me`, {
-            displayName: ' Alice ',
-        });
-        const alicia = { ...alice.viewer, displayName: 'Alice' };
-        expect(renamed).toMatchObject({ status: 200, body: alicia });
-        expect(await bobStream.next()).toEqual({ type: 'viewer', viewer: alicia });
-        expect((await alice.client.get(base)).body.me).toEqual(alicia);
-        expect((await alice.client.get(`${base}/threads`)).body).toMatchObject([
-            { id, author: alicia, comments: [{ author: alicia }] },
-        ]);
-        // Presence published from now on shows the new name.
-        await aliceStream.reader.cancel();
-        expect(await bobStream.next()).toEqual({ type: 'presence', participants: [bob.viewer] });
-        const aliceAgain = await openStream(t, `${base}/events`, alice.key);
-        expect(await bobStream.next()).toEqual({
-            type: 'presence',
-            participants: [bob.viewer, alicia],
-        });
-        await Promise.all([bobStream.reader.cancel(), aliceAgain.reader.cancel()]);
-
-        const empty = await alice.client.patch(`${base}/viewers/me`, { displayName: ' ' });
-        expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
-        const anonymous = await t.client().patch(`${base}/viewers/me`, { displayName: 'Eve' });
-        expect(anonymous).toMatchObject({ status: 401, body: { error: 'viewer_required' } });
-        expect((await editor.patch(`${base}/viewers/me`, { displayName: 'Ed' })).status).toBe(403);
-    });
-
-    it('does not accept viewers on read-only mockups', async () => {
-        const { t, editor, mockup, base } = await sharedMockup();
-        await editor.patch(`/api/mockups/${mockup.id}`, { readOnly: true });
-        const res = await t.client().post(`${base}/viewers`, { displayName: 'Alice' });
-        expect(res).toMatchObject({ status: 403, body: { error: 'read_only' } });
-    });
-});
+import { createSharedMockup } from '../test-utils.ts';
 
 describe('threads', () => {
     it('creates pin and general threads with their first comment', async () => {
-        const { t, base, viewer } = await sharedMockup();
+        const { t, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
 
@@ -186,7 +50,7 @@ describe('threads', () => {
     });
 
     it('treats a retried creation as success and rejects reused ids', async () => {
-        const { base, viewer } = await sharedMockup();
+        const { base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
         const thread = { id: crypto.randomUUID(), kind: 'general', body: 'Hi' };
@@ -199,7 +63,7 @@ describe('threads', () => {
     });
 
     it('requires a viewer identity and a valid anchor', async () => {
-        const { t, base, viewer } = await sharedMockup();
+        const { t, base, viewer } = await createSharedMockup();
         const anonymous = await t.client().post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'general',
@@ -218,7 +82,7 @@ describe('threads', () => {
     });
 
     it('numbers pins in order and never reuses the number of a deleted one', async () => {
-        const { base, viewer } = await sharedMockup();
+        const { base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const pin = () =>
             alice.client.post(`${base}/threads`, {
@@ -239,7 +103,7 @@ describe('threads', () => {
     });
 
     it('lets only editors resolve and reopen threads', async () => {
-        const { editor, base, viewer } = await sharedMockup();
+        const { editor, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
         await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
@@ -254,7 +118,7 @@ describe('threads', () => {
     });
 
     it('hides threads when the link is disabled, except from its editors', async () => {
-        const { t, editor, mockup, base } = await sharedMockup();
+        const { t, editor, mockup, base } = await createSharedMockup();
         await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
         expect((await t.client().get(`${base}/threads`)).status).toBe(404);
         expect((await editor.get(`${base}/threads`)).status).toBe(200);
@@ -263,7 +127,7 @@ describe('threads', () => {
 
 describe('comments', () => {
     async function threadWithReply() {
-        const ctx = await sharedMockup();
+        const ctx = await createSharedMockup();
         const alice = await ctx.viewer('Alice');
         const bob = await ctx.viewer('Bob');
         const threadId = crypto.randomUUID();
@@ -350,7 +214,7 @@ describe('comments', () => {
 
 describe('reviews', () => {
     it('submits a verdict and reopens the review on new feedback', async () => {
-        const { editor, mockup, base, viewer } = await sharedMockup();
+        const { editor, mockup, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const verdict = { verdict: 'changes_requested', summary: 'See pins' };
 
@@ -386,122 +250,11 @@ describe('reviews', () => {
             },
         ]);
     });
-
-    it('lists viewers to the editors of the mockup only', async () => {
-        const { t, admin, mockup } = await sharedMockup();
-        const { editor: fran } = await inviteEditor(t, admin, 'fran');
-        expect((await fran.get(`/api/mockups/${mockup.id}/reviews`)).status).toBe(404);
-        expect((await admin.get(`/api/mockups/${mockup.id}/reviews`)).body).toEqual([]);
-    });
-});
-
-describe('mockup activity', () => {
-    it('counts threads and submitted reviews, and dates the latest comment', async () => {
-        const { editor, mockup, base, viewer } = await sharedMockup();
-        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual({
-            openThreads: 0,
-            resolvedThreads: 0,
-            submittedReviews: 0,
-            lastActivityAt: null,
-        });
-
-        const alice = await viewer('Alice');
-        const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
-        await alice.client.put(`${base}/review`, { verdict: 'approved' });
-        // Editors' threads count too.
-        await editor.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'pin',
-            anchor: PIN_ANCHOR,
-            body: 'There',
-        });
-        await editor.patch(`${base}/threads/${id}`, { status: 'resolved' });
-
-        const activity = {
-            openThreads: 1,
-            resolvedThreads: 1,
-            submittedReviews: 1,
-            lastActivityAt: expect.any(String),
-        };
-        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual(activity);
-        const listed = await editor.get(`/api/projects/${mockup.projectId}`);
-        expect(listed.body.mockups[0].activity).toEqual(activity);
-    });
-});
-
-describe('event stream', () => {
-    it('streams presence and thread changes', async () => {
-        const { t, base, viewer } = await sharedMockup();
-        const alice = await viewer('Alice');
-        const bob = await viewer('Bob');
-        const { headers, reader, next } = await openStream(t, `${base}/events`, bob.key);
-        expect(headers.get('content-type')).toBe('text/event-stream');
-        expect(headers.get('x-accel-buffering')).toBe('no');
-
-        expect(await next()).toEqual({ type: 'presence', participants: [bob.viewer] });
-
-        // Alice's review stays private to Alice; her thread is shared with everyone.
-        const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
-        expect(await next()).toMatchObject({
-            type: 'thread',
-            thread: { id, author: alice.viewer },
-        });
-
-        await bob.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'Yo',
-        });
-        expect(await next()).toEqual({
-            type: 'review',
-            review: {
-                viewerId: bob.viewer.id,
-                status: 'in_progress',
-                verdict: null,
-                summary: '',
-                submittedAt: null,
-            },
-        });
-        expect(await next()).toMatchObject({ type: 'thread', thread: { author: bob.viewer } });
-
-        await reader.cancel();
-    });
-    it('ends open streams once the link is disabled or regenerated', async () => {
-        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-        const { t, editor, mockup, base, viewer } = await sharedMockup();
-        const alice = await viewer('Alice');
-        const open = async () => {
-            const res = await t.app.request(`${base}/events`, {
-                headers: { 'x-loupe-viewer': alice.key },
-            });
-            const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
-            if (!reader) throw new Error('expected a stream');
-            await reader.read(); // presence
-            return reader;
-        };
-        const heartbeat = async (reader: Awaited<ReturnType<typeof open>>) => {
-            await vi.advanceTimersByTimeAsync(25_000);
-            return reader.read();
-        };
-
-        const first = await open();
-        expect(await heartbeat(first)).toEqual({ done: false, value: ': heartbeat\n\n' });
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
-        expect((await heartbeat(first)).done).toBe(true);
-
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: true });
-        const second = await open();
-        await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
-        expect((await heartbeat(second)).done).toBe(true);
-        expect((await t.app.request(`${base}/events`)).status).toBe(404);
-    });
 });
 
 describe('versions', () => {
     it('starts a new version without threads or reviews, keeping the viewers', async () => {
-        const { editor, mockup, base, viewer, uploadVersion } = await sharedMockup();
+        const { editor, mockup, base, viewer, uploadVersion } = await createSharedMockup();
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
         await alice.client.post(`${base}/threads`, {
@@ -554,7 +307,7 @@ describe('versions', () => {
     });
 
     it('refuses changes to an older version, but keeps its threads readable', async () => {
-        const { t, base, viewer, uploadVersion } = await sharedMockup();
+        const { t, base, viewer, uploadVersion } = await createSharedMockup();
         const alice = await viewer('Alice');
         alice.client.header('x-loupe-version', '1');
         const first = await alice.client.post(`${base}/threads`, {
@@ -593,23 +346,11 @@ describe('versions', () => {
             body: { error: 'invalid_request', message: 'Invalid x-loupe-version header.' },
         });
     });
-
-    it('ends open streams of the previous version', async () => {
-        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-        const { t, base, viewer, uploadVersion } = await sharedMockup();
-        const alice = await viewer('Alice');
-        const { reader, next } = await openStream(t, `${base}/events`, alice.key);
-        await next(); // presence
-
-        await uploadVersion();
-        await vi.advanceTimersByTimeAsync(25_000);
-        expect((await reader.read()).done).toBe(true);
-    });
 });
 
 describe('rate limits', () => {
     it('limits how fast a viewer can change things, but not editors', async () => {
-        const { editor, base, viewer } = await sharedMockup();
+        const { editor, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const comment = () => ({ id: crypto.randomUUID(), kind: 'general', body: 'Spam' });
 
@@ -623,16 +364,5 @@ describe('rate limits', () => {
         for (let i = 0; i < 31; i++) {
             expect((await editor.post(`${base}/threads`, comment())).status).toBe(201);
         }
-    });
-
-    it('limits how many viewers can join a mockup in a short time', async () => {
-        const { t, base } = await sharedMockup();
-        for (let i = 0; i < 60; i++) {
-            expect((await t.client().post(`${base}/viewers`, {})).status).toBe(201);
-        }
-        expect(await t.client().post(`${base}/viewers`, {})).toMatchObject({
-            status: 429,
-            body: { error: 'too_many_requests' },
-        });
     });
 });

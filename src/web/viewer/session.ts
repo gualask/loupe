@@ -1,4 +1,5 @@
 import { computed, signal } from '@preact/signals';
+import { useEffect, useMemo } from 'preact/hooks';
 import type { PinAnchor } from '../../shared/anchor.ts';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import {
@@ -11,17 +12,17 @@ import {
 } from '../../shared/api/reviews.ts';
 import { ApiError, api, errorMessage } from '../lib/api.ts';
 import { openEventStream } from '../lib/event-stream.ts';
+import { createChangeQueue } from './changes.ts';
 import { createIdentity } from './identity.ts';
-
-const MAX_RETRY_MS = 30_000;
-
-export type SaveState = 'idle' | 'saving' | 'saved' | 'offline';
 
 function sortByCreation<T extends { createdAt: string }>(items: T[]) {
     return items.toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 const visible = (thread: Thread) => thread.comments.some((c) => !c.deleted);
+
+/** Where a new thread goes: a pin on an element, or a general comment. */
+export type ThreadTarget = { kind: 'pin'; anchor: PinAnchor } | { kind: 'general' };
 
 /**
  * Client state of a review space: threads, presence and the viewer's own review, kept in sync
@@ -37,7 +38,6 @@ export function createReviewSession(
     const shared = signal(initial);
     const threads = signal<Thread[]>([]);
     const presence = signal<Author[]>([]);
-    const saveState = signal<SaveState>('idle');
     const error = signal<string>();
     /** Set when the link stops giving access, e.g. disabled, regenerated or expired. */
     const unavailable = signal(false);
@@ -45,13 +45,6 @@ export function createReviewSession(
     const outdated = signal(false);
     /** Set once the threads of the current version were loaded. */
     const loaded = signal(false);
-    let pending = 0;
-    // Changes are sent one at a time, in order: a reply must not reach the server before its
-    // thread, even when both were retried while offline.
-    let queue: Promise<unknown> = Promise.resolve();
-    // Set by a rejected change; the server state is reloaded once nothing else is pending, so
-    // the reload does not drop changes that are still queued.
-    let resync = false;
 
     const me = computed(() => shared.value.me);
     /** Whether changes are accepted here at all; a viewer may first need an identity. */
@@ -91,51 +84,22 @@ export function createReviewSession(
         if (!outdated.value) loaded.value = true;
     }
 
-    /** Sends one change, retrying network failures; undefined when the server rejects it. */
-    async function attempt<T>(send: () => Promise<T>): Promise<T | undefined> {
-        let delay = 1000;
-        for (;;) {
-            try {
-                return await send();
-            } catch (err) {
-                if (err instanceof ApiError) {
-                    // An editor's session ended: sign in again, then come back here.
-                    if (err.status === 401 && me.value?.kind === 'editor') {
-                        const here = location.pathname + location.search;
-                        location.assign(`/login?next=${encodeURIComponent(here)}`);
-                        return undefined;
-                    }
-                    // A newer version is shown as a notice to reload rather than as an error.
-                    if (err.code === 'version_changed') outdated.value = true;
-                    else error.value = errorMessage(err);
-                    resync = true;
-                    return undefined;
-                }
-                saveState.value = 'offline';
-                await new Promise((resolve) => setTimeout(resolve, delay));
-                delay = Math.min(delay * 2, MAX_RETRY_MS);
-                saveState.value = 'saving';
+    const changes = createChangeQueue({
+        onRejected: (err) => {
+            // An editor's session ended: sign in again, then come back here.
+            if (err.status === 401 && me.value?.kind === 'editor') {
+                const here = location.pathname + location.search;
+                location.assign(`/login?next=${encodeURIComponent(here)}`);
+            } else if (err.code === 'version_changed') {
+                // A newer version is shown as a notice to reload rather than as an error.
+                outdated.value = true;
+            } else {
+                error.value = errorMessage(err);
             }
-        }
-    }
-
-    /** Queues a change after the pending ones; API errors resync from the server. */
-    function perform<T>(send: () => Promise<T>): Promise<T | undefined> {
-        pending++;
-        // Queued behind a change that is waiting for the network: still offline.
-        if (saveState.value !== 'offline') saveState.value = 'saving';
-        const result = queue.then(() => attempt(send));
-        queue = result;
-        return result.finally(async () => {
-            pending--;
-            if (pending) return;
-            if (resync) {
-                resync = false;
-                await refresh().catch(() => undefined);
-            }
-            saveState.value = error.value || outdated.value ? 'idle' : 'saved';
-        });
-    }
+        },
+        resync: refresh,
+    });
+    const { perform } = changes;
 
     function newComment(threadId: string, body: string): Comment {
         const author = me.value;
@@ -209,7 +173,7 @@ export function createReviewSession(
         shared,
         threads,
         presence,
-        saveState,
+        saveState: changes.saveState,
         error,
         unavailable,
         outdated,
@@ -221,10 +185,7 @@ export function createReviewSession(
         connect,
         disconnect: () => closeStream?.(),
 
-        createThread(
-            input: { kind: 'pin'; anchor: PinAnchor } | { kind: 'general' },
-            body: string,
-        ) {
+        createThread(input: ThreadTarget, body: string) {
             const id = crypto.randomUUID();
             const comment = newComment(id, body);
             upsert({
@@ -310,3 +271,26 @@ export function createReviewSession(
 }
 
 export type ReviewSession = ReturnType<typeof createReviewSession>;
+
+/**
+ * The session of a review space: created once per link, connected while the space is shown;
+ * `onUnavailable` runs when the link stops giving access.
+ */
+export function useReviewSession(
+    token: string,
+    initial: SharedMockup,
+    viewerKey: string | null,
+    onUnavailable: () => void,
+) {
+    // biome-ignore lint/correctness/useExhaustiveDependencies: initial values only
+    const session = useMemo(() => createReviewSession(token, initial, viewerKey), [token]);
+    useEffect(() => {
+        session.connect();
+        return session.disconnect;
+    }, [session]);
+    const unavailable = session.unavailable.value;
+    useEffect(() => {
+        if (unavailable) onUnavailable();
+    }, [unavailable, onUnavailable]);
+    return session;
+}

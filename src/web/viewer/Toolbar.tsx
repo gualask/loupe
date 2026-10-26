@@ -10,10 +10,10 @@ import {
     IconMessage,
 } from '@tabler/icons-preact';
 import type { ComponentChildren, RefObject } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Review } from '../../shared/api/reviews.ts';
 import { VERDICT_LABELS } from '../lib/review.ts';
-import type { SaveState } from './session.ts';
+import type { SaveState } from './changes.ts';
+import { useDragOffset } from './drag.ts';
 
 function ToolButton({
     label,
@@ -63,22 +63,6 @@ function SaveStatus({ state }: { state: SaveState }) {
     );
 }
 
-type Offset = { x: number; y: number };
-
-// Space kept between the toolbar and the edges of the window.
-const EDGE = 8;
-
-/** `next`, limited so that the toolbar, now at `rect` with offset `current`, stays on screen. */
-function clampOffset(next: Offset, current: Offset, rect: DOMRect): Offset {
-    // Where the toolbar would be without any offset.
-    const left = rect.left - current.x;
-    const top = rect.top - current.y;
-    return {
-        x: Math.min(Math.max(next.x, EDGE - left), innerWidth - EDGE - rect.width - left),
-        y: Math.min(Math.max(next.y, EDGE - top), innerHeight - EDGE - rect.height - top),
-    };
-}
-
 function reviewLabel(review: Review | null) {
     if (review?.status !== 'submitted' || !review.verdict) return 'Finish review';
     return VERDICT_LABELS[review.verdict];
@@ -112,34 +96,7 @@ export function Toolbar({
     onFinish: () => void;
     onHelp: () => void;
 }) {
-    const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
-    const drag = useRef<Offset | null>(null);
-
-    /** Moves the toolbar to `next`, or as close as it can get while staying on screen. */
-    function moveTo(next: (current: Offset) => Offset) {
-        setOffset((current) => {
-            const rect = toolbarRef.current?.getBoundingClientRect();
-            return rect ? clampOffset(next(current), current, rect) : current;
-        });
-    }
-
-    // A smaller window must not leave the toolbar out of reach.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: moveTo only reads the ref
-    useEffect(() => {
-        const keepOnScreen = () => moveTo((current) => current);
-        window.addEventListener('resize', keepOnScreen);
-        return () => window.removeEventListener('resize', keepOnScreen);
-    }, []);
-
-    function onPointerDown(event: PointerEvent) {
-        drag.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
-        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    }
-
-    function onPointerMove(event: PointerEvent) {
-        const start = drag.current;
-        if (start) moveTo(() => ({ x: event.clientX - start.x, y: event.clientY - start.y }));
-    }
+    const { offset, handle } = useDragOffset(toolbarRef);
 
     return (
         <div
@@ -150,11 +107,7 @@ export function Toolbar({
             <span
                 class="cursor-grab touch-none px-0.5 text-stone-400 active:cursor-grabbing"
                 title="Drag to move"
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={() => {
-                    drag.current = null;
-                }}
+                {...handle}
             >
                 <IconGripVertical size={16} />
             </span>

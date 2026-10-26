@@ -1,7 +1,15 @@
 import { existsSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createTestApp, htmlFile, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
+import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
+import {
+    createSharedMockup,
+    createTestApp,
+    htmlFile,
+    inviteEditor,
+    setUpAdmin,
+    tokenFromUrl,
+} from '../test-utils.ts';
 
 const MOCKUP = `<!doctype html>
 <html><head><title>Checkout</title>
@@ -284,5 +292,47 @@ describe('mockup versions', () => {
             },
         });
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.version.number).toBe(1);
+    });
+});
+
+describe('mockup feedback', () => {
+    it('counts threads and submitted reviews, and dates the latest comment', async () => {
+        const { editor, mockup, base, viewer } = await createSharedMockup();
+        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual({
+            openThreads: 0,
+            resolvedThreads: 0,
+            submittedReviews: 0,
+            lastActivityAt: null,
+        });
+
+        const alice = await viewer('Alice');
+        const id = crypto.randomUUID();
+        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        await alice.client.put(`${base}/review`, { verdict: 'approved' });
+        // Editors' threads count too.
+        await editor.post(`${base}/threads`, {
+            id: crypto.randomUUID(),
+            kind: 'pin',
+            anchor: PIN_ANCHOR,
+            body: 'There',
+        });
+        await editor.patch(`${base}/threads/${id}`, { status: 'resolved' });
+
+        const activity = {
+            openThreads: 1,
+            resolvedThreads: 1,
+            submittedReviews: 1,
+            lastActivityAt: expect.any(String),
+        };
+        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual(activity);
+        const listed = await editor.get(`/api/projects/${mockup.projectId}`);
+        expect(listed.body.mockups[0].activity).toEqual(activity);
+    });
+
+    it('lists viewers to the editors of the mockup only', async () => {
+        const { t, admin, mockup } = await createSharedMockup();
+        const { editor: fran } = await inviteEditor(t, admin, 'fran');
+        expect((await fran.get(`/api/mockups/${mockup.id}/reviews`)).status).toBe(404);
+        expect((await admin.get(`/api/mockups/${mockup.id}/reviews`)).body).toEqual([]);
     });
 });

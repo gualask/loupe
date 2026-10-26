@@ -2,8 +2,7 @@ import { IconMessage, IconX } from '@tabler/icons-preact';
 import type { Thread } from '../../shared/api/reviews.ts';
 import { authorColor } from '../lib/colors.ts';
 import { formatRelative, plural } from '../lib/format.ts';
-
-export type ThreadFilter = 'open' | 'mine' | 'resolved' | 'all';
+import type { ThreadFilter } from './filters.ts';
 
 const FILTERS: { value: ThreadFilter; label: string }[] = [
     { value: 'open', label: 'Open' },

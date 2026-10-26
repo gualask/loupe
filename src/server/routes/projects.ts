@@ -1,6 +1,5 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
-import { bodyLimit } from 'hono/body-limit';
 import {
     createProjectRequestSchema,
     type ProjectDetail,
@@ -31,18 +30,11 @@ import { countThreadsByViewer, threadActivity } from '../db/threads.ts';
 import { listViewers } from '../db/viewers.ts';
 import { apiError, notFound, parseJson } from '../http.ts';
 import { canManage } from '../mockups/access.ts';
-import {
-    decodeHtml,
-    deleteUnreferencedFiles,
-    findExternalRefs,
-    storeMockupFile,
-} from '../mockups/files.ts';
+import { deleteUnreferencedFiles, storeMockupFile } from '../mockups/files.ts';
 import { toMockup, toProject } from '../mockups/present.ts';
+import { createUploadReader } from '../mockups/upload.ts';
 import { toReviewerSummaries } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
-
-// Multipart framing and the name field on top of the file itself.
-const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
 /**
  * Whether a request is a mockup upload (`POST /projects/:id/mockups` and
@@ -85,31 +77,7 @@ export function projectRoutes({ db, config }: AppDeps) {
     const cleanUpFiles = () =>
         deleteUnreferencedFiles(config.dataDir, () => referencedFileHashes(db));
 
-    const uploadLimit = bodyLimit({
-        maxSize: config.maxUploadBytes + MULTIPART_OVERHEAD_BYTES,
-        onError: () => {
-            throw apiError(413, 'file_too_large', 'The file exceeds the upload limit.');
-        },
-    });
-
-    /** The HTML file of an upload, checked, with what is recorded about it and the form fields. */
-    async function readUpload(c: Context<AppEnv>) {
-        const fields = await c.req.parseBody();
-        const { file } = fields;
-        if (!(file instanceof File)) throw apiError(400, 'invalid_request', 'Missing file.');
-        if (file.size > config.maxUploadBytes) {
-            throw apiError(413, 'file_too_large', 'The file exceeds the upload limit.');
-        }
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const html = decodeHtml(bytes);
-        if (!html) throw apiError(400, 'not_html', 'The file is not a UTF-8 HTML document.');
-        const fileInfo = {
-            sizeBytes: bytes.byteLength,
-            originalFilename: file.name,
-            externalRefs: findExternalRefs(html),
-        };
-        return { fields, bytes, fileInfo };
-    }
+    const upload = createUploadReader(config.maxUploadBytes);
 
     return new Hono<AppEnv>()
         .get('/projects', (c) => {
@@ -143,9 +111,9 @@ export function projectRoutes({ db, config }: AppDeps) {
             await cleanUpFiles();
             return c.body(null, 204);
         })
-        .post('/projects/:id/mockups', uploadLimit, async (c) => {
+        .post('/projects/:id/mockups', upload.limit, async (c) => {
             const row = managedProject(c, c.req.param('id'));
-            const { fields, bytes, fileInfo } = await readUpload(c);
+            const { fields, bytes, fileInfo } = await upload.read(c);
             const fallbackName =
                 fileInfo.originalFilename.replace(/\.html?$/i, '') || 'Untitled mockup';
             const name = (typeof fields.name === 'string' && fields.name.trim()) || fallbackName;
@@ -163,10 +131,10 @@ export function projectRoutes({ db, config }: AppDeps) {
             );
             return c.json(presentMockup(managedMockup(c, id)), 201);
         })
-        .post('/mockups/:id/versions', uploadLimit, async (c) => {
+        .post('/mockups/:id/versions', upload.limit, async (c) => {
             // Same link and viewers; the new version starts without threads or reviews.
             const { mockup } = managedMockup(c, c.req.param('id'));
-            const { bytes, fileInfo } = await readUpload(c);
+            const { bytes, fileInfo } = await upload.read(c);
             const added = await storeMockupFile(config.dataDir, bytes, (sha256) =>
                 insertVersion(db, mockup.id, {
                     sha256,

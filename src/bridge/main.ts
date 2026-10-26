@@ -7,6 +7,7 @@ import type {
     PinPosition,
 } from '../shared/bridge-protocol.ts';
 import { computeAnchor, resolveAnchor } from './anchor.ts';
+import { createMarkers } from './markers.ts';
 import { createOverlay } from './overlay.ts';
 
 const SHORTCUT_KEYS = new Set(['p', 'c', 'h', '?', 'Escape']);
@@ -33,36 +34,12 @@ function start() {
     let pins: BridgePin[] = [];
     // Anchors are resolved when pins or the DOM change; scrolling only re-reads positions.
     let resolved = new Map<string, Element | undefined>();
-    const markers = new Map<string, HTMLButtonElement>();
+    const markers = createMarkers(overlay.pins, (id) => post({ type: 'loupe:pin-clicked', id }));
     let lastPositions = '';
     let frame = 0;
 
     function resolveAll() {
         resolved = new Map(pins.map((pin) => [pin.id, resolveAnchor(pin.anchor)]));
-    }
-
-    function renderMarkers() {
-        for (const [id, marker] of markers) {
-            if (!pins.some((pin) => pin.id === id)) {
-                marker.remove();
-                markers.delete(id);
-            }
-        }
-        for (const pin of pins) {
-            let marker = markers.get(pin.id);
-            if (!marker) {
-                marker = document.createElement('button');
-                marker.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    post({ type: 'loupe:pin-clicked', id: pin.id });
-                });
-                overlay.pins.append(marker);
-                markers.set(pin.id, marker);
-            }
-            marker.className = `pin${pin.muted ? ' muted' : ''}${pin.active ? ' active' : ''}`;
-            marker.textContent = pin.label;
-            marker.style.setProperty('--color', pin.color);
-        }
     }
 
     function updatePositions() {
@@ -81,14 +58,7 @@ function start() {
             const shown = rect.width > 0 || rect.height > 0;
             return { id: pin.id, x, y, visible: shown && inViewport(x, y), orphaned: false };
         });
-        for (const position of positions) {
-            const marker = markers.get(position.id);
-            if (!marker) continue;
-            marker.hidden = !position.visible;
-            marker.classList.toggle('orphaned', position.orphaned);
-            marker.style.left = `${position.x}px`;
-            marker.style.top = `${position.y}px`;
-        }
+        markers.place(positions);
         const serialized = JSON.stringify(positions);
         if (serialized !== lastPositions) {
             lastPositions = serialized;
@@ -150,7 +120,7 @@ function start() {
         } else if (message?.type === 'loupe:pins') {
             pins = message.pins;
             resolveAll();
-            renderMarkers();
+            markers.render(pins);
             schedule();
         } else if (message?.type === 'loupe:scroll-to') {
             const el = resolved.get(message.id);

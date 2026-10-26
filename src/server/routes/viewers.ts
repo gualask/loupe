@@ -8,10 +8,11 @@ import { randomToken, sha256 } from '../auth/crypto.ts';
 import { insertViewer, renameViewer } from '../db/viewers.ts';
 import { apiError, notFound, parseJson } from '../http.ts';
 import { createWindowLimiter } from '../rate-limit.ts';
-import { type ShareAccess, sharedMockup } from '../review/context.ts';
+import { sharedMockup } from '../review/context.ts';
 import type { Hub } from '../review/hub.ts';
 import { anonymousName } from '../review/names.ts';
 import { viewerAuthor } from '../review/present.ts';
+import type { ShareAccess } from '../review/share-access.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 /** Viewer registration and names on a share link, mounted under /api/s. */

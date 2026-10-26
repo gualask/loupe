@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findExternalRefs } from './files.ts';
+import { findExternalRefs } from './html.ts';
 
 describe('findExternalRefs', () => {
     it('reports resources the browser would load', () => {

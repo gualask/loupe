@@ -9,6 +9,7 @@ import { FormError } from '../ui/FormError.tsx';
 import { INPUT_CLASS } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
+import { SHORTCUTS } from './shortcuts.ts';
 
 /** The viewer's display name, shown next to their comments; the parent closes it on success. */
 export function NameDialog({
@@ -128,14 +129,6 @@ export function ReviewDialog({
         </Dialog>
     );
 }
-
-const SHORTCUTS = [
-    ['P', 'Place a pin'],
-    ['C', 'Write a general comment'],
-    ['H', 'Show or hide pins'],
-    ['Esc', 'Cancel or close'],
-    ['?', 'Show this help'],
-];
 
 export function HelpDialog({ onClose }: { onClose: () => void }) {
     return (

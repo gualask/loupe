@@ -6,10 +6,11 @@ import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { sessionMiddleware } from './auth/session.ts';
 import { apiError, notFound } from './http.ts';
-import { createShareAccess } from './review/context.ts';
 import { createHub } from './review/hub.ts';
+import { createShareAccess } from './review/share-access.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { authRoutes } from './routes/auth.ts';
+import { eventRoutes } from './routes/events.ts';
 import { isMockupUpload, projectRoutes } from './routes/projects.ts';
 import { shareApiRoutes, shareContentRoutes } from './routes/share.ts';
 import { threadRoutes } from './routes/threads.ts';
@@ -96,6 +97,7 @@ export function createApp(
     app.route('/api/s', shareApiRoutes(deps));
     app.route('/api/s', viewerRoutes({ ...deps, hub, access }));
     app.route('/api/s', threadRoutes({ ...deps, hub, access }));
+    app.route('/api/s', eventRoutes({ ...deps, hub, access }));
     // Every project route resolves the signed-in user and answers 401 without one.
     app.route('/api', projectRoutes(deps));
     app.all('/api/*', () => {

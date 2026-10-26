@@ -41,20 +41,22 @@ export function createHub() {
         };
     }
 
-    /** Shows a renamed viewer's new name in the presence of a room. */
-    function rename(room: string, viewer: Author) {
-        let present = false;
+    /**
+     * Replaces a participant's details, e.g. a new name, in the presence published from now on;
+     * the event telling the change is the caller's.
+     */
+    function updateParticipant(room: string, participant: Author) {
         for (const member of rooms.get(room) ?? []) {
-            const { participant } = member;
-            if (participant?.kind === viewer.kind && participant.id === viewer.id) {
-                member.participant = viewer;
-                present = true;
+            if (
+                member.participant?.kind === participant.kind &&
+                member.participant.id === participant.id
+            ) {
+                member.participant = participant;
             }
         }
-        if (present) publishPresence(room);
     }
 
-    return { publish, join, rename };
+    return { publish, join, updateParticipant };
 }
 
 export type Hub = ReturnType<typeof createHub>;

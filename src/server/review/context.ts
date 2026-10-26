@@ -7,6 +7,7 @@ import type { UserRow } from '../db/users.ts';
 import { findViewerByKey, touchViewer, type ViewerRow } from '../db/viewers.ts';
 import { apiError } from '../http.ts';
 import { canManage, isShared } from '../mockups/access.ts';
+import { createWindowLimiter } from '../rate-limit.ts';
 import type { AppEnv } from '../types.ts';
 import { viewerAuthor } from './present.ts';
 
@@ -33,26 +34,16 @@ export function sharedMockup(db: Db, c: Context<AppEnv>) {
 }
 
 /**
- * The number of the version the review space sending the request shows, when it is not the
- * current one; undefined for the current version or without the header.
+ * The number of the version shown by the review space sending the request; the current one when
+ * the request does not say (docs/SPEC.md §5.3).
  */
-export function olderVersionShown(c: Context<AppEnv>, row: SharedMockupRow) {
-    const shown = c.req.header(VERSION_HEADER);
-    return shown !== undefined && shown !== String(row.version.number) ? Number(shown) : undefined;
-}
-
-/**
- * Refuses a request sent from a review space that shows another version than the current one,
- * e.g. a pin placed on the old file after a new version was uploaded.
- */
-export function checkVersion(c: Context<AppEnv>, row: SharedMockupRow) {
-    if (olderVersionShown(c, row) !== undefined) {
-        throw apiError(
-            409,
-            'version_changed',
-            'A new version of this mockup is available. Reload to see it.',
-        );
+export function shownVersion(c: Context<AppEnv>, row: SharedMockupRow) {
+    const header = c.req.header(VERSION_HEADER);
+    if (header === undefined) return row.version.number;
+    if (!/^[1-9]\d*$/.test(header)) {
+        throw apiError(400, 'invalid_request', `Invalid ${VERSION_HEADER} header.`);
     }
+    return Number(header);
 }
 
 /** Who is acting on a share link: an editor who manages the mockup, or a registered viewer. */
@@ -91,3 +82,49 @@ export function authorIds(actor: ShareActor) {
         ? { authorViewerId: actor.viewer.id, authorUserId: null }
         : { authorViewerId: null, authorUserId: actor.user.id };
 }
+
+/**
+ * Access to the current version of a share link, for its event stream and every change. One
+ * instance serves all share-link routes, so a viewer's changes count against one limit.
+ */
+export function createShareAccess(db: Db) {
+    // Far above a person typing comments; stops scripts flooding a mockup.
+    const viewerChanges = createWindowLimiter({ max: 30, windowMs: 60 * 1000 });
+
+    /**
+     * The mockup behind the link; refuses a request from a review space that shows an older
+     * version, e.g. a pin placed on the old file after a new version was uploaded.
+     */
+    function currentVersion(c: Context<AppEnv>) {
+        const row = sharedMockup(db, c);
+        if (shownVersion(c, row) !== row.version.number) {
+            throw apiError(
+                409,
+                'version_changed',
+                'A new version of this mockup is available. Reload to see it.',
+            );
+        }
+        return row;
+    }
+
+    /**
+     * The mockup and actor for a change; read-only mockups accept changes from editors only.
+     * Viewers are rate limited, editors are trusted.
+     */
+    function writer(c: Context<AppEnv>) {
+        const row = currentVersion(c);
+        const actor = shareActor(db, c, row);
+        if (!actor) throw apiError(401, 'viewer_required', 'Join the review before commenting.');
+        if (actor.kind === 'viewer') {
+            if (row.mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
+            if (!viewerChanges.take(actor.viewer.id)) {
+                throw apiError(429, 'too_many_requests', 'Too many changes, retry in a minute.');
+            }
+        }
+        return { row, actor };
+    }
+
+    return { currentVersion, writer };
+}
+
+export type ShareAccess = ReturnType<typeof createShareAccess>;

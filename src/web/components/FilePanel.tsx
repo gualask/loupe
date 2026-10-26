@@ -1,11 +1,22 @@
 import { IconAlertTriangle } from '@tabler/icons-preact';
-import type { Mockup } from '../../shared/api/projects.ts';
-import type { ReviewerSummary } from '../../shared/api/reviews.ts';
+import { useState } from 'preact/hooks';
+import type { Mockup, MockupActivity } from '../../shared/api/projects.ts';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
 import { formatBytes, formatDateTime, plural } from '../lib/format.ts';
 import { FormError } from '../ui/FormError.tsx';
 import { UploadDropzone } from './UploadDropzone.tsx';
+
+/** The feedback a new version would hide, e.g. "3 comment threads and 1 review"; empty without. */
+function hiddenFeedback({ openThreads, resolvedThreads, submittedReviews }: MockupActivity) {
+    const threads = openThreads + resolvedThreads;
+    return [
+        threads ? plural(threads, 'comment thread') : '',
+        submittedReviews ? plural(submittedReviews, 'review') : '',
+    ]
+        .filter(Boolean)
+        .join(' and ');
+}
 
 /**
  * The current file of a mockup, with a warning when it is not self-contained, and the upload of
@@ -20,30 +31,28 @@ export function FilePanel({
 }) {
     const { version } = mockup;
     const upload = useAction();
-
-    /** Whether to go on when the current version has feedback that the new one would hide. */
-    async function confirmUpload() {
-        const reviewers = await api.get<ReviewerSummary[]>(`/mockups/${mockup.id}/reviews`);
-        const comments = reviewers.reduce((n, r) => n + r.threads.open + r.threads.resolved, 0);
-        const reviews = reviewers.filter((r) => r.review?.status === 'submitted').length;
-        if (!comments && !reviews) return true;
-        const feedback = [
-            comments ? plural(comments, 'comment') : '',
-            reviews ? plural(reviews, 'review') : '',
-        ]
-            .filter(Boolean)
-            .join(' and ');
-        return confirm(
-            `Upload version ${version.number + 1}? The ${feedback} on version ${version.number} will no longer be shown. The share link stays the same.`,
-        );
-    }
+    // The upload itself, after the check of what it would hide.
+    const [sending, setSending] = useState(false);
 
     const uploadVersion = (file: File) =>
         upload.run(async () => {
-            if (!(await confirmUpload())) return;
-            const form = new FormData();
-            form.set('file', file);
-            onChange(await api.post<Mockup>(`/mockups/${mockup.id}/versions`, form));
+            // Reviewers may have commented since this page loaded.
+            const { activity } = await api.get<Mockup>(`/mockups/${mockup.id}`);
+            const hidden = hiddenFeedback(activity);
+            const confirmed =
+                !hidden ||
+                confirm(
+                    `Upload version ${version.number + 1}? The ${hidden} on version ${version.number} will no longer be shown. The share link stays the same.`,
+                );
+            if (!confirmed) return;
+            setSending(true);
+            try {
+                const form = new FormData();
+                form.set('file', file);
+                onChange(await api.post<Mockup>(`/mockups/${mockup.id}/versions`, form));
+            } finally {
+                setSending(false);
+            }
         });
 
     return (
@@ -79,7 +88,7 @@ export function FilePanel({
             ) : null}
             <UploadDropzone
                 compact
-                busy={upload.pending}
+                busy={sending}
                 label="Upload a new version"
                 hint="Same link and reviewers; the new version starts without comments."
                 onFile={uploadVersion}

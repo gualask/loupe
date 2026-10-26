@@ -1,6 +1,6 @@
 import type { Mockup, Project } from '../../shared/api/projects.ts';
 import type { Config } from '../config.ts';
-import type { MockupRow, MockupVersionRow } from '../db/mockups.ts';
+import type { MockupWithVersion } from '../db/mockups.ts';
 import type { ProjectRow } from '../db/projects.ts';
 
 export function toProject(row: {
@@ -18,9 +18,18 @@ export function toProject(row: {
     };
 }
 
+/** Feedback on a mockup's current version, as the database reports it. */
+export type ActivityRow = {
+    openThreads: number;
+    resolvedThreads: number;
+    submittedReviews: number;
+    lastActivityAt: Date | null;
+};
+
 export function toMockup(
     config: Config,
-    { mockup, version }: { mockup: MockupRow; version: MockupVersionRow },
+    { mockup, version }: MockupWithVersion,
+    activity: ActivityRow,
 ): Mockup {
     return {
         id: mockup.id,
@@ -36,6 +45,10 @@ export function toMockup(
             sizeBytes: version.sizeBytes,
             externalRefs: version.externalRefs,
             createdAt: version.createdAt.toISOString(),
+        },
+        activity: {
+            ...activity,
+            lastActivityAt: activity.lastActivityAt?.toISOString() ?? null,
         },
         createdAt: mockup.createdAt.toISOString(),
     };

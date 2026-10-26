@@ -1,8 +1,8 @@
 import { useRoute } from 'preact-iso';
 import { useResource } from '../lib/resource.ts';
 import { CenteredLoadStatus } from '../ui/LoadStatus.tsx';
+import { loadSharedMockup } from '../viewer/identity.ts';
 import { ReviewSpace } from '../viewer/ReviewSpace.tsx';
-import { loadSharedMockup } from '../viewer/session.ts';
 
 /** What reviewers, and the editors managing the mockup, see when they open a share link. */
 export function ViewerPage() {

@@ -1,5 +1,11 @@
 const MAX_RETRY_MS = 30_000;
 
+/** How one connection ended: closed by the server, refused with an API error code, or failed. */
+type Outcome =
+    | { kind: 'ended' }
+    | { kind: 'refused'; code: string | undefined }
+    | { kind: 'failed' };
+
 /**
  * Reads a Server-Sent Events stream with fetch, so requests can carry headers, and reconnects
  * with backoff. `onOpen` runs on every (re)connection. A 4xx answer (e.g. a disabled link)
@@ -18,12 +24,15 @@ export function openEventStream<T>(
     let stopped = false;
     let controller: AbortController | undefined;
 
-    async function readOnce() {
+    async function readOnce(): Promise<Outcome> {
         controller = new AbortController();
         const res = await fetch(url, { headers, signal: controller.signal });
         if (res.status >= 400 && res.status < 500) {
             const data = await res.json().catch(() => ({}));
-            return { refused: typeof data.error === 'string' ? data.error : undefined };
+            return {
+                kind: 'refused',
+                code: typeof data.error === 'string' ? data.error : undefined,
+            };
         }
         if (!res.ok || !res.body) throw new Error(`event stream failed: ${res.status}`);
         handlers.onOpen();
@@ -31,7 +40,7 @@ export function openEventStream<T>(
         let buffer = '';
         for (;;) {
             const { value, done } = await reader.read();
-            if (done) return 'ended';
+            if (done) return { kind: 'ended' };
             buffer += value;
             let end = buffer.indexOf('\n\n');
             while (end >= 0) {
@@ -52,11 +61,11 @@ export function openEventStream<T>(
         let delay = 1000;
         while (!stopped) {
             const started = Date.now();
-            const outcome = await readOnce().catch(() => 'failed');
+            const outcome = await readOnce().catch((): Outcome => ({ kind: 'failed' }));
             if (stopped) return;
-            if (typeof outcome === 'object') {
+            if (outcome.kind === 'refused') {
                 stopped = true;
-                handlers.onRefused(outcome.refused);
+                handlers.onRefused(outcome.code);
                 return;
             }
             // A connection that stayed up for a while resets the backoff.

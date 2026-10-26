@@ -1,24 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { PinAnchor } from '../../shared/anchor.ts';
 import type { Author, Thread } from '../../shared/api/reviews.ts';
+import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
 import { authorColor } from '../lib/colors.ts';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 
 const ANN: Author = { kind: 'viewer', id: 'v1', displayName: 'Ann', colorIndex: 0 };
-
-const ANCHOR: PinAnchor = {
-    selector: '#buy',
-    offset: { x: 0.5, y: 0.5 },
-    point: { x: 10, y: 20 },
-    viewport: { width: 1280, height: 800 },
-};
 
 function thread(id: string, changes: Partial<Thread> = {}): Thread {
     return {
         id,
         kind: 'pin',
         number: null,
-        anchor: ANCHOR,
+        anchor: PIN_ANCHOR,
         status: 'open',
         resolvedAt: null,
         author: ANN,
@@ -63,7 +56,7 @@ describe('bridgePins', () => {
         expect(pins).toEqual([
             {
                 id: 'open',
-                anchor: ANCHOR,
+                anchor: PIN_ANCHOR,
                 label: '1',
                 color: authorColor(ANN),
                 muted: false,
@@ -71,7 +64,7 @@ describe('bridgePins', () => {
             },
             {
                 id: 'resolved',
-                anchor: ANCHOR,
+                anchor: PIN_ANCHOR,
                 label: '2',
                 color: authorColor(ANN),
                 muted: true,
@@ -86,12 +79,12 @@ describe('bridgePins', () => {
             listed: [],
             labels,
             openId: null,
-            draft: { anchor: ANCHOR, author: ANN },
+            draft: { anchor: PIN_ANCHOR, author: ANN },
         });
         expect(pins).toEqual([
             {
                 id: DRAFT_PIN,
-                anchor: ANCHOR,
+                anchor: PIN_ANCHOR,
                 label: '+',
                 color: authorColor(ANN),
                 muted: false,

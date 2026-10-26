@@ -110,8 +110,8 @@ export function countThreadsByViewer(db: Db, versionId: string) {
         .all();
 }
 
-/** Thread counts and the latest comment time for each of the given versions. */
-export function activityByVersion(db: Db, versionIds: string[]) {
+/** Thread counts and the latest comment time of the given versions, looked up per version. */
+export function threadActivity(db: Db, versionIds: string[]) {
     const counts = db
         .select({ versionId: threads.versionId, status: threads.status, n: count() })
         .from(threads)
@@ -125,17 +125,13 @@ export function activityByVersion(db: Db, versionIds: string[]) {
         .where(inArray(threads.versionId, versionIds))
         .groupBy(threads.versionId)
         .all();
-    return new Map(
-        versionIds.map((versionId) => {
-            const countOf = (status: string) =>
-                counts.find((c) => c.versionId === versionId && c.status === status)?.n ?? 0;
-            const at = latest.find((l) => l.versionId === versionId)?.at;
-            const activity = {
-                openThreads: countOf('open'),
-                resolvedThreads: countOf('resolved'),
-                lastActivityAt: at ?? null,
-            };
-            return [versionId, activity];
-        }),
-    );
+    return (versionId: string) => {
+        const countOf = (status: string) =>
+            counts.find((c) => c.versionId === versionId && c.status === status)?.n ?? 0;
+        return {
+            openThreads: countOf('open'),
+            resolvedThreads: countOf('resolved'),
+            lastActivityAt: latest.find((l) => l.versionId === versionId)?.at ?? null,
+        };
+    };
 }

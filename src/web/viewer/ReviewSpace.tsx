@@ -9,11 +9,13 @@ import { MockupFrame } from '../components/MockupFrame.tsx';
 import { useBridge } from './bridge.ts';
 import { Composer } from './Composer.tsx';
 import { HelpDialog, NameDialog, ReviewDialog } from './dialogs.tsx';
+import { gatherDrafts, generalDraft, offerAtNextLoad, setAside } from './drafts.ts';
 import { ErrorToast } from './ErrorToast.tsx';
+import { NewVersionNotice } from './NewVersionNotice.tsx';
 import { Popover } from './Popover.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
-import { createReviewSession, draftName } from './session.ts';
+import { createReviewSession } from './session.ts';
 import { type ThreadFilter, ThreadPanel } from './ThreadPanel.tsx';
 import { ThreadView } from './ThreadView.tsx';
 import { Toolbar } from './Toolbar.tsx';
@@ -90,18 +92,27 @@ export function ReviewSpace({
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
 
-    // Comments that could not be sent before the reload wait in the general comment box.
-    const keptText = session.keptText.value;
+    // A newer version accepts nothing more: placing a pin stops, and the next load offers the
+    // unsent text again.
+    const outdated = session.outdated.value;
     useEffect(() => {
-        if (!keptText) return;
-        session.keptText.value = false;
-        if (me && mayWrite) {
+        if (!outdated) return;
+        setInspecting(false);
+        offerAtNextLoad(shared.mockupId);
+    }, [outdated, shared.mockupId]);
+
+    // Once the threads are known, text left unsent before the reload is offered again.
+    const loaded = session.loaded.value;
+    // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when the threads load
+    useEffect(() => {
+        if (!loaded || !gatherDrafts(shared.mockupId, new Set(threads.map((t) => t.id)))) return;
+        if (session.canWrite.value) {
             setComposing({
                 kind: 'general',
-                notice: 'Unsent comments from the previous version. Send, edit or discard them.',
+                notice: 'Comments you had not sent yet. Send, edit or discard them.',
             });
         }
-    }, [keptText, me, mayWrite, session]);
+    }, [loaded]);
 
     const viewerFilter = query.viewer;
     const listed = threads.filter((t) => {
@@ -128,9 +139,7 @@ export function ReviewSpace({
 
     /** Runs an action that needs an identity, joining under a generated name if necessary. */
     function withIdentity(action: () => void) {
-        if (!mayWrite) return;
-        if (me) action();
-        else void session.join().then((joined) => joined && action());
+        void session.identity.join().then((joined) => joined && action());
     }
 
     function startPin() {
@@ -266,19 +275,21 @@ export function ReviewSpace({
                         placeholder="Add a comment…"
                         initial={composing.body}
                         draftKey={
-                            composing.kind === 'general'
-                                ? draftName(shared.mockupId, 'general')
-                                : undefined
+                            composing.kind === 'general' ? generalDraft(shared.mockupId) : undefined
                         }
                         onSubmit={(body) => {
                             const draft = composing;
                             setComposing(null);
                             const saved = session.createThread(draft, body);
                             // Rejected (e.g. rate limited): reopen it rather than lose the text.
-                            // On a newer version the session keeps it for after the reload.
+                            // A newer version accepts nothing more: a pin's text is set aside for
+                            // after the reload, a general comment's stays in its draft.
                             void saved.then((ok) => {
-                                if (!ok && !session.outdated.value) {
+                                if (ok) return;
+                                if (!session.outdated.value) {
                                     setComposing((current) => current ?? { ...draft, body });
+                                } else if (draft.kind === 'pin') {
+                                    setAside(shared.mockupId, body);
                                 }
                             });
                             return saved;
@@ -322,29 +333,17 @@ export function ReviewSpace({
                 viewportWidth={viewportWidth}
                 me={me}
                 canName={mayWrite && me?.kind !== 'editor'}
-                nameHint={session.nameHint.value}
+                nameHint={session.identity.nameHint.value}
                 onName={() => setDialog('name')}
-                onDismissNameHint={session.dismissNameHint}
+                onDismissNameHint={session.identity.dismissNameHint}
                 presence={session.presence.value}
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}
                 onViewport={setViewportWidth}
                 onTogglePanel={() => setPanelOpen((open) => !open)}
             />
-            {session.outdated.value ? (
-                <div
-                    role="status"
-                    class="flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-100 px-4 py-2 text-amber-900 text-sm"
-                >
-                    A new version of this mockup is available. Unsent comments are kept.
-                    <button
-                        type="button"
-                        onClick={() => location.reload()}
-                        class="font-semibold underline underline-offset-2"
-                    >
-                        Reload
-                    </button>
-                </div>
+            {outdated ? (
+                <NewVersionNotice class="shrink-0 bg-amber-100 px-4 py-2 text-center text-amber-900 text-sm" />
             ) : null}
             <div class="flex min-h-0 flex-1">
                 <main class="flex min-w-0 flex-1 justify-center overflow-auto">
@@ -402,7 +401,7 @@ export function ReviewSpace({
                 <NameDialog
                     current={me?.displayName ?? ''}
                     onSubmit={async (name) => {
-                        await session.setName(name);
+                        await session.identity.setName(name);
                         setDialog(null);
                     }}
                     onClose={() => setDialog(null)}
@@ -411,7 +410,7 @@ export function ReviewSpace({
             {dialog === 'review' ? (
                 <ReviewDialog
                     review={shared.review}
-                    outdated={session.outdated.value}
+                    outdated={outdated}
                     onSubmit={session.submitReview}
                     onClose={() => setDialog(null)}
                 />

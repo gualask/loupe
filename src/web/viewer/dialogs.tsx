@@ -8,6 +8,7 @@ import { Dialog } from '../ui/Dialog.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { INPUT_CLASS } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
+import { NewVersionNotice } from './NewVersionNotice.tsx';
 
 /** The viewer's display name, shown next to their comments; the parent closes it on success. */
 export function NameDialog({
@@ -114,22 +115,14 @@ export function ReviewDialog({
                         class={`font-normal ${INPUT_CLASS}`}
                     />
                 </label>
-                {outdated ? (
-                    <p class="text-amber-800 text-sm">
-                        A new version of this mockup is available. Reload to review it.
-                    </p>
-                ) : null}
+                {outdated ? <NewVersionNotice class="text-amber-800 text-sm" /> : null}
                 <div class="flex justify-end gap-2">
                     <Button variant="ghost" onClick={onClose}>
                         Cancel
                     </Button>
-                    {outdated ? (
-                        <Button onClick={() => location.reload()}>Reload</Button>
-                    ) : (
-                        <Button type="submit" disabled={pending || !verdict}>
-                            Submit review
-                        </Button>
-                    )}
+                    <Button type="submit" disabled={pending || !verdict || outdated}>
+                        Submit review
+                    </Button>
                 </div>
             </form>
         </Dialog>

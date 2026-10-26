@@ -219,7 +219,8 @@ reloaded once no other action is pending. Unsent replies and general comments ar
 ### 5.2 Real time
 
 One **Server-Sent Events** channel per mockup version broadcasts the full state of each changed
-thread, deleted threads and presence (who is connected, with name and color). A viewer's review
+thread, deleted threads, presence (who is connected, with name and color) and viewers' new names,
+which clients apply wherever the viewer appears. A viewer's review
 status is sent only to that viewer's own connections, e.g. other tabs.
 Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The client reads the
 stream with `fetch`, so it can send the viewer key, reconnects with backoff, and refetches the
@@ -232,36 +233,41 @@ shows it as unavailable (or offers to retry if the server cannot be reached).
 
 ### 5.3 New versions
 
-The review space sends the number of the version it shows in the `X-Loupe-Version` header.
-Changes and the event stream are accepted only for the current version; for an older one the
-server answers `409 version_changed`. Reading the threads of the version shown still works, so
-the client can reload them after a rejected change. Open streams of an older version end at the
-next heartbeat, and the reconnection is refused the same way.
+The review space sends the number of the version it shows in the `X-Loupe-Version` header; a
+value that is not a version number answers `400 invalid_request`. Changes and the event stream
+are accepted only for the current version; for an older one the server answers
+`409 version_changed`. Reading the threads of the version shown still works, so the client can
+reload them after a rejected change. Open streams of an older version end at the next heartbeat,
+and the reconnection is refused the same way.
 
 On `version_changed` the review space stops accepting changes and shows "A new version of this
-mockup is available · Reload" instead of an error. Reloading the page shows the current version,
-with the same viewer. Unsent text is not lost: the text of a rejected pin and the reply drafts of
-threads the new version no longer lists are moved into the general comment draft, which opens
-after the reload with a note saying where the text comes from.
+mockup is available · Reload" instead of an error, also where replies and reviews are written.
+Reloading the page shows the current version, with the same viewer. Unsent text is not lost: the
+text of a rejected pin is set aside in the general comment draft, a rejected general comment
+stays in it, and after the reload the reply drafts of threads no longer listed join it too. The
+general comment box then opens with that text and a note asking to send, edit or discard it.
 
 ## 6. Editor experience
 
 - **Workspace**: list of own projects (admins can switch to any user's workspace).
 - **Project**: list of mockups with open/resolved counts and last activity; each row renames
-  (inline) or deletes its mockup.
+  (inline) or deletes its mockup. Every mockup the API returns carries this activity of its
+  current version, with the number of submitted reviews.
 - **Upload**: drag & drop an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
   self-contained.
 - **New version**: from the mockup page, upload the next file with the same checks. It becomes
   the current version on the same share link; viewers keep their identity, and threads, reviews
   and activity counts start again from zero. Threads of earlier versions stay stored but are not
-  shown in the MVP, so the upload asks for confirmation when the current version has comments
-  or submitted reviews. A file identical to the current version is refused (`409 same_file`).
+  shown in the MVP, so the upload first reloads the activity of the current version and asks for
+  confirmation when it has threads (from viewers or editors) or submitted reviews. A file
+  identical to the current version is refused (`409 same_file`).
 - **Share settings** per mockup: copy link, enable/disable, regenerate (old link stops working),
   optional expiry, read-only mode (comments visible, no new ones).
 - **Reviews**: per mockup and for the current version, a list grouped by viewer (color, name,
   thread counts open/resolved, verdict, last activity). Viewers of earlier versions stay listed,
-  without feedback until they review the current one. Selecting a viewer opens the mockup filtered to their pins.
+  without feedback until they review the current one. Selecting a viewer opens the mockup
+  filtered to their pins.
 - **Moderation**: reply to any thread, resolve/reopen, delete any comment.
 
 Pages, share links and account links tell an item that does not exist (404) from one that could

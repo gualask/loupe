@@ -96,4 +96,6 @@ export type ShareEvent =
     | { type: 'thread'; thread: Thread }
     | { type: 'thread-deleted'; id: string }
     | { type: 'review'; review: Review }
-    | { type: 'presence'; participants: Author[] };
+    | { type: 'presence'; participants: Author[] }
+    /** A viewer changed their name: it shows wherever they appear. */
+    | { type: 'viewer'; viewer: Extract<Author, { kind: 'viewer' }> };

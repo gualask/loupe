@@ -41,6 +41,15 @@ type MockupVersion = {
     createdAt: string;
 };
 
+/** Feedback on a mockup's current version. */
+export type MockupActivity = {
+    openThreads: number;
+    resolvedThreads: number;
+    submittedReviews: number;
+    /** Time of the latest comment, or null without any. */
+    lastActivityAt: string | null;
+};
+
 export type Mockup = {
     id: string;
     projectId: string;
@@ -50,18 +59,11 @@ export type Mockup = {
     shareExpiresAt: string | null;
     readOnly: boolean;
     version: MockupVersion;
+    activity: MockupActivity;
     createdAt: string;
 };
 
-/** Feedback on a mockup's current version, as listed in its project. */
-export type MockupActivity = {
-    openThreads: number;
-    resolvedThreads: number;
-    /** Time of the latest comment, or null without any. */
-    lastActivityAt: string | null;
-};
-
-export type ProjectDetail = Project & { mockups: (Mockup & { activity: MockupActivity })[] };
+export type ProjectDetail = Project & { mockups: Mockup[] };
 
 /** What a share link exposes before anything else is loaded. */
 export type SharedMockup = {

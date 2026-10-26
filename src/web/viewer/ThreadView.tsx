@@ -6,7 +6,9 @@ import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
 import { Composer } from './Composer.tsx';
-import { draftName, type ReviewSession } from './session.ts';
+import { replyDraft } from './drafts.ts';
+import { NewVersionNotice } from './NewVersionNotice.tsx';
+import type { ReviewSession } from './session.ts';
 
 function CommentItem({ comment, session }: { comment: Comment; session: ReviewSession }) {
     // The text being edited, or null when not editing.
@@ -122,16 +124,14 @@ export function ThreadView({
             </ol>
             <footer class="border-stone-100 border-t px-3 py-2.5">
                 {session.outdated.value ? (
-                    <p class="text-stone-500 text-xs">
-                        A new version is available. Reload to reply.
-                    </p>
+                    <NewVersionNotice class="text-stone-500 text-xs" />
                 ) : session.mayWrite.value ? (
                     <Composer
                         placeholder="Reply…"
-                        draftKey={draftName(mockupId, thread.id)}
+                        draftKey={replyDraft(mockupId, thread.id)}
                         // A first reply joins the review, like a first pin.
                         onSubmit={async (body) =>
-                            (await session.join()) && session.reply(thread.id, body)
+                            (await session.identity.join()) && session.reply(thread.id, body)
                         }
                         onCancel={onClose}
                     />

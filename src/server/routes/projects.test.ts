@@ -1,25 +1,21 @@
 import { existsSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createTestApp, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
+import { createTestApp, htmlFile, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
 
 const MOCKUP = `<!doctype html>
 <html><head><title>Checkout</title>
 <link rel="stylesheet" href="https://cdn.example.com/kit.css"></head>
 <body><button onclick="pay()">Pay</button></body></html>`;
 
-function htmlFile(content = MOCKUP, name = 'checkout.html') {
-    const form = new FormData();
-    form.set('file', new File([content], name, { type: 'text/html' }));
-    return form;
-}
+const checkoutFile = () => htmlFile(MOCKUP, 'checkout.html');
 
 async function editorWithMockup() {
     const t = createTestApp();
     const admin = await setUpAdmin(t);
     const { editor } = await inviteEditor(t, admin);
     const project = await editor.post('/api/projects', { name: 'Shop' });
-    const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, htmlFile());
+    const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, checkoutFile());
     return { t, admin, editor, project: project.body, mockup: mockup.body };
 }
 
@@ -78,6 +74,12 @@ describe('mockup upload', () => {
                 externalRefs: ['https://cdn.example.com/kit.css'],
                 createdAt: expect.any(String),
             },
+            activity: {
+                openThreads: 0,
+                resolvedThreads: 0,
+                submittedReviews: 0,
+                lastActivityAt: null,
+            },
             createdAt: expect.any(String),
         });
         expect(readdirSync(path.join(t.config.dataDir, 'mockups'))).toHaveLength(1);
@@ -105,7 +107,10 @@ describe('mockup upload', () => {
     it('rejects files over the upload limit', async () => {
         const { editor, project } = await editorWithMockup();
         const big = `<html><body>${'x'.repeat(1024 * 1024)}</body></html>`;
-        const res = await editor.post(`/api/projects/${project.id}/mockups`, htmlFile(big));
+        const res = await editor.post(
+            `/api/projects/${project.id}/mockups`,
+            htmlFile(big, 'checkout.html'),
+        );
         expect(res).toMatchObject({ status: 413, body: { error: 'file_too_large' } });
     });
 
@@ -264,14 +269,14 @@ describe('mockup versions', () => {
             body: { error: 'not_html' },
         });
         const big = `<html><body>${'x'.repeat(1024 * 1024)}</body></html>`;
-        expect(await editor.post(url, htmlFile(big))).toMatchObject({
+        expect(await editor.post(url, htmlFile(big, 'checkout.html'))).toMatchObject({
             status: 413,
             body: { error: 'file_too_large' },
         });
         const { editor: other } = await inviteEditor(t, admin, 'fran');
-        expect((await other.post(url, htmlFile())).status).toBe(404);
-        expect((await t.client().post(url, htmlFile())).status).toBe(401);
-        expect(await editor.post(url, htmlFile())).toMatchObject({
+        expect((await other.post(url, checkoutFile())).status).toBe(404);
+        expect((await t.client().post(url, checkoutFile())).status).toBe(401);
+        expect(await editor.post(url, checkoutFile())).toMatchObject({
             status: 409,
             body: {
                 error: 'same_file',

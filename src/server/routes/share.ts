@@ -1,58 +1,32 @@
 import { readFile, stat } from 'node:fs/promises';
 import { Hono } from 'hono';
 import type { SharedMockup } from '../../shared/api/projects.ts';
-import { type RegisteredViewer, registerViewerRequestSchema } from '../../shared/api/reviews.ts';
-import { randomToken, sha256 } from '../auth/crypto.ts';
+import { sha256 } from '../auth/crypto.ts';
 import { findReview } from '../db/reviews.ts';
-import { insertViewer } from '../db/viewers.ts';
-import { apiError, parseJson } from '../http.ts';
 import { injectBridge, mockupHeaders } from '../mockups/document.ts';
 import { readMockupFile } from '../mockups/files.ts';
-import { createWindowLimiter } from '../rate-limit.ts';
 import { shareActor, sharedMockup } from '../review/context.ts';
-import { anonymousName } from '../review/names.ts';
-import { toReview, viewerAuthor } from '../review/present.ts';
+import { toReview } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
-/** Share-link metadata and viewer registration, mounted under /api/s. */
+/** Share-link metadata, mounted under /api/s. */
 export function shareApiRoutes({ db }: AppDeps) {
-    // Anyone with the link can register, so a script could flood the mockup with viewers.
-    const registrations = createWindowLimiter({ max: 60, windowMs: 10 * 60 * 1000 });
-
-    return new Hono<AppEnv>()
-        .get('/:token', (c) => {
-            const row = sharedMockup(db, c);
-            const actor = shareActor(db, c, row);
-            const review =
-                actor?.kind === 'viewer' && findReview(db, row.version.id, actor.viewer.id);
-            const body: SharedMockup = {
-                mockupId: row.mockup.id,
-                name: row.mockup.name,
-                readOnly: row.mockup.readOnly,
-                version: row.version.number,
-                contentUrl: `/s/${row.mockup.shareToken}/content`,
-                me: actor?.author ?? null,
-                canModerate: actor?.kind === 'editor',
-                review: review ? toReview(review) : null,
-            };
-            return c.json(body);
-        })
-        .post('/:token/viewers', async (c) => {
-            const { mockup } = sharedMockup(db, c);
-            if (mockup.readOnly) throw apiError(403, 'read_only', 'This mockup is read-only.');
-            if (!registrations.take(mockup.id)) {
-                throw apiError(429, 'too_many_requests', 'Too many new reviewers, retry later.');
-            }
-            const { displayName } = await parseJson(c, registerViewerRequestSchema);
-            const key = randomToken();
-            const viewer = insertViewer(db, {
-                mockupId: mockup.id,
-                keyHash: sha256(key),
-                displayName: displayName || anonymousName(),
-            });
-            const body: RegisteredViewer = { key, viewer: viewerAuthor(viewer) };
-            return c.json(body, 201);
-        });
+    return new Hono<AppEnv>().get('/:token', (c) => {
+        const row = sharedMockup(db, c);
+        const actor = shareActor(db, c, row);
+        const review = actor?.kind === 'viewer' && findReview(db, row.version.id, actor.viewer.id);
+        const body: SharedMockup = {
+            mockupId: row.mockup.id,
+            name: row.mockup.name,
+            readOnly: row.mockup.readOnly,
+            version: row.version.number,
+            contentUrl: `/s/${row.mockup.shareToken}/content`,
+            me: actor?.author ?? null,
+            canModerate: actor?.kind === 'editor',
+            review: review ? toReview(review) : null,
+        };
+        return c.json(body);
+    });
 }
 
 /** Whether an If-None-Match header names the ETag; compression makes the browser's copy weak. */

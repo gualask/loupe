@@ -1,23 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PinAnchor } from '../../shared/anchor.ts';
-import { createTestApp, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
-
-const ANCHOR: PinAnchor = {
-    selector: 'main > button.cta',
-    offset: { x: 0.5, y: 0.25 },
-    text: 'Get started',
-    point: { x: 640, y: 380 },
-    viewport: { width: 1440, height: 900 },
-};
+import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
+import { createTestApp, htmlFile, inviteEditor, setUpAdmin, tokenFromUrl } from '../test-utils.ts';
 
 async function sharedMockup() {
     const t = createTestApp();
     const admin = await setUpAdmin(t);
     const { editor, editorId } = await inviteEditor(t, admin);
     const project = await editor.post('/api/projects', { name: 'Shop' });
-    const form = new FormData();
-    form.set('file', new File(['<!doctype html><main>Hi</main>'], 'home.html'));
-    const mockup = await editor.post(`/api/projects/${project.body.id}/mockups`, form);
+    const mockup = await editor.post(
+        `/api/projects/${project.body.id}/mockups`,
+        htmlFile('<!doctype html><main>Hi</main>', 'home.html'),
+    );
     const token = tokenFromUrl(mockup.body.shareUrl);
     const base = `/api/s/${token}`;
 
@@ -31,9 +24,10 @@ async function sharedMockup() {
 
     /** Uploads the next version of the mockup, on the same link. */
     async function uploadVersion() {
-        const next = new FormData();
-        next.set('file', new File(['<!doctype html><main>Hello</main>'], 'home-v2.html'));
-        const res = await editor.post(`/api/mockups/${mockup.body.id}/versions`, next);
+        const res = await editor.post(
+            `/api/mockups/${mockup.body.id}/versions`,
+            htmlFile('<!doctype html><main>Hello</main>', 'home-v2.html'),
+        );
         expect(res.status).toBe(201);
     }
 
@@ -46,6 +40,7 @@ async function openStream(t: ReturnType<typeof createTestApp>, url: string, key:
     const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
     if (!reader) throw new Error('expected a stream');
     return {
+        headers: res.headers,
         reader,
         next: async () => {
             const { value = '' } = await reader.read();
@@ -113,16 +108,20 @@ describe('viewers', () => {
         });
         const alicia = { ...alice.viewer, displayName: 'Alice' };
         expect(renamed).toMatchObject({ status: 200, body: alicia });
+        expect(await bobStream.next()).toEqual({ type: 'viewer', viewer: alicia });
+        expect((await alice.client.get(base)).body.me).toEqual(alicia);
+        expect((await alice.client.get(`${base}/threads`)).body).toMatchObject([
+            { id, author: alicia, comments: [{ author: alicia }] },
+        ]);
+        // Presence published from now on shows the new name.
+        await aliceStream.reader.cancel();
+        expect(await bobStream.next()).toEqual({ type: 'presence', participants: [bob.viewer] });
+        const aliceAgain = await openStream(t, `${base}/events`, alice.key);
         expect(await bobStream.next()).toEqual({
             type: 'presence',
             participants: [bob.viewer, alicia],
         });
-        expect(await bobStream.next()).toMatchObject({
-            type: 'thread',
-            thread: { id, author: alicia, comments: [{ author: alicia }] },
-        });
-        expect((await alice.client.get(base)).body.me).toEqual(alicia);
-        await Promise.all([bobStream.reader.cancel(), aliceStream.reader.cancel()]);
+        await Promise.all([bobStream.reader.cancel(), aliceAgain.reader.cancel()]);
 
         const empty = await alice.client.patch(`${base}/viewers/me`, { displayName: ' ' });
         expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
@@ -148,7 +147,7 @@ describe('threads', () => {
         const created = await alice.client.post(`${base}/threads`, {
             id,
             kind: 'pin',
-            anchor: ANCHOR,
+            anchor: PIN_ANCHOR,
             body: ' Make this bigger ',
         });
         expect(created.status).toBe(201);
@@ -156,7 +155,7 @@ describe('threads', () => {
             id,
             kind: 'pin',
             number: 1,
-            anchor: ANCHOR,
+            anchor: PIN_ANCHOR,
             status: 'open',
             resolvedAt: null,
             author: alice.viewer,
@@ -212,7 +211,7 @@ describe('threads', () => {
         const invalid = await alice.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'pin',
-            anchor: { ...ANCHOR, offset: { x: 2, y: 0 } },
+            anchor: { ...PIN_ANCHOR, offset: { x: 2, y: 0 } },
             body: 'Hi',
         });
         expect(invalid).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
@@ -225,7 +224,7 @@ describe('threads', () => {
             alice.client.post(`${base}/threads`, {
                 id: crypto.randomUUID(),
                 kind: 'pin',
-                anchor: ANCHOR,
+                anchor: PIN_ANCHOR,
                 body: 'Here',
             });
 
@@ -369,7 +368,7 @@ describe('reviews', () => {
         await alice.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'pin',
-            anchor: ANCHOR,
+            anchor: PIN_ANCHOR,
             body: 'One more',
         });
         expect((await alice.client.get(base)).body.review).toMatchObject({
@@ -396,33 +395,38 @@ describe('reviews', () => {
     });
 });
 
-describe('project activity', () => {
-    it('counts threads and dates the latest comment per mockup', async () => {
+describe('mockup activity', () => {
+    it('counts threads and submitted reviews, and dates the latest comment', async () => {
         const { editor, mockup, base, viewer } = await sharedMockup();
-        const empty = await editor.get(`/api/projects/${mockup.projectId}`);
-        expect(empty.body.mockups[0].activity).toEqual({
+        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual({
             openThreads: 0,
             resolvedThreads: 0,
+            submittedReviews: 0,
             lastActivityAt: null,
         });
 
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
         await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
-        await alice.client.post(`${base}/threads`, {
+        await alice.client.put(`${base}/review`, { verdict: 'approved' });
+        // Editors' threads count too.
+        await editor.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'pin',
-            anchor: ANCHOR,
+            anchor: PIN_ANCHOR,
             body: 'There',
         });
         await editor.patch(`${base}/threads/${id}`, { status: 'resolved' });
 
-        const listed = await editor.get(`/api/projects/${mockup.projectId}`);
-        expect(listed.body.mockups[0].activity).toEqual({
+        const activity = {
             openThreads: 1,
             resolvedThreads: 1,
+            submittedReviews: 1,
             lastActivityAt: expect.any(String),
-        });
+        };
+        expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual(activity);
+        const listed = await editor.get(`/api/projects/${mockup.projectId}`);
+        expect(listed.body.mockups[0].activity).toEqual(activity);
     });
 });
 
@@ -431,17 +435,9 @@ describe('event stream', () => {
         const { t, base, viewer } = await sharedMockup();
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
-        const res = await t.app.request(`${base}/events`, {
-            headers: { 'x-loupe-viewer': bob.key },
-        });
-        expect(res.headers.get('content-type')).toBe('text/event-stream');
-        expect(res.headers.get('x-accel-buffering')).toBe('no');
-        const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
-        if (!reader) throw new Error('expected a stream');
-        const next = async () => {
-            const { value = '' } = await reader.read();
-            return JSON.parse(value.replace(/^data: /, ''));
-        };
+        const { headers, reader, next } = await openStream(t, `${base}/events`, bob.key);
+        expect(headers.get('content-type')).toBe('text/event-stream');
+        expect(headers.get('x-accel-buffering')).toBe('no');
 
         expect(await next()).toEqual({ type: 'presence', participants: [bob.viewer] });
 
@@ -511,7 +507,7 @@ describe('versions', () => {
         await alice.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'pin',
-            anchor: ANCHOR,
+            anchor: PIN_ANCHOR,
             body: 'Bigger',
         });
         await alice.client.put(`${base}/review`, { verdict: 'changes_requested' });
@@ -531,7 +527,7 @@ describe('versions', () => {
         const created = await alice.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'pin',
-            anchor: ANCHOR,
+            anchor: PIN_ANCHOR,
             body: 'Better',
         });
         // Pins are numbered per version.
@@ -591,6 +587,11 @@ describe('versions', () => {
         expect((await alice.client.get(`${base}/threads`)).body).toEqual([]);
         alice.client.header('x-loupe-version', '7');
         expect((await alice.client.get(`${base}/threads`)).status).toBe(404);
+        alice.client.header('x-loupe-version', 'latest');
+        expect(await alice.client.get(`${base}/threads`)).toMatchObject({
+            status: 400,
+            body: { error: 'invalid_request', message: 'Invalid x-loupe-version header.' },
+        });
     });
 
     it('ends open streams of the previous version', async () => {

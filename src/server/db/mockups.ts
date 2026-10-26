@@ -5,6 +5,9 @@ import { mockups, mockupVersions, projects } from './schema.ts';
 export type MockupRow = typeof mockups.$inferSelect;
 export type MockupVersionRow = typeof mockupVersions.$inferSelect;
 
+/** A mockup with its current version. */
+export type MockupWithVersion = { mockup: MockupRow; version: MockupVersionRow };
+
 const withCurrentVersion = (db: Db) =>
     db
         .select({ mockup: mockups, version: mockupVersions })
@@ -69,7 +72,10 @@ export function findVersion(db: Db, mockupId: string, number: number) {
         .get();
 }
 
-/** Adds a version after the latest one and makes it current. */
+/**
+ * Adds a version after the latest one and makes it current. Returns false, adding nothing, when
+ * the file is the current version's: uploading it again would only hide its threads.
+ */
 export function insertVersion(
     db: Db,
     mockupId: string,
@@ -79,7 +85,14 @@ export function insertVersion(
     >,
 ) {
     const versionId = crypto.randomUUID();
-    db.transaction((tx) => {
+    return db.transaction((tx) => {
+        const current = tx
+            .select({ sha256: mockupVersions.sha256 })
+            .from(mockups)
+            .innerJoin(mockupVersions, eq(mockupVersions.id, mockups.currentVersionId))
+            .where(eq(mockups.id, mockupId))
+            .get();
+        if (current?.sha256 === version.sha256) return false;
         const latest =
             tx
                 .select({ n: max(mockupVersions.number) })
@@ -93,6 +106,7 @@ export function insertVersion(
             .set({ currentVersionId: versionId })
             .where(eq(mockups.id, mockupId))
             .run();
+        return true;
     });
 }
 

@@ -69,10 +69,8 @@ function Activity({ activity }: { activity: MockupActivity }) {
 const MOCKUP_COLUMNS =
     'md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_4.5rem]';
 
-type MockupItem = ProjectDetail['mockups'][number];
-
 /** The mockup name in an inline form: Enter saves, Escape cancels. */
-function RenameRow({ mockup, onDone }: { mockup: MockupItem; onDone: (mockup?: Mockup) => void }) {
+function RenameRow({ mockup, onDone }: { mockup: Mockup; onDone: (mockup?: Mockup) => void }) {
     const [name, setName] = useState(mockup.name);
     const input = useRef<HTMLInputElement>(null);
     const { error, pending, submit } = useFormSubmit(async () => {
@@ -118,7 +116,7 @@ function MockupRow({
     onRename,
     onDelete,
 }: {
-    mockup: MockupItem;
+    mockup: Mockup;
     onRename: () => void;
     onDelete: () => void;
 }) {
@@ -197,10 +195,10 @@ export function ProjectPage() {
         });
     }
 
-    const updateMockups = (change: (mockups: MockupItem[]) => MockupItem[]) =>
+    const updateMockups = (change: (mockups: Mockup[]) => Mockup[]) =>
         resource.update((p) => ({ ...p, mockups: change(p.mockups) }));
 
-    function removeMockup(mockup: MockupItem) {
+    function removeMockup(mockup: Mockup) {
         if (!confirm(`Delete "${mockup.name}" and all its comments?`)) return;
         deletion.run(async () => {
             await api.delete(`/mockups/${mockup.id}`);
@@ -209,7 +207,7 @@ export function ProjectPage() {
     }
 
     const renamed = (updated: Mockup) =>
-        updateMockups((list) => list.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+        updateMockups((list) => list.map((m) => (m.id === updated.id ? updated : m)));
 
     return (
         <AppShell>

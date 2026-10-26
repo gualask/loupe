@@ -74,6 +74,13 @@ function createClient(app: App) {
     };
 }
 
+/** A form uploading an HTML file, as the web app sends it. */
+export function htmlFile(content: string, name: string) {
+    const form = new FormData();
+    form.set('file', new File([content], name, { type: 'text/html' }));
+    return form;
+}
+
 /** The secret at the end of an account or share link URL. */
 export function tokenFromUrl(url: string) {
     return url.slice(url.lastIndexOf('/') + 1);

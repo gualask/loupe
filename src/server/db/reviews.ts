@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import type { Db } from './client.ts';
 import { reviews } from './schema.ts';
 
@@ -9,6 +9,17 @@ const byViewer = (versionId: string, viewerId: string) =>
 
 export function findReview(db: Db, versionId: string, viewerId: string) {
     return db.select().from(reviews).where(byViewer(versionId, viewerId)).get();
+}
+
+/** Submitted reviews of the given versions, counted per version. */
+export function countSubmittedReviews(db: Db, versionIds: string[]) {
+    const rows = db
+        .select({ versionId: reviews.versionId, n: count() })
+        .from(reviews)
+        .where(and(inArray(reviews.versionId, versionIds), eq(reviews.status, 'submitted')))
+        .groupBy(reviews.versionId)
+        .all();
+    return (versionId: string) => rows.find((r) => r.versionId === versionId)?.n ?? 0;
 }
 
 export function listReviews(db: Db, versionId: string) {

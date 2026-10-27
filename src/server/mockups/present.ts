@@ -11,14 +11,23 @@ const ownerOf = ({ project, ownerName }: ProjectWithOwner) => ({
     displayName: ownerName,
 });
 
-export function toProject(row: ProjectWithOwner & { mockupCount: number }): Project {
+type ProjectWithActivity = ProjectWithOwner & {
+    mockupCount: number;
+    openThreads: number;
+    resolvedThreads: number;
+    updatedAt: Date;
+};
+
+export function toProject(row: ProjectWithActivity): Project {
     return {
         id: row.project.id,
         name: row.project.name,
         description: row.project.description,
         owner: ownerOf(row),
         mockupCount: row.mockupCount,
+        activity: { openThreads: row.openThreads, resolvedThreads: row.resolvedThreads },
         createdAt: row.project.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
     };
 }
 

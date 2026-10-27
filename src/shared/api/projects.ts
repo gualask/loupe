@@ -34,7 +34,11 @@ export type Project = {
     description: string;
     owner: { id: string; displayName: string };
     mockupCount: number;
+    /** Threads on the current versions of its mockups. */
+    activity: ThreadTotals;
     createdAt: string;
+    /** Latest of its creation, a version upload and a comment in any of its mockups. */
+    updatedAt: string;
 };
 
 type MockupVersion = {
@@ -46,10 +50,11 @@ type MockupVersion = {
     createdAt: string;
 };
 
+/** Open and resolved threads, of a mockup's current version or summed over a project. */
+export type ThreadTotals = { openThreads: number; resolvedThreads: number };
+
 /** Feedback on a mockup's current version. */
-export type MockupActivity = {
-    openThreads: number;
-    resolvedThreads: number;
+type MockupActivity = ThreadTotals & {
     /** Time of the latest comment, or null without any. */
     lastActivityAt: string | null;
 };

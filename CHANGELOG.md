@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Projects and HTML mockup upload, with size, encoding and self-containment checks
+- Projects, listed with their open and resolved comments by latest upload or comment, and HTML mockup upload with size, encoding and self-containment checks
 - New versions of a mockup on the same link: reviewers keep their name, and each version starts without comments
 - Mockups served in a sandbox, so uploaded code cannot reach the app, its data or sessions
 - Share links with copy and regeneration

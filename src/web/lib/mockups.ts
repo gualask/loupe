@@ -1,4 +1,4 @@
-import type { Mockup, MockupActivity } from '../../shared/api/projects.ts';
+import type { Mockup, ThreadTotals } from '../../shared/api/projects.ts';
 import { api } from './api.ts';
 import { plural } from './format.ts';
 
@@ -15,7 +15,7 @@ export const setArchived = (mockup: Mockup, archived: boolean) =>
     api.patch<Mockup>(`/mockups/${mockup.id}`, { archived });
 
 /** The feedback a new version would hide, e.g. "3 comment threads"; empty without. */
-function hiddenFeedback({ openThreads, resolvedThreads }: MockupActivity) {
+function hiddenFeedback({ openThreads, resolvedThreads }: ThreadTotals) {
     const threads = openThreads + resolvedThreads;
     return threads ? plural(threads, 'comment thread') : '';
 }

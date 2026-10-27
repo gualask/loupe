@@ -250,8 +250,11 @@ general comment box then opens with that text and a note asking to send, edit or
 
 ## 6. Editor experience
 
-- **Workspace**: list of own projects; each card's actions menu edits (inline) or deletes its
-  project. The path in the top bar starts from the workspace of the page shown. Admins switch
+- **Workspace**: list of own projects, most recently updated first: each row shows the name,
+  description, open/resolved counts summed over the current versions of its mockups, mockup
+  count and when it was last updated (latest of its creation, a version upload or a comment in
+  any of its mockups); its actions menu edits (inline) or deletes the project. Projects and
+  mockups are listed with the same table. The path in the top bar starts from the workspace of the page shown. Admins switch
   from there to any user's workspace or to all of them (`?owner=<user id>|all`); another user's
   workspace offers no New project, since new projects belong to whoever creates them. Mockups
   carry their project's owner, so a mockup page links back to the right workspace.

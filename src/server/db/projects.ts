@@ -1,39 +1,54 @@
-import { count, desc, eq } from 'drizzle-orm';
+import { countDistinct, desc, eq, type SQL, sql } from 'drizzle-orm';
 import type { Db } from './client.ts';
-import { mockups, projects, users } from './schema.ts';
+import { comments, mockups, mockupVersions, projects, threads, users } from './schema.ts';
 
 export type ProjectRow = typeof projects.$inferSelect;
 
-/** Projects with owner and mockup count; all projects when `ownerId` is omitted. */
-export function listProjects(db: Db, ownerId?: string) {
+/** Ids of the joined threads with a status, for counting them once each. */
+const threadsWith = (status: 'open' | 'resolved') =>
+    countDistinct(sql`case when ${threads.status} = ${status} then ${threads.id} end`);
+
+/**
+ * When a project was last updated: the latest of its creation, an upload and a comment. Uploads
+ * and comments are read on current versions only, as a current version is the latest upload of
+ * its mockup and comments go to current versions alone.
+ */
+const updatedAt = sql`max(
+    ${projects.createdAt},
+    coalesce(max(${mockupVersions.createdAt}), 0),
+    coalesce(max(${comments.createdAt}), 0)
+)`.mapWith(projects.createdAt);
+
+/** Projects with owner, mockup count, threads on current versions and last update. */
+function selectProjects(db: Db, where: SQL | undefined) {
     return db
         .select({
             project: projects,
             ownerName: users.displayName,
-            mockupCount: count(mockups.id),
+            mockupCount: countDistinct(mockups.id),
+            openThreads: threadsWith('open'),
+            resolvedThreads: threadsWith('resolved'),
+            updatedAt,
         })
         .from(projects)
         .innerJoin(users, eq(users.id, projects.ownerId))
         .leftJoin(mockups, eq(mockups.projectId, projects.id))
-        .where(ownerId ? eq(projects.ownerId, ownerId) : undefined)
-        .groupBy(projects.id)
-        .orderBy(desc(projects.createdAt))
+        .leftJoin(mockupVersions, eq(mockupVersions.id, mockups.currentVersionId))
+        .leftJoin(threads, eq(threads.versionId, mockupVersions.id))
+        .leftJoin(comments, eq(comments.threadId, threads.id))
+        .where(where)
+        .groupBy(projects.id);
+}
+
+/** The latest updated first; all projects when `ownerId` is omitted. */
+export function listProjects(db: Db, ownerId?: string) {
+    return selectProjects(db, ownerId ? eq(projects.ownerId, ownerId) : undefined)
+        .orderBy(desc(updatedAt))
         .all();
 }
 
 export function findProject(db: Db, id: string) {
-    return db
-        .select({
-            project: projects,
-            ownerName: users.displayName,
-            mockupCount: count(mockups.id),
-        })
-        .from(projects)
-        .innerJoin(users, eq(users.id, projects.ownerId))
-        .leftJoin(mockups, eq(mockups.projectId, projects.id))
-        .where(eq(projects.id, id))
-        .groupBy(projects.id)
-        .get();
+    return selectProjects(db, eq(projects.id, id)).get();
 }
 
 export function insertProject(

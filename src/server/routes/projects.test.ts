@@ -1,12 +1,14 @@
 import { existsSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { Project } from '../../shared/api/projects.ts';
 import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
 import {
     createSharedMockup,
     createTestApp,
     htmlFile,
     inviteEditor,
+    later,
     setUpAdmin,
     tokenFromUrl,
 } from '../test-utils.ts';
@@ -35,7 +37,9 @@ describe('projects', () => {
             description: 'Q4',
             owner: { id: expect.any(String), displayName: 'Eddie' },
             mockupCount: 0,
+            activity: { openThreads: 0, resolvedThreads: 0 },
             createdAt: expect.any(String),
+            updatedAt: created.body.createdAt,
         });
 
         expect((await eddie.get('/api/projects')).body).toHaveLength(1);
@@ -54,6 +58,45 @@ describe('projects', () => {
         expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
         expect((await editor.delete(`/api/projects/${project.id}`)).status).toBe(204);
         expect((await editor.get('/api/projects')).body).toEqual([]);
+    });
+
+    it('sums the threads of current versions and lists the latest updated first', async () => {
+        const { editor, project, mockup, base, viewer, uploadVersion } = await editorWithMockup();
+        await later();
+        const quiet = await editor.post('/api/projects', { name: 'Quiet' });
+        const listed = async () =>
+            (await editor.get('/api/projects')).body.map((p: Project) => [
+                p.id,
+                p.activity,
+                p.updatedAt,
+            ]);
+        const none = { openThreads: 0, resolvedThreads: 0 };
+        expect(await listed()).toEqual([
+            [quiet.body.id, none, quiet.body.createdAt],
+            [project.id, none, mockup.version.createdAt],
+        ]);
+
+        await later();
+        const { client } = await viewer('Alice');
+        const thread = (body: string) =>
+            client.post(`${base}/threads`, { id: crypto.randomUUID(), kind: 'general', body });
+        const first = await thread('Looks good');
+        await editor.patch(`${base}/threads/${first.body.id}`, { status: 'resolved' });
+        const second = await thread('Larger buttons');
+        const commentedAt = second.body.comments[0].createdAt;
+        expect(await listed()).toEqual([
+            [project.id, { openThreads: 1, resolvedThreads: 1 }, commentedAt],
+            [quiet.body.id, none, quiet.body.createdAt],
+        ]);
+
+        await later();
+        await uploadVersion();
+        const detail = (await editor.get(`/api/projects/${project.id}`)).body;
+        expect(detail).toMatchObject({
+            mockupCount: 1,
+            activity: none,
+            updatedAt: detail.mockups[0].version.createdAt,
+        });
     });
 });
 

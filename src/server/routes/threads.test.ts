@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
-import { createSharedMockup } from '../test-utils.ts';
+import { createSharedMockup, later } from '../test-utils.ts';
 
 describe('threads', () => {
     it('creates pin and general threads with their first comment', async () => {
@@ -225,8 +225,6 @@ describe('reviewers', () => {
             kind: 'general',
             body: 'First',
         });
-        // Each change later than the one before, at millisecond precision.
-        const later = () => new Promise((resolve) => setTimeout(resolve, 5));
         await later();
         const reply = await bob.client.post(`${base}/threads/${thread.body.id}/comments`, {
             id: crypto.randomUUID(),

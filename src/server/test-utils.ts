@@ -80,6 +80,9 @@ export function htmlFile(content: string, name: string) {
     return form;
 }
 
+/** Waits long enough that the next change is dated after the last, at millisecond precision. */
+export const later = () => new Promise((resolve) => setTimeout(resolve, 5));
+
 /** The secret at the end of an account or share link URL. */
 export function tokenFromUrl(url: string) {
     return url.slice(url.lastIndexOf('/') + 1);

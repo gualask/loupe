@@ -61,7 +61,8 @@ consistent:
   stone-100, its outer border stone-200; floating surfaces cast `shadow-lg`, only dialogs
   `shadow-xl`;
 - buttons with `buttonClass` and `iconButtonClass`; states with `Badge` and its `TONES`; keys with
-  `Kbd`; the logo with `Logo` or `LogoMark`.
+  `Kbd`; the logo with `Logo` or `LogoMark`; tables of items, such as projects and mockups, with
+  `ItemList`.
 
 Reuse the components in `src/web/ui/` before writing markup that looks like them. When a value is
 missing, add it to the scale with the role it serves rather than writing it inline.

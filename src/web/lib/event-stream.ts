@@ -8,7 +8,7 @@ type Outcome =
 
 /**
  * Reads a Server-Sent Events stream with fetch, so requests can carry headers, and reconnects
- * with backoff. `onOpen` runs on every (re)connection. A 4xx answer (e.g. a disabled link)
+ * with backoff. `onOpen` runs on every (re)connection. A 4xx answer (e.g. a regenerated link)
  * would not change on retry: the stream then stops and `onRefused` runs with the API error code.
  * Returns the function that closes it.
  */

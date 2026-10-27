@@ -48,7 +48,7 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
 | `sessions` | `id_hash`, `user_id`, `created_at`, `expires_at`, `last_seen_at` |
 | `account_tokens` | `id`, `token_hash`, `kind` (`setup`/`invite`/`reset`), `role` (invite), `user_id` (reset), `created_at`, `expires_at` |
 | `projects` | `id`, `owner_id`, `name`, `description`, `created_at` |
-| `mockups` | `id`, `project_id`, `name`, `share_token`, `share_enabled`, `share_expires_at`, `read_only`, `current_version_id`, `created_by`, `created_at` |
+| `mockups` | `id`, `project_id`, `name`, `share_token`, `archived_at`, `current_version_id`, `created_by`, `created_at` |
 | `mockup_versions` | `id`, `mockup_id`, `number`, `sha256`, `size_bytes`, `original_filename`, `external_refs` (JSON), `pin_count`, `uploaded_by`, `created_at` |
 | `viewers` | `id`, `mockup_id`, `key_hash`, `display_name`, `color_index`, `created_at`, `last_seen_at` |
 | `reviews` | `id`, `version_id`, `viewer_id`, `status` (`in_progress`/`submitted`), `verdict` (`approved`/`changes_requested`), `summary`, `submitted_at` |
@@ -121,7 +121,7 @@ Uploaded HTML is untrusted. It is never served as a regular page of the app:
   responses carry `X-Content-Type-Options: nosniff`.
 - The document is sent with `Cache-Control: private, no-cache` and an `ETag` made of the file's
   SHA-256 and the bridge's hash: browsers revalidate on every load and get `304` when their copy
-  is current. Access is checked first, so a disabled or expired link stops serving it.
+  is current. Access is checked first, so a regenerated link stops serving it.
 
 ### 4.2 Bridge script
 
@@ -145,10 +145,10 @@ mockup code cannot tamper with it.
 - Opening a share link asks for nothing: anyone can read the mockup and its threads. The first
   change (pin, comment, reply, review) registers the viewer under a generated name such as
   "Anonymous Fox", or under the name they chose on an earlier mockup.
-- Viewers change their name from the header while the mockup accepts comments; the new name shows
+- Viewers change their name from their avatar in the header while the mockup accepts comments; the new name shows
   on all their threads and comments. The chosen name is remembered by the browser (`localStorage`) and used when they
   join other mockups. Names need not be unique.
-- After a viewer joins under a generated name, a hint next to their name invites them, once per
+- After a viewer joins under a generated name, a hint below their avatar invites them, once per
   browser, to add their own; closing it or choosing a name stops it for good.
 - The browser stores a secret **viewer key** per mockup in `localStorage` and sends it in the
   `X-Loupe-Viewer` header; the server stores its hash. The key authorizes editing and deleting
@@ -168,8 +168,7 @@ mockup code cannot tamper with it.
   "selector": "main > section:nth-of-type(2) > button.cta", // stable CSS path
   "offset": { "x": 0.42, "y": 0.18 },  // position inside the element's box, 0..1
   "text": "Get started",                // trimmed text snippet, for re-matching
-  "point": { "x": 812, "y": 1430 },     // document coordinates, fallback
-  "viewport": { "width": 1440, "height": 900 }
+  "point": { "x": 812, "y": 1430 }      // document coordinates, fallback
 }
 ```
 
@@ -184,25 +183,27 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 
 ## 5. Viewer experience
 
-- **Floating toolbar** (draggable): Pin · General comment · Show/hide pins · save status ·
-  "Finish review" · shortcuts help.
-- **Header**: mockup name, viewport switcher, the viewer's own name (to change it, §4.3),
-  presence avatars and the side-panel toggle. Editors also get a link back to the mockup page.
+- **Header**: mockup name; the review actions Pin · General comment · Show/hide pins and the save
+  status; viewport switcher, the viewer's own avatar (to change their name, §4.3), the avatars
+  of the others present, "Finish review", shortcuts help and the side-panel toggle. Editors also
+  get a link back to the mockup page.
 - **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
   marked. Editors can open it filtered to one viewer (`?viewer=<id>`).
-- **Narrow screens** (below 768 px, e.g. phones): the side panel covers the mockup instead of
-  sitting beside it, starts closed and closes when a thread opens or a pin or comment starts;
-  the toolbar shows icons only; comment actions are always visible on touch screens.
+- **Narrower screens**: below 1024 px the review actions show icons only and the viewport
+  switcher is hidden. Below 768 px (e.g. phones) the side panel covers the mockup instead of
+  sitting beside it, starts closed and closes when a thread opens or a pin or comment starts, and
+  the review actions move to a second header row. Below 640 px the shortcuts help is hidden.
+  Comment actions are always visible on touch screens.
 - **Pin flow**: press Pin (or `P`) → inspect mode → click an element → pin appears with a
   floating popover next to it → write → `Enter` / Send. `Esc` cancels; an empty pin is discarded.
-- **General comment** (`C`): a popover attached to the toolbar.
+- **General comment** (`C`): a popover below the Comment button of the header.
 - **Threads**: clicking a pin opens its thread: replies, edit/delete own comments, status.
-- **Viewport switcher**: desktop / tablet / mobile widths (iframe width). Each pin records the
-  viewport it was created at; switching shows a hint when it differs.
+- **Viewport switcher**: desktop / tablet / mobile widths (iframe width). Pins follow their
+  element at any width (§4.4).
 - **Finish review**: verdict (Approved / Changes requested) + optional summary. Adding comments
   after submitting moves the review back to `in_progress` until submitted again.
 - **Moderation**: only editors resolve and reopen threads; authors edit their own comments;
-  authors and editors delete them. Read-only mockups accept changes from editors only.
+  authors and editors delete them. Archived mockups accept no review changes from anyone (§6).
 - **Shortcuts**: `P` pin, `C` comment, `H` hide pins, `Esc` cancel, `?` help.
 
 ### 5.1 Saving
@@ -219,15 +220,16 @@ reloaded once no other action is pending. Unsent replies and general comments ar
 ### 5.2 Real time
 
 One **Server-Sent Events** channel per mockup version broadcasts the full state of each changed
-thread, deleted threads, presence (who is connected, with name and color) and viewers' new names,
-which clients apply wherever the viewer appears. A viewer's review
+thread, deleted threads, presence (who is connected, with name and color), viewers' new names,
+which clients apply wherever the viewer appears, and the mockup being archived or unarchived,
+which closes or reopens open review spaces to changes at once. A viewer's review
 status is sent only to that viewer's own connections, e.g. other tabs.
 Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The client reads the
 stream with `fetch`, so it can send the viewer key, reconnects with backoff, and refetches the
 threads on every (re)connection instead of replaying missed events. The stream sends a heartbeat every 25 seconds
 and `X-Accel-Buffering: no`, so proxies neither drop it as idle nor hold events back.
-At every heartbeat the server checks the link again: once it is disabled, regenerated or
-expired, open streams end, so a revoked link stops receiving events within 25 seconds. A 4xx
+At every heartbeat the server checks the link again: once it is regenerated or its mockup
+deleted, open streams end, so a revoked link stops receiving events within 25 seconds. A 4xx
 answer on reconnection is final: the client stops retrying and loads the link again, which then
 shows it as unavailable (or offers to retry if the server cannot be reached).
 
@@ -249,11 +251,15 @@ general comment box then opens with that text and a note asking to send, edit or
 
 ## 6. Editor experience
 
-- **Workspace**: list of own projects (admins can switch to any user's workspace).
-- **Project**: list of mockups with open/resolved counts and last activity; each row renames
-  (inline) or deletes its mockup. Every mockup the API returns carries this activity of its
+- **Workspace**: list of own projects; each card's actions menu edits (inline) or deletes its
+  project. The path in the top bar starts from the workspace of the page shown. Admins switch
+  from there to any user's workspace or to all of them (`?owner=<user id>|all`); another user's
+  workspace offers no New project, since new projects belong to whoever creates them. Mockups
+  carry their project's owner, so a mockup page links back to the right workspace.
+- **Project**: list of mockups with open/resolved counts and last activity; each row's actions
+  menu renames (inline), archives, unarchives or deletes its mockup. Every mockup the API returns carries this activity of its
   current version, with the number of submitted reviews.
-- **Upload**: drag & drop an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
+- **Upload**: from the project page, pick an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
   self-contained.
 - **New version**: from the mockup page, upload the next file with the same checks. It becomes
@@ -262,10 +268,26 @@ general comment box then opens with that text and a note asking to send, edit or
   shown in the MVP, so the upload first reloads the activity of the current version and asks for
   confirmation when it has threads (from viewers or editors) or submitted reviews. A file
   identical to the current version is refused (`409 same_file`).
-- **Share settings** per mockup: copy link, enable/disable, regenerate (old link stops working),
-  optional expiry, read-only mode (comments visible, no new ones).
+- **Share link** per mockup: anyone with it can open the mockup and comment. It can be copied
+  and regenerated, which stops the old link for good (e.g. when it reached the wrong people).
+- **Archive**: marks the work on a mockup as concluded, without losing anything. Its link keeps
+  showing the mockup and its comments, but nobody, editors included, can change the review: pin,
+  comment, reply, edit, delete, resolve, review, join or rename (`403 archived`). No new version
+  can be uploaded either (`409 archived`, checked again once the file is received). Its editors
+  can still rename it, regenerate its link or delete it.
+  The project lists archived mockups in a separate section, closed by default, where each can be
+  unarchived; the mockup page shows the archiving date with an Unarchive button, so a mistaken
+  click is undone in place. The date of the first archiving is kept until then.
+- **Actions**: the mockup page shows its frequent actions (upload a new version, open the review
+  space); renaming, archiving and deleting sit in an actions menu. A project page and a mockup
+  page offer the same menu as their card or row in the list. Delete comes last, in red and set
+  apart, and asks for confirmation since it cannot be undone.
 - **Reviews**: per mockup and for the current version, a list grouped by viewer (color, name,
-  thread counts open/resolved, verdict, last activity). Viewers of earlier versions stay listed,
+  thread counts open/resolved, verdict, last activity), under a count of viewers and a summary
+  (approved, changes requested, pending). Changes requested come first, then reviews in
+  progress, viewers without feedback and approvals; the most recently seen first within each.
+  The list scrolls on its own beside the share link, which stays in reach; on narrow screens it
+  shows the first rows and the rest on request. Viewers of earlier versions stay listed,
   without feedback until they review the current one. Selecting a viewer opens the mockup
   filtered to their pins.
 - **Moderation**: reply to any thread, resolve/reopen, delete any comment.

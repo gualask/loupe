@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Projects and HTML mockup upload, with size, encoding and self-containment checks
 - New versions of a mockup on the same link: reviewers keep their name, and each version starts without comments
 - Mockups served in a sandbox, so uploaded code cannot reach the app, its data or sessions
-- Share links with copy, revocation, regeneration, expiry and read-only mode
+- Share links with copy and regeneration
+- Archiving of finished mockups: their comments stay readable, nothing new is accepted
 - Pins anchored to page elements, picked with an inspector-style selector, that follow layout changes
 - General comments, threaded replies, editing, deletion, and resolve or reopen by editors
 - Anonymous reviewers with generated names they can change, colors and live presence, with no account or sign-up prompt

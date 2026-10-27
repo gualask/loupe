@@ -3,16 +3,20 @@ import type { Config } from '../config.ts';
 import type { MockupWithVersion } from '../db/mockups.ts';
 import type { ProjectRow } from '../db/projects.ts';
 
-export function toProject(row: {
-    project: ProjectRow;
-    ownerName: string;
-    mockupCount: number;
-}): Project {
+/** A project with its owner's name, as the project queries return it. */
+type ProjectWithOwner = { project: ProjectRow; ownerName: string };
+
+const ownerOf = ({ project, ownerName }: ProjectWithOwner) => ({
+    id: project.ownerId,
+    displayName: ownerName,
+});
+
+export function toProject(row: ProjectWithOwner & { mockupCount: number }): Project {
     return {
         id: row.project.id,
         name: row.project.name,
         description: row.project.description,
-        owner: { id: row.project.ownerId, displayName: row.ownerName },
+        owner: ownerOf(row),
         mockupCount: row.mockupCount,
         createdAt: row.project.createdAt.toISOString(),
     };
@@ -29,16 +33,15 @@ export type ActivityRow = {
 export function toMockup(
     config: Config,
     { mockup, version }: MockupWithVersion,
+    project: ProjectWithOwner,
     activity: ActivityRow,
 ): Mockup {
     return {
         id: mockup.id,
-        projectId: mockup.projectId,
+        project: { id: project.project.id, name: project.project.name, owner: ownerOf(project) },
         name: mockup.name,
         shareUrl: `${config.publicUrl}/s/${mockup.shareToken}`,
-        shareEnabled: mockup.shareEnabled,
-        shareExpiresAt: mockup.shareExpiresAt?.toISOString() ?? null,
-        readOnly: mockup.readOnly,
+        archivedAt: mockup.archivedAt?.toISOString() ?? null,
         version: {
             number: version.number,
             originalFilename: version.originalFilename,

@@ -6,7 +6,7 @@ import type { ShareAccess } from '../review/share-access.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 // Keeps idle connections open through proxies that drop silent ones, and is when an open stream
-// notices that its link was disabled, regenerated or has expired.
+// notices that its link was regenerated or its mockup deleted.
 const HEARTBEAT_MS = 25_000;
 
 /** The event stream of a share link's current version (docs/SPEC.md §5.2), mounted under /api/s. */

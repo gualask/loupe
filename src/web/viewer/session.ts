@@ -41,7 +41,7 @@ export function createReviewSession(
     const threads = signal<Thread[]>([]);
     const presence = signal<Author[]>([]);
     const error = signal<string>();
-    /** Set when the link stops giving access, e.g. disabled, regenerated or expired. */
+    /** Set when the link stops giving access: regenerated, or its mockup deleted. */
     const unavailable = signal(false);
     /** Set once a newer version was uploaded: this space shows a file reviewers moved on from. */
     const outdated = signal(false);
@@ -50,9 +50,7 @@ export function createReviewSession(
 
     const me = computed(() => shared.value.me);
     /** Whether changes are accepted here at all; a viewer may first need an identity. */
-    const mayWrite = computed(
-        () => !outdated.value && (shared.value.canModerate || !shared.value.readOnly),
-    );
+    const mayWrite = computed(() => !outdated.value && !shared.value.archived);
     /** Whether this browser can change things right now: writing is open and it has an identity. */
     const canWrite = computed(() => !!me.value && mayWrite.value);
     const identity = createIdentity({
@@ -94,6 +92,9 @@ export function createReviewSession(
             } else if (err.code === 'version_changed') {
                 // A newer version is shown as a notice to reload rather than as an error.
                 outdated.value = true;
+            } else if (err.code === 'archived') {
+                // Archived meanwhile, and its event missed: the space closes to changes.
+                setArchived(true);
             } else {
                 error.value = errorMessage(err);
             }
@@ -114,6 +115,10 @@ export function createReviewSession(
             editedAt: null,
             deleted: false,
         };
+    }
+
+    function setArchived(archived: boolean) {
+        shared.value = { ...shared.value, archived };
     }
 
     function setReview(review: Review) {
@@ -144,6 +149,7 @@ export function createReviewSession(
         } else if (event.type === 'presence') presence.value = event.participants;
         else if (event.type === 'review') setReview(event.review);
         else if (event.type === 'viewer') showName(event.viewer);
+        else if (event.type === 'archived') setArchived(event.archived);
     }
 
     /** Applies the server's copy of a saved thread; resolves to whether the change was saved. */

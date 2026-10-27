@@ -1,1 +1,15 @@
-@import "tailwindcss";
+/* Only the web app uses Tailwind classes: scanning the rest of the repository (docs, server)
+   would add utilities for words that merely look like class names. */
+@import "tailwindcss" source(".");
+
+@layer base {
+    body {
+        @apply bg-stone-50 text-stone-900;
+    }
+
+    /* Tailwind 4 leaves buttons with the default arrow; the hand says they can be clicked. */
+    button:not(:disabled),
+    [role="button"]:not(:disabled) {
+        cursor: pointer;
+    }
+}

@@ -1,16 +1,16 @@
 import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { CARD_CLASS } from '../ui/styles.ts';
 
 const WIDTH = 320;
-const GAP = 16;
 // Pin markers are 28px wide and drawn up and to the right of their anchor point.
 const MARKER = 28;
 const MARGIN = 8;
 
 /**
  * Floating card in viewport coordinates: beside a pin (`side`), flipping to the left when it
- * would overflow and going below it when neither side fits, or centered above a point
- * (`above`), e.g. the toolbar.
+ * would overflow and going below it when neither side fits, or centered below a point
+ * (`below`), e.g. the comment button.
  */
 export function Popover({
     x,
@@ -20,7 +20,7 @@ export function Popover({
 }: {
     x: number;
     y: number;
-    placement: 'side' | 'above';
+    placement: 'side' | 'below';
     children: ComponentChildren;
 }) {
     const ref = useRef<HTMLDivElement>(null);
@@ -50,7 +50,7 @@ export function Popover({
         }
     } else {
         left = x - width / 2;
-        top = y - GAP - height;
+        top = y + MARGIN;
     }
     left = Math.min(Math.max(left, MARGIN), innerWidth - width - MARGIN);
     top = Math.min(Math.max(top, MARGIN), innerHeight - height - MARGIN);
@@ -58,10 +58,26 @@ export function Popover({
     return (
         <div
             ref={ref}
-            class="fixed z-30 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
+            class={`fixed z-30 overflow-hidden shadow-xl ${CARD_CLASS}`}
             style={{ left: `${left}px`, top: `${top}px`, width: `${width}px` }}
         >
             {children}
         </div>
+    );
+}
+
+/** Title row of a popover, with its actions on the right. */
+export function PopoverHeader({
+    title,
+    children,
+}: {
+    title: ComponentChildren;
+    children: ComponentChildren;
+}) {
+    return (
+        <header class="flex items-center gap-2 border-stone-100 border-b py-1.5 pr-1.5 pl-3 text-sm">
+            {title}
+            <span class="ml-auto flex">{children}</span>
+        </header>
     );
 }

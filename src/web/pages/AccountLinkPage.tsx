@@ -10,6 +10,7 @@ import { Button } from '../ui/Button.tsx';
 import { CenteredCard } from '../ui/CenteredCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { CenteredLoadStatus } from '../ui/LoadStatus.tsx';
+import { Notice } from '../ui/Notice.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
 const TITLES: Record<AccountTokenInfo['kind'], string> = {
@@ -52,10 +53,10 @@ export function AccountLinkPage() {
             <form class="flex flex-col gap-4" onSubmit={submit}>
                 {/* E.g. an admin opening an invite link they just created, to check it. */}
                 {signedIn ? (
-                    <p class="rounded-md bg-amber-50 p-3 text-amber-800 text-sm">
+                    <Notice tone="warning">
                         You are signed in as <strong>{signedIn.username}</strong>. Continuing signs
                         you out and into the account of this link.
-                    </p>
+                    </Notice>
                 ) : null}
                 {info.kind === 'reset' ? (
                     <p class="text-sm text-stone-600">

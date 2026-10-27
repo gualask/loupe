@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "ae22f23d-b31a-43a1-9b33-5d02b019ca24",
+  "id": "a03d07cb-e0f8-467c-82e8-faf39792f32f",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -338,31 +338,11 @@
     },
     {
       "table": "mockups",
-      "name": "share_enabled",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "true",
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "mockups",
-      "name": "share_expires_at",
+      "name": "archived_at",
       "type": "integer",
       "notNull": false,
       "autoincrement": false,
       "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "mockups",
-      "name": "read_only",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "false",
       "generated": null,
       "entityType": "columns"
     },

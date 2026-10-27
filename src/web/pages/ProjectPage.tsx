@@ -1,53 +1,21 @@
-import { IconPencil, IconTrash } from '@tabler/icons-preact';
+import { IconUpload } from '@tabler/icons-preact';
 import { useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
-import type { Mockup, Project, ProjectDetail } from '../../shared/api/projects.ts';
+import type { Mockup, ProjectDetail } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
+import { HtmlFileButton } from '../components/HtmlFileButton.tsx';
 import { MockupList } from '../components/MockupList.tsx';
-import { UploadDropzone } from '../components/UploadDropzone.tsx';
+import { ProjectForm } from '../components/ProjectForm.tsx';
+import { ProjectMenu } from '../components/ProjectMenu.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
-import { plural } from '../lib/format.ts';
+import { deleteMockup, setArchived, uploadMockup } from '../lib/mockups.ts';
+import { deleteProject, updateProject } from '../lib/projects.ts';
 import { useResource } from '../lib/resource.ts';
-import { Button } from '../ui/Button.tsx';
-import { FormCard } from '../ui/FormCard.tsx';
+import { EmptyState } from '../ui/EmptyState.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
-import { TextField } from '../ui/TextField.tsx';
-
-function EditProjectForm({
-    project,
-    onDone,
-}: {
-    project: Project;
-    onDone: (project?: Project) => void;
-}) {
-    const [name, setName] = useState(project.name);
-    const [description, setDescription] = useState(project.description);
-
-    async function save() {
-        onDone(await api.patch<Project>(`/projects/${project.id}`, { name, description }));
-    }
-
-    return (
-        <FormCard submitLabel="Save" onSubmit={save} onCancel={() => onDone()}>
-            <TextField
-                label="Project name"
-                required
-                maxLength={120}
-                value={name}
-                onInput={(e) => setName(e.currentTarget.value)}
-            />
-            <TextField
-                label="Description"
-                maxLength={500}
-                value={description}
-                onInput={(e) => setDescription(e.currentTarget.value)}
-            />
-        </FormCard>
-    );
-}
 
 export function ProjectPage() {
     const { params } = useRoute();
@@ -55,7 +23,8 @@ export function ProjectPage() {
     const resource = useResource(`/projects/${params.id}`, api.get<ProjectDetail>);
     const [editing, setEditing] = useState(false);
     const upload = useAction();
-    const deletion = useAction();
+    // Deletions and other changes made from the page or its rows.
+    const change = useAction();
 
     if (resource.status !== 'ready') {
         return (
@@ -68,80 +37,86 @@ export function ProjectPage() {
 
     const uploadFile = (file: File) =>
         upload.run(async () => {
-            const mockup = await api.upload<Mockup>(`/projects/${project.id}/mockups`, file);
+            const mockup = await uploadMockup(project.id, file);
             route(`/mockups/${mockup.id}`);
         });
 
-    function remove() {
-        const count = project.mockups.length;
-        const warning = count
-            ? ` Its ${plural(count, 'mockup')} and all their comments will be lost.`
-            : '';
-        if (!confirm(`Delete "${project.name}"?${warning}`)) return;
-        deletion.run(async () => {
-            await api.delete(`/projects/${project.id}`);
-            route('/');
+    const remove = () =>
+        change.run(async () => {
+            if (await deleteProject(project, project.mockups.length)) route('/');
         });
-    }
 
-    const updateMockups = (change: (mockups: Mockup[]) => Mockup[]) =>
-        resource.update((p) => ({ ...p, mockups: change(p.mockups) }));
+    const updateMockups = (edit: (mockups: Mockup[]) => Mockup[]) =>
+        resource.update((p) => ({ ...p, mockups: edit(p.mockups) }));
 
-    function removeMockup(mockup: Mockup) {
-        if (!confirm(`Delete "${mockup.name}" and all its comments?`)) return;
-        deletion.run(async () => {
-            await api.delete(`/mockups/${mockup.id}`);
-            updateMockups((list) => list.filter((m) => m.id !== mockup.id));
+    const replaceMockup = (updated: Mockup) =>
+        updateMockups((list) => list.map((m) => (m.id === updated.id ? updated : m)));
+
+    const archiveMockup = (mockup: Mockup, archived: boolean) =>
+        change.run(async () => replaceMockup(await setArchived(mockup, archived)));
+
+    const removeMockup = (mockup: Mockup) =>
+        change.run(async () => {
+            if (await deleteMockup(mockup)) {
+                updateMockups((list) => list.filter((m) => m.id !== mockup.id));
+            }
         });
-    }
 
     return (
-        <AppShell>
+        <AppShell workspace={project.owner}>
             <div class="flex flex-col gap-6">
-                {/* While editing, the form replaces the actions and the description. */}
+                {/* The primary action, then the menu of secondary ones, as on a mockup page.
+                    While editing, the form replaces the actions and the description. */}
                 <PageHeader
-                    trail={[{ href: '/', label: 'Workspace' }]}
                     title={project.name}
                     description={editing ? undefined : project.description}
                     actions={
                         editing ? null : (
                             <>
-                                <Button variant="ghost" onClick={() => setEditing(true)}>
-                                    <IconPencil size={16} />
-                                    Edit
-                                </Button>
-                                <Button variant="ghost" onClick={remove}>
-                                    <IconTrash size={16} />
-                                    Delete
-                                </Button>
+                                <HtmlFileButton
+                                    disabled={upload.pending}
+                                    title="A single self-contained .html file"
+                                    onFile={uploadFile}
+                                >
+                                    <IconUpload size={16} />
+                                    {upload.pending ? 'Uploading…' : 'Upload mockup'}
+                                </HtmlFileButton>
+                                <ProjectMenu
+                                    project={project}
+                                    size="lg"
+                                    disabled={change.pending}
+                                    onEdit={() => setEditing(true)}
+                                    onDelete={remove}
+                                />
                             </>
                         )
                     }
                 />
                 {editing ? (
-                    <EditProjectForm
-                        project={project}
-                        onDone={(updated) => {
-                            if (updated) resource.update((p) => ({ ...p, ...updated }));
+                    <ProjectForm
+                        initial={project}
+                        submitLabel="Save"
+                        onSubmit={async (fields) => {
+                            const updated = await updateProject(project, fields);
+                            resource.update((p) => ({ ...p, ...updated }));
                             setEditing(false);
                         }}
+                        onCancel={() => setEditing(false)}
                     />
                 ) : null}
-                <UploadDropzone
-                    busy={upload.pending}
-                    compact={project.mockups.length > 0}
-                    onFile={uploadFile}
-                />
-                <FormError message={upload.error ?? deletion.error} />
-                <MockupList
-                    mockups={project.mockups}
-                    onRenamed={(updated) =>
-                        updateMockups((list) =>
-                            list.map((m) => (m.id === updated.id ? updated : m)),
-                        )
-                    }
-                    onDelete={removeMockup}
-                />
+                <FormError message={upload.error ?? change.error} />
+                {project.mockups.length ? (
+                    <MockupList
+                        mockups={project.mockups}
+                        onRenamed={replaceMockup}
+                        onSetArchived={archiveMockup}
+                        onDelete={removeMockup}
+                    />
+                ) : (
+                    <EmptyState title="No mockups yet">
+                        Upload a self-contained HTML file, then share its link for review.
+                    </EmptyState>
+                )}
             </div>
         </AppShell>
     );

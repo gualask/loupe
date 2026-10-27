@@ -73,8 +73,8 @@ export function findVersion(db: Db, mockupId: string, number: number) {
 }
 
 /**
- * Adds a version after the latest one and makes it current. Returns false, adding nothing, when
- * the file is the current version's: uploading it again would only hide its threads.
+ * Adds a version after the latest one and makes it current. Adds nothing to an archived mockup,
+ * nor when the file is the current version's: uploading it again would only hide its threads.
  */
 export function insertVersion(
     db: Db,
@@ -87,12 +87,14 @@ export function insertVersion(
     const versionId = crypto.randomUUID();
     return db.transaction((tx) => {
         const current = tx
-            .select({ sha256: mockupVersions.sha256 })
+            .select({ sha256: mockupVersions.sha256, archivedAt: mockups.archivedAt })
             .from(mockups)
             .innerJoin(mockupVersions, eq(mockupVersions.id, mockups.currentVersionId))
             .where(eq(mockups.id, mockupId))
             .get();
-        if (current?.sha256 === version.sha256) return false;
+        // Checked here too, as the mockup may be archived while the file uploads.
+        if (current?.archivedAt) return 'archived';
+        if (current?.sha256 === version.sha256) return 'same_file';
         const latest =
             tx
                 .select({ n: max(mockupVersions.number) })
@@ -106,16 +108,14 @@ export function insertVersion(
             .set({ currentVersionId: versionId })
             .where(eq(mockups.id, mockupId))
             .run();
-        return true;
+        return 'added';
     });
 }
 
 export function updateMockup(
     db: Db,
     id: string,
-    changes: Partial<
-        Pick<MockupRow, 'name' | 'shareToken' | 'shareEnabled' | 'shareExpiresAt' | 'readOnly'>
-    >,
+    changes: Partial<Pick<MockupRow, 'name' | 'shareToken' | 'archivedAt'>>,
 ) {
     db.update(mockups).set(changes).where(eq(mockups.id, id)).run();
 }

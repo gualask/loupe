@@ -106,4 +106,6 @@ export type ShareEvent =
     | { type: 'review'; review: Review }
     | { type: 'presence'; participants: Author[] }
     /** A viewer changed their name: it shows wherever they appear. */
-    | { type: 'viewer'; viewer: Extract<Author, { kind: 'viewer' }> };
+    | { type: 'viewer'; viewer: Extract<Author, { kind: 'viewer' }> }
+    /** The mockup was archived or unarchived: changes stop or resume. */
+    | { type: 'archived'; archived: boolean };

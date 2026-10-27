@@ -1,9 +1,14 @@
 import type { ComponentChildren } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
 import { useFormSubmit } from '../lib/form.ts';
 import { Button } from './Button.tsx';
 import { FormError } from './FormError.tsx';
+import { CARD_CLASS } from './styles.ts';
 
-/** A form in a card: runs `onSubmit`, shows the error it fails with, and offers to cancel. */
+/**
+ * A form in a card: runs `onSubmit`, shows the error it fails with, and offers to cancel. Its
+ * first field takes focus, as the form usually replaces the button that opened it.
+ */
 export function FormCard({
     submitLabel,
     onSubmit,
@@ -16,12 +21,15 @@ export function FormCard({
     children: ComponentChildren;
 }) {
     const { error, pending, submit } = useFormSubmit(onSubmit);
+    const form = useRef<HTMLFormElement>(null);
+
+    useEffect(
+        () => form.current?.querySelector<HTMLElement>('input, textarea, select')?.focus(),
+        [],
+    );
 
     return (
-        <form
-            class="flex max-w-xl flex-col gap-4 rounded-xl border border-stone-200 bg-white p-5"
-            onSubmit={submit}
-        >
+        <form ref={form} class={`flex max-w-xl flex-col gap-4 p-5 ${CARD_CLASS}`} onSubmit={submit}>
             {children}
             <FormError message={error} />
             <div class="flex gap-2">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import type { SharedMockup } from '../../shared/api/projects.ts';
-import type { Thread } from '../../shared/api/reviews.ts';
+import { sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import type { BridgeMessage, PinPosition, ShortcutKey } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { useBridge } from './bridge.ts';
@@ -15,14 +15,12 @@ import { NewVersionNotice } from './NewVersionNotice.tsx';
 import { Popover } from './Popover.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
+import { FinishButton, ReviewTools } from './ReviewTools.tsx';
 import { useReviewSession } from './session.ts';
 import { useShortcuts } from './shortcuts.ts';
 import { ThreadPanel } from './ThreadPanel.tsx';
 import { ThreadView } from './ThreadView.tsx';
-import { Toolbar } from './Toolbar.tsx';
 
-// Pins placed at a width this different from the current one may point elsewhere.
-const VIEWPORT_HINT_PX = 100;
 // Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 
@@ -47,13 +45,14 @@ export function ReviewSpace({
 
     const { path, query, route } = useLocation();
     const frame = useRef<HTMLIFrameElement>(null);
-    const toolbar = useRef<HTMLDivElement>(null);
+    const commentButton = useRef<HTMLButtonElement>(null);
 
     const shared = session.shared.value;
     const me = session.me.value;
     const isEditor = me?.kind === 'editor';
     const threads = session.threads.value;
     const mayWrite = session.mayWrite.value;
+    const canRename = mayWrite && !isEditor;
 
     const [inspecting, setInspecting] = useState(false);
     const [composing, setComposing] = useState<NewThread | null>(null);
@@ -179,7 +178,7 @@ export function ReviewSpace({
 
     useShortcuts(shortcut);
 
-    /** Where a popover goes: next to its pin, or above the toolbar. */
+    /** Where a popover goes: next to its pin, or below the comment button. */
     function popoverPoint(pinId: string | null) {
         const position = pinId ? positions.get(pinId) : undefined;
         const frameRect = frame.current?.getBoundingClientRect();
@@ -190,19 +189,12 @@ export function ReviewSpace({
                 placement: 'side' as const,
             };
         }
-        const bar = toolbar.current?.getBoundingClientRect();
+        const button = commentButton.current?.getBoundingClientRect();
         return {
-            x: bar ? bar.left + bar.width / 2 : innerWidth / 2,
-            y: bar ? bar.top : innerHeight - 80,
-            placement: 'above' as const,
+            x: button ? button.left + button.width / 2 : innerWidth / 2,
+            y: button ? button.bottom : 0,
+            placement: 'below' as const,
         };
-    }
-
-    function viewportHint(thread: Thread) {
-        const placed = thread.anchor?.viewport.width;
-        const current = frame.current?.clientWidth;
-        if (!placed || !current || Math.abs(placed - current) < VIEWPORT_HINT_PX) return undefined;
-        return `Placed on a ${placed}px wide screen; at this width it may point elsewhere.`;
     }
 
     let popover = null;
@@ -228,7 +220,6 @@ export function ReviewSpace({
                             ? `Pin ${labels.get(openThread.id) ?? ''}`
                             : 'General comment'
                     }
-                    hint={viewportHint(openThread)}
                     session={session}
                     onClose={() => setOpenId(null)}
                 />
@@ -243,14 +234,26 @@ export function ReviewSpace({
     const error = session.error.value;
 
     return (
-        <div class="flex h-dvh flex-col bg-stone-100 text-stone-900">
+        <div class="flex h-dvh flex-col bg-stone-100">
             <ReviewHeader
                 name={shared.name}
-                readOnly={shared.readOnly}
+                archived={shared.archived}
                 backHref={isEditor ? `/mockups/${shared.mockupId}` : undefined}
+                tools={
+                    <ReviewTools
+                        commentRef={commentButton}
+                        inspecting={inspecting}
+                        pinsHidden={pinsHidden}
+                        mayWrite={mayWrite}
+                        saveState={session.saveState.value}
+                        onPin={startPin}
+                        onComment={startComment}
+                        onTogglePins={() => setPinsHidden((hidden) => !hidden)}
+                    />
+                }
                 viewportWidth={viewportWidth}
-                myName={
-                    mayWrite && !isEditor ? (
+                me={
+                    canRename ? (
                         <MyName
                             me={me}
                             hint={session.identity.nameHint.value}
@@ -259,16 +262,31 @@ export function ReviewSpace({
                         />
                     ) : null
                 }
-                presence={session.presence.value}
+                others={
+                    // The viewer's own avatar is the name button, not one of the others.
+                    canRename && me
+                        ? session.presence.value.filter((author) => !sameAuthor(author, me))
+                        : session.presence.value
+                }
+                finish={
+                    isEditor ? null : (
+                        <FinishButton
+                            review={shared.review}
+                            disabled={!mayWrite}
+                            onClick={() => withIdentity(() => setDialog('review'))}
+                        />
+                    )
+                }
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}
                 onViewport={setViewportWidth}
+                onHelp={() => setDialog('help')}
                 onTogglePanel={() => setPanelOpen((open) => !open)}
             />
             {outdated ? (
                 <NewVersionNotice class="shrink-0 bg-amber-100 px-4 py-2 text-center text-amber-900 text-sm" />
             ) : null}
-            <div class="flex min-h-0 flex-1">
+            <div class="relative flex min-h-0 flex-1">
                 <main class="flex min-w-0 flex-1 justify-center overflow-auto">
                     <div
                         class="h-full bg-white shadow-sm"
@@ -298,19 +316,6 @@ export function ReviewSpace({
                     />
                 ) : null}
             </div>
-            <Toolbar
-                toolbarRef={toolbar}
-                inspecting={inspecting}
-                pinsHidden={pinsHidden}
-                mayWrite={mayWrite}
-                saveState={session.saveState.value}
-                review={isEditor ? undefined : shared.review}
-                onPin={startPin}
-                onComment={startComment}
-                onTogglePins={() => setPinsHidden((hidden) => !hidden)}
-                onFinish={() => withIdentity(() => setDialog('review'))}
-                onHelp={() => setDialog('help')}
-            />
             {popover}
             {error ? (
                 <ErrorToast

@@ -1,7 +1,8 @@
 import { IconSend2 } from '@tabler/icons-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { storage } from '../lib/storage.ts';
-import { INPUT_CLASS } from '../ui/styles.ts';
+import { IconButton } from '../ui/IconButton.tsx';
+import { Textarea } from '../ui/Input.tsx';
 
 /**
  * Comment box: Enter sends, Shift+Enter adds a line, Esc cancels. With `draftKey`, unsent text
@@ -64,7 +65,7 @@ export function Composer({
 
     return (
         <div class="flex items-end gap-2">
-            <textarea
+            <Textarea
                 ref={ref}
                 rows={Math.min(6, Math.max(2, text.split('\n').length))}
                 maxLength={5000}
@@ -72,18 +73,18 @@ export function Composer({
                 value={text}
                 onInput={(e) => update(e.currentTarget.value)}
                 onKeyDown={onKeyDown}
-                class={`min-w-0 flex-1 resize-none ${INPUT_CLASS}`}
+                class="min-w-0 flex-1 resize-none"
             />
-            <button
-                type="button"
-                onClick={submit}
+            <IconButton
+                label={submitLabel}
+                shortcut="Enter"
+                variant="primary"
+                size="lg"
                 disabled={!text.trim()}
-                aria-label={submitLabel}
-                title={`${submitLabel} (Enter)`}
-                class="grid size-9 shrink-0 place-items-center rounded-md bg-stone-900 text-white hover:bg-stone-700 disabled:opacity-40"
+                onClick={submit}
             >
                 <IconSend2 size={18} />
-            </button>
+            </IconButton>
         </div>
     );
 }

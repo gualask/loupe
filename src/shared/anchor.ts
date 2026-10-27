@@ -11,7 +11,6 @@ export const pinAnchorSchema = z.object({
     text: z.string().max(200).optional(),
     /** Document coordinates, used when neither selector nor text resolves. */
     point,
-    viewport: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }),
 });
 
 export type PinAnchor = z.infer<typeof pinAnchorSchema>;

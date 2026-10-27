@@ -20,10 +20,10 @@ export function Avatar({ author, size = 24 }: { author: Author; size?: number })
 
 export function AuthorName({ author }: { author: Author }) {
     return (
-        <span class="inline-flex items-center gap-1.5 font-medium">
-            {author.displayName}
+        <span class="inline-flex max-w-44 shrink-0 items-center gap-1.5 font-medium">
+            <span class="truncate">{author.displayName}</span>
             {author.kind === 'editor' ? (
-                <span class="rounded bg-stone-800 px-1 py-px font-semibold text-[10px] text-white uppercase tracking-wide">
+                <span class="shrink-0 rounded bg-stone-800 px-1 py-px font-semibold text-[10px] text-white uppercase tracking-wide">
                     Editor
                 </span>
             ) : null}

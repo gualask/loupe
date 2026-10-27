@@ -1,3 +1,7 @@
+import type { Role } from '../../shared/api/auth.ts';
+
+export const ROLE_LABELS: Record<Role, string> = { editor: 'Editor', admin: 'Admin' };
+
 export function formatBytes(bytes: number) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

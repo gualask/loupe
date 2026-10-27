@@ -36,7 +36,7 @@ export const BOB: Extract<Author, { kind: 'viewer' }> = {
 export const SHARED: SharedMockup = {
     mockupId: 'm1',
     name: 'Checkout',
-    readOnly: false,
+    archived: false,
     version: 1,
     contentUrl: '/s/tok/content',
     me: ANN,

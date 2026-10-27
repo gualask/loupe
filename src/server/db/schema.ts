@@ -68,9 +68,8 @@ export const mockups = sqliteTable(
             .references(() => projects.id, { onDelete: 'cascade' }),
         name: text('name').notNull(),
         shareToken: text('share_token').notNull().unique(),
-        shareEnabled: integer('share_enabled', { mode: 'boolean' }).notNull().default(true),
-        shareExpiresAt: timestamp('share_expires_at'),
-        readOnly: integer('read_only', { mode: 'boolean' }).notNull().default(false),
+        // When the work on it was concluded; an archived mockup accepts no review changes.
+        archivedAt: timestamp('archived_at'),
         // Not a foreign key: versions reference mockups, and SQLite cannot add the cycle later.
         currentVersionId: text('current_version_id'),
         createdBy: text('created_by')

@@ -3,56 +3,57 @@ import { useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import type { Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
+import { ProjectForm } from '../components/ProjectForm.tsx';
+import { ProjectMenu } from '../components/ProjectMenu.tsx';
 import { api } from '../lib/api.ts';
+import { useAction } from '../lib/form.ts';
 import { formatDate, plural } from '../lib/format.ts';
+import { createProject, deleteProject, updateProject } from '../lib/projects.ts';
 import { useResource } from '../lib/resource.ts';
-import { currentUser } from '../lib/session.ts';
+import { signedInUser } from '../lib/session.ts';
+import { ownerFromQuery, resolveWorkspace, useWorkspaceOwners } from '../lib/workspaces.ts';
 import { Button } from '../ui/Button.tsx';
-import { FormCard } from '../ui/FormCard.tsx';
+import { EmptyState } from '../ui/EmptyState.tsx';
+import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
-import { INPUT_CLASS } from '../ui/styles.ts';
-import { TextField } from '../ui/TextField.tsx';
+import { CARD_CLASS } from '../ui/styles.ts';
 
-function NewProjectForm({ onCancel }: { onCancel: () => void }) {
-    const { route } = useLocation();
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-
-    async function create() {
-        const project = await api.post<Project>('/projects', { name, description });
-        route(`/projects/${project.id}`);
-    }
-
+function ProjectCard({
+    project,
+    showOwner,
+    disabled,
+    onEdit,
+    onDelete,
+}: {
+    project: Project;
+    /** When projects of several people are listed together. */
+    showOwner: boolean;
+    disabled: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+}) {
     return (
-        <FormCard submitLabel="Create project" onSubmit={create} onCancel={onCancel}>
-            <TextField
-                label="Project name"
-                required
-                maxLength={120}
-                value={name}
-                onInput={(e) => setName(e.currentTarget.value)}
-            />
-            <TextField
-                label="Description (optional)"
-                maxLength={500}
-                value={description}
-                onInput={(e) => setDescription(e.currentTarget.value)}
-            />
-        </FormCard>
-    );
-}
-
-function ProjectCard({ project }: { project: Project }) {
-    const showOwner = project.owner.id !== currentUser.value?.id;
-    return (
-        <a
-            href={`/projects/${project.id}`}
-            class="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-5 transition-colors hover:border-stone-400"
+        // The link covers the whole card; the menu sits above it.
+        <div
+            class={`relative flex flex-col gap-2 p-5 transition hover:border-stone-400 hover:shadow-sm ${CARD_CLASS}`}
         >
-            <div class="flex items-center gap-2 font-medium">
-                <IconFolder size={18} class="text-stone-400" />
-                {project.name}
+            <div class="-my-1 -mr-2 flex items-center gap-2">
+                <IconFolder size={18} class="shrink-0 text-stone-400" />
+                <a
+                    href={`/projects/${project.id}`}
+                    class="min-w-0 flex-1 truncate font-medium after:absolute after:inset-0"
+                >
+                    {project.name}
+                </a>
+                <div class="relative">
+                    <ProjectMenu
+                        project={project}
+                        disabled={disabled}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                    />
+                </div>
             </div>
             {project.description ? (
                 <p class="line-clamp-2 text-sm text-stone-600">{project.description}</p>
@@ -61,94 +62,95 @@ function ProjectCard({ project }: { project: Project }) {
                 {plural(project.mockupCount, 'mockup')} · created {formatDate(project.createdAt)}
                 {showOwner ? ` · ${project.owner.displayName}` : ''}
             </p>
-        </a>
-    );
-}
-
-/** Admins see every workspace; they pick one, or all, through `?owner=`. */
-function WorkspacePicker({
-    projects,
-    value,
-    onChange,
-}: {
-    projects: Project[];
-    value: string;
-    onChange: (owner: string) => void;
-}) {
-    const me = currentUser.value?.id;
-    const others = new Map(
-        projects.filter((p) => p.owner.id !== me).map((p) => [p.owner.id, p.owner.displayName]),
-    );
-    return (
-        <select
-            aria-label="Workspace"
-            value={value}
-            onChange={(e) => onChange(e.currentTarget.value)}
-            class={INPUT_CLASS}
-        >
-            <option value="">My workspace</option>
-            <option value="all">All workspaces</option>
-            {[...others].map(([id, name]) => (
-                <option key={id} value={id}>
-                    {name}
-                </option>
-            ))}
-        </select>
+        </div>
     );
 }
 
 export function HomePage() {
-    const { path, query, route } = useLocation();
-    const user = currentUser.value;
+    const { query, route } = useLocation();
+    const user = signedInUser();
+    const accounts = useWorkspaceOwners(user.role === 'admin');
     const resource = useResource('/projects', api.get<Project[]>);
     const projects = resource.status === 'ready' ? resource.data : undefined;
     const [creating, setCreating] = useState(false);
+    const [editingId, setEditingId] = useState<string>();
+    // Deletions from the cards.
+    const change = useAction();
 
-    const owner = user?.role === 'admin' ? (query.owner ?? '') : '';
-    const shown = projects?.filter((p) =>
-        owner === 'all' ? true : p.owner.id === (owner || user?.id),
-    );
+    const owner = ownerFromQuery(query.owner, user);
+    // New projects go to the signed-in user's workspace, so another user's offers none.
+    const someoneElses = owner !== 'all' && owner !== user.id;
+    const shown = projects?.filter((p) => owner === 'all' || p.owner.id === owner);
+    const workspace = resolveWorkspace(owner, user, { projects, accounts });
+
+    const replaceProject = (updated: Project) =>
+        resource.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+
+    const removeProject = (project: Project) =>
+        change.run(async () => {
+            if (await deleteProject(project, project.mockupCount)) {
+                resource.update((list) => list.filter((p) => p.id !== project.id));
+            }
+        });
 
     return (
-        <AppShell>
+        <AppShell workspace={workspace}>
             <div class="flex flex-col gap-6">
                 <PageHeader
-                    title="Workspace"
+                    title="Projects"
                     actions={
-                        <>
-                            {user?.role === 'admin' && projects ? (
-                                <WorkspacePicker
-                                    projects={projects}
-                                    value={owner}
-                                    onChange={(value) =>
-                                        route(value ? `${path}?owner=${value}` : path)
-                                    }
-                                />
-                            ) : null}
-                            {creating ? null : (
-                                <Button onClick={() => setCreating(true)}>
-                                    <IconPlus size={16} />
-                                    New project
-                                </Button>
-                            )}
-                        </>
+                        creating || someoneElses ? null : (
+                            <Button onClick={() => setCreating(true)}>
+                                <IconPlus size={16} />
+                                New project
+                            </Button>
+                        )
                     }
                 />
-                {creating ? <NewProjectForm onCancel={() => setCreating(false)} /> : null}
+                {creating ? (
+                    <ProjectForm
+                        submitLabel="Create project"
+                        onSubmit={async (fields) => {
+                            const project = await createProject(fields);
+                            route(`/projects/${project.id}`);
+                        }}
+                        onCancel={() => setCreating(false)}
+                    />
+                ) : null}
                 <LoadStatus resource={resource} />
                 {shown?.length === 0 && !creating ? (
-                    <div class="rounded-xl border border-stone-300 border-dashed p-10 text-center">
-                        <p class="font-medium">No projects yet</p>
-                        <p class="mt-1 text-sm text-stone-500">
-                            Create a project, then upload HTML mockups into it.
-                        </p>
-                    </div>
+                    <EmptyState title="No projects yet">
+                        {someoneElses
+                            ? 'Projects created by this person will show up here.'
+                            : 'Create a project, then upload HTML mockups into it.'}
+                    </EmptyState>
                 ) : null}
+                <FormError message={change.error} />
                 {shown?.length ? (
                     <div class="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-4">
-                        {shown.map((project) => (
-                            <ProjectCard key={project.id} project={project} />
-                        ))}
+                        {shown.map((project) =>
+                            project.id === editingId ? (
+                                <ProjectForm
+                                    key={project.id}
+                                    initial={project}
+                                    submitLabel="Save"
+                                    onSubmit={async (fields) => {
+                                        replaceProject(await updateProject(project, fields));
+                                        setEditingId(undefined);
+                                    }}
+                                    onCancel={() => setEditingId(undefined)}
+                                />
+                            ) : (
+                                <ProjectCard
+                                    key={project.id}
+                                    project={project}
+                                    showOwner={owner === 'all'}
+                                    disabled={change.pending}
+                                    onEdit={() => setEditingId(project.id)}
+                                    onDelete={() => removeProject(project)}
+                                />
+                            ),
+                        )}
                     </div>
                 ) : null}
             </div>

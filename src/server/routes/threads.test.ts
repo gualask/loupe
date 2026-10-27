@@ -116,13 +116,6 @@ describe('threads', () => {
         const reopened = await editor.patch(`${base}/threads/${id}`, { status: 'open' });
         expect(reopened.body).toMatchObject({ status: 'open', resolvedAt: null });
     });
-
-    it('hides threads when the link is disabled, except from its editors', async () => {
-        const { t, editor, mockup, base } = await createSharedMockup();
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
-        expect((await t.client().get(`${base}/threads`)).status).toBe(404);
-        expect((await editor.get(`${base}/threads`)).status).toBe(200);
-    });
 });
 
 describe('comments', () => {
@@ -201,14 +194,23 @@ describe('comments', () => {
         ).toBe(404);
     });
 
-    it('keeps read-only mockups closed to viewers but not to editors', async () => {
+    it('keeps archived mockups readable but closed to everyone, editors included', async () => {
         const { editor, mockup, base, alice, threadId } = await threadWithReply();
-        await editor.patch(`/api/mockups/${mockup.id}`, { readOnly: true });
+        await editor.patch(`/api/mockups/${mockup.id}`, { archived: true });
         const reply = { id: crypto.randomUUID(), body: 'Late' };
+        for (const client of [alice.client, editor]) {
+            expect(await client.post(`${base}/threads/${threadId}/comments`, reply)).toMatchObject({
+                status: 403,
+                body: { error: 'archived' },
+            });
+        }
+        const threads = await alice.client.get(`${base}/threads`);
+        expect(threads.body.map((t: { id: string }) => t.id)).toEqual([threadId]);
+
+        await editor.patch(`/api/mockups/${mockup.id}`, { archived: false });
         expect(
             (await alice.client.post(`${base}/threads/${threadId}/comments`, reply)).status,
-        ).toBe(403);
-        expect((await editor.post(`${base}/threads/${threadId}/comments`, reply)).status).toBe(201);
+        ).toBe(201);
     });
 });
 

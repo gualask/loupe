@@ -47,7 +47,6 @@ describe('resolveAnchor', () => {
     const base = {
         offset: { x: 0, y: 0 },
         point: { x: 0, y: 0 },
-        viewport: { width: 1, height: 1 },
     };
 
     it('finds moved elements by their text', () => {

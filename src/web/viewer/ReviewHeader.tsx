@@ -3,6 +3,7 @@ import {
     IconDeviceDesktop,
     IconDeviceMobile,
     IconDeviceTablet,
+    IconHelp,
     IconLayoutSidebarRight,
     IconZoomScan,
 } from '@tabler/icons-preact';
@@ -10,94 +11,120 @@ import type { ComponentChildren } from 'preact';
 import { type Author, authorKey } from '../../shared/api/reviews.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { Badge } from '../ui/Badge.tsx';
-import { HEADER_BUTTON } from './styles.ts';
+import { IconButton } from '../ui/IconButton.tsx';
+import { Segmented } from '../ui/Segmented.tsx';
+import { buttonClass } from '../ui/styles.ts';
+import { SHORTCUTS } from './shortcuts.ts';
 
 /** Widths the mockup can be previewed at; null fills the window. */
 const VIEWPORTS = [
-    { label: 'Desktop', width: null, Icon: IconDeviceDesktop },
-    { label: 'Tablet', width: 768, Icon: IconDeviceTablet },
-    { label: 'Mobile', width: 390, Icon: IconDeviceMobile },
-] as const;
+    { label: 'Desktop', value: null, icon: <IconDeviceDesktop size={16} /> },
+    { label: 'Tablet', value: 768, icon: <IconDeviceTablet size={16} /> },
+    { label: 'Mobile', value: 390, icon: <IconDeviceMobile size={16} /> },
+];
 
 const MAX_AVATARS = 5;
 
 /**
- * Top bar of the review space: mockup name, preview width, the viewer's own name, who is here
- * and the panel toggle.
+ * Top bar of the review space: mockup name, the review actions (`tools`, on a row of their own on
+ * narrow screens), preview width, the viewer's own avatar, the others here, finishing the review,
+ * help and the panel toggle.
  */
 export function ReviewHeader({
     name,
-    readOnly,
+    archived,
     backHref,
+    tools,
     viewportWidth,
-    myName,
-    presence,
+    me,
+    others,
+    finish,
     openCount,
     panelOpen,
     onViewport,
+    onHelp,
     onTogglePanel,
 }: {
     name: string;
-    readOnly: boolean;
+    archived: boolean;
     /** Editors only: the mockup page they came from. */
     backHref: string | undefined;
+    tools: ComponentChildren;
     viewportWidth: number | null;
-    /** The viewer's own name, where they may change it. */
-    myName: ComponentChildren;
-    presence: Author[];
+    /** The viewer's own avatar, where they may change their name. */
+    me: ComponentChildren;
+    /** Everyone else here now. */
+    others: Author[];
+    /** Viewers only: the review button. */
+    finish: ComponentChildren;
     openCount: number;
     panelOpen: boolean;
     onViewport: (width: number | null) => void;
+    onHelp: () => void;
     onTogglePanel: () => void;
 }) {
     return (
-        <header class="flex h-12 shrink-0 items-center gap-3 border-stone-200 border-b bg-white px-4 text-sm">
-            {backHref ? (
-                <a
-                    href={backHref}
-                    title="Back to the mockup page"
-                    class={`-ml-2 shrink-0 ${HEADER_BUTTON}`}
-                >
-                    <IconArrowLeft size={18} />
-                    <span class="hidden sm:inline">Back</span>
-                </a>
-            ) : null}
-            <IconZoomScan size={18} stroke={1.75} class="shrink-0" />
-            <span class="truncate font-medium">{name}</span>
-            {readOnly ? <Badge>Read-only</Badge> : null}
-            <div class="ml-auto flex items-center gap-3">
-                <div class="hidden rounded-lg bg-stone-100 p-0.5 sm:flex">
-                    {VIEWPORTS.map(({ label, width, Icon }) => (
-                        <button
-                            key={label}
-                            type="button"
-                            title={label}
-                            aria-label={label}
-                            aria-pressed={viewportWidth === width}
-                            onClick={() => onViewport(width)}
-                            class={`rounded-md p-1.5 ${viewportWidth === width ? 'bg-white shadow-sm' : 'text-stone-500 hover:text-stone-900'}`}
-                        >
-                            <Icon size={16} />
-                        </button>
-                    ))}
+        <header class="relative flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-stone-200 border-b bg-white px-4 py-2 text-sm">
+            <div class="flex min-w-0 flex-1 items-center gap-2">
+                {backHref ? (
+                    <a
+                        href={backHref}
+                        aria-label="Back to the mockup page"
+                        title="Back to the mockup page"
+                        class={`-ml-2.5 ${buttonClass('ghost', 'sm')}`}
+                    >
+                        <IconArrowLeft size={18} />
+                        <span class="hidden sm:inline">Back</span>
+                    </a>
+                ) : (
+                    <IconZoomScan size={18} stroke={1.75} class="shrink-0" />
+                )}
+                <span class="truncate font-medium">{name}</span>
+                {archived ? <Badge>Archived</Badge> : null}
+            </div>
+            <div class="order-last flex w-full shrink-0 items-center justify-center gap-1 md:order-none md:w-auto">
+                {tools}
+            </div>
+            <div class="flex shrink-0 items-center justify-end gap-2 md:grow">
+                <div class="hidden lg:block">
+                    <Segmented
+                        label="Preview width"
+                        options={VIEWPORTS}
+                        value={viewportWidth}
+                        onChange={onViewport}
+                    />
                 </div>
-                {myName}
-                <div class="flex -space-x-1.5" title="People here now">
-                    {presence.slice(0, MAX_AVATARS).map((author) => (
-                        <Avatar key={authorKey(author)} author={author} size={26} />
-                    ))}
-                    {presence.length > MAX_AVATARS ? (
-                        <span class="grid size-[26px] place-items-center rounded-full bg-stone-200 text-[11px] ring-2 ring-white">
-                            +{presence.length - MAX_AVATARS}
-                        </span>
-                    ) : null}
-                </div>
+                {me}
+                {others.length ? (
+                    <div class="flex -space-x-1.5" title="Also here now">
+                        {others.slice(0, MAX_AVATARS).map((author) => (
+                            <Avatar key={authorKey(author)} author={author} size={26} />
+                        ))}
+                        {others.length > MAX_AVATARS ? (
+                            <span class="grid size-6.5 place-items-center rounded-full bg-stone-200 text-[11px] ring-2 ring-white">
+                                +{others.length - MAX_AVATARS}
+                            </span>
+                        ) : null}
+                    </div>
+                ) : null}
+                {finish}
+                <span class="hidden sm:contents">
+                    <IconButton
+                        label="Keyboard shortcuts"
+                        shortcut={SHORTCUTS['?'].label}
+                        size="md"
+                        onClick={onHelp}
+                    >
+                        <IconHelp size={18} />
+                    </IconButton>
+                </span>
                 <button
                     type="button"
                     onClick={onTogglePanel}
                     aria-pressed={panelOpen}
+                    aria-label={`Comments panel, ${openCount} open`}
                     title="Comments panel"
-                    class={HEADER_BUTTON}
+                    class={`-mr-2.5 ${buttonClass('ghost', 'sm')}`}
                 >
                     <IconLayoutSidebarRight size={18} />
                     <span class="tabular-nums">{openCount}</span>

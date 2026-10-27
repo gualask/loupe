@@ -2,7 +2,7 @@ import { IconLoader2 } from '@tabler/icons-preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { Resource } from '../lib/resource.ts';
 import { Button } from './Button.tsx';
-import { CenteredCard } from './CenteredCard.tsx';
+import { CenteredCard, CenteredScreen } from './CenteredCard.tsx';
 import { FormError } from './FormError.tsx';
 
 // Fast loads finish before the spinner shows, so it does not flash.
@@ -52,9 +52,9 @@ export function CenteredLoadStatus<T>({
 }) {
     if (resource.status === 'loading') {
         return (
-            <main class="grid min-h-dvh place-items-center bg-stone-50">
+            <CenteredScreen>
                 <Spinner />
-            </main>
+            </CenteredScreen>
         );
     }
     if (resource.status === 'missing') {

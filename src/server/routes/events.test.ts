@@ -44,7 +44,7 @@ describe('event stream', () => {
         await reader.cancel();
     });
 
-    it('ends open streams once the link is disabled or regenerated', async () => {
+    it('ends open streams once the link is regenerated', async () => {
         vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
         const { t, editor, mockup, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
@@ -62,16 +62,29 @@ describe('event stream', () => {
             return reader.read();
         };
 
-        const first = await open();
-        expect(await heartbeat(first)).toEqual({ done: false, value: ': heartbeat\n\n' });
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
-        expect((await heartbeat(first)).done).toBe(true);
-
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: true });
-        const second = await open();
+        const stream = await open();
+        expect(await heartbeat(stream)).toEqual({ done: false, value: ': heartbeat\n\n' });
         await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
-        expect((await heartbeat(second)).done).toBe(true);
+        expect((await heartbeat(stream)).done).toBe(true);
         expect((await t.app.request(`${base}/events`)).status).toBe(404);
+    });
+
+    it('tells open streams when the mockup is archived or unarchived', async () => {
+        const { t, editor, mockup, base, viewer } = await createSharedMockup();
+        const alice = await viewer('Alice');
+        const { reader, next } = await openStream(t, `${base}/events`, alice.key);
+        await next(); // presence
+        const archive = (archived: boolean) =>
+            editor.patch(`/api/mockups/${mockup.id}`, { archived });
+
+        await archive(true);
+        expect(await next()).toEqual({ type: 'archived', archived: true });
+        // Archiving again changes nothing, so nothing is sent.
+        await archive(true);
+        await archive(false);
+        expect(await next()).toEqual({ type: 'archived', archived: false });
+
+        await reader.cancel();
     });
 
     it('ends open streams of the previous version', async () => {

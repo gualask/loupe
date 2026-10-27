@@ -1,7 +1,10 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
-/** Modal dialog on the native <dialog> element: focus trap, Esc and backdrop for free. */
+/**
+ * Modal dialog on the native <dialog> element: focus trap, Esc and backdrop for free. The browser
+ * styles dialogs with their own colors, hence the explicit text color.
+ */
 export function Dialog({
     title,
     onClose,

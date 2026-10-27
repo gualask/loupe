@@ -2,6 +2,9 @@ import { IconMessage, IconX } from '@tabler/icons-preact';
 import type { Thread } from '../../shared/api/reviews.ts';
 import { authorColor } from '../lib/colors.ts';
 import { formatRelative, plural } from '../lib/format.ts';
+import { IconButton } from '../ui/IconButton.tsx';
+import { Segmented } from '../ui/Segmented.tsx';
+import { ROW_HOVER_CLASS } from '../ui/styles.ts';
 import type { ThreadFilter } from './filters.ts';
 
 const FILTERS: { value: ThreadFilter; label: string }[] = [
@@ -31,7 +34,7 @@ function ThreadItem({
             <button
                 type="button"
                 onClick={onSelect}
-                class={`flex w-full gap-3 px-4 py-3 text-left hover:bg-stone-50 ${active ? 'bg-stone-100' : ''}`}
+                class={`flex w-full gap-3 px-4 py-3 text-left ${active ? 'bg-stone-100' : ROW_HOVER_CLASS}`}
             >
                 <span
                     class={`grid size-6 shrink-0 place-items-center rounded-full font-semibold text-[11px] text-white ${thread.status === 'resolved' ? 'opacity-50' : ''}`}
@@ -90,32 +93,24 @@ export function ThreadPanel({
     onSelect: (thread: Thread) => void;
 }) {
     return (
-        // A full-width layer over the mockup on narrow screens, a column beside it otherwise.
-        <aside class="fixed inset-x-0 top-12 bottom-0 z-30 flex flex-col border-stone-200 bg-white md:static md:z-auto md:w-80 md:shrink-0 md:border-l">
-            <div class="flex gap-1 border-stone-100 border-b p-2">
-                {FILTERS.filter((f) => f.value !== 'mine' || canFilterMine).map((f) => (
-                    <button
-                        key={f.value}
-                        type="button"
-                        aria-pressed={filter === f.value}
-                        onClick={() => onFilter(f.value)}
-                        class={`rounded-md px-2.5 py-1 text-sm ${filter === f.value ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'}`}
-                    >
-                        {f.label}
-                    </button>
-                ))}
+        // A layer over the mockup on narrow screens, a column beside it otherwise.
+        <aside class="absolute inset-0 z-30 flex flex-col border-stone-200 bg-white md:static md:z-auto md:w-80 md:shrink-0 md:border-l">
+            <div class="border-stone-100 border-b p-2">
+                <Segmented
+                    label="Show"
+                    options={FILTERS.filter((f) => f.value !== 'mine' || canFilterMine)}
+                    value={filter}
+                    onChange={onFilter}
+                />
             </div>
             {viewerName ? (
-                <div class="flex items-center gap-2 border-stone-100 border-b bg-stone-50 px-4 py-2 text-sm">
+                <div class="flex items-center gap-2 border-stone-100 border-b bg-stone-50 py-1.5 pr-2 pl-4 text-sm">
                     Comments by <span class="font-medium">{viewerName}</span>
-                    <button
-                        type="button"
-                        onClick={onClearViewer}
-                        aria-label="Show everyone's comments"
-                        class="ml-auto rounded p-0.5 text-stone-500 hover:bg-stone-200"
-                    >
-                        <IconX size={14} />
-                    </button>
+                    <span class="ml-auto">
+                        <IconButton label="Show everyone's comments" onClick={onClearViewer}>
+                            <IconX size={14} />
+                        </IconButton>
+                    </span>
                 </div>
             ) : null}
             {threads.length ? (

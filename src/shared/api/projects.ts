@@ -2,8 +2,16 @@ import { z } from 'zod';
 import type { Author, Review } from './reviews.ts';
 import { updateSchema } from './update.ts';
 
-const nameSchema = z.string().trim().min(1, 'Required').max(120, 'At most 120 characters');
-const descriptionSchema = z.string().trim().max(500);
+/** Longest name of a project or mockup, also set on the inputs. */
+export const NAME_MAX_LENGTH = 120;
+export const DESCRIPTION_MAX_LENGTH = 500;
+
+const nameSchema = z
+    .string()
+    .trim()
+    .min(1, 'Required')
+    .max(NAME_MAX_LENGTH, `At most ${NAME_MAX_LENGTH} characters`);
+const descriptionSchema = z.string().trim().max(DESCRIPTION_MAX_LENGTH);
 
 export const createProjectRequestSchema = z.object({
     name: nameSchema,
@@ -17,10 +25,7 @@ export const updateProjectRequestSchema = updateSchema({
 
 export const updateMockupRequestSchema = updateSchema({
     name: nameSchema,
-    shareEnabled: z.boolean(),
-    /** ISO date-time, or null for no expiry. */
-    shareExpiresAt: z.iso.datetime({ offset: true }).nullable(),
-    readOnly: z.boolean(),
+    archived: z.boolean(),
 });
 
 export type Project = {
@@ -52,12 +57,12 @@ export type MockupActivity = {
 
 export type Mockup = {
     id: string;
-    projectId: string;
+    /** The project it belongs to, with its owner, for breadcrumbs. */
+    project: Pick<Project, 'id' | 'name' | 'owner'>;
     name: string;
     shareUrl: string;
-    shareEnabled: boolean;
-    shareExpiresAt: string | null;
-    readOnly: boolean;
+    /** When the work on it was concluded; archived mockups accept no review changes. */
+    archivedAt: string | null;
     version: MockupVersion;
     activity: MockupActivity;
     createdAt: string;
@@ -69,7 +74,8 @@ export type ProjectDetail = Project & { mockups: Mockup[] };
 export type SharedMockup = {
     mockupId: string;
     name: string;
-    readOnly: boolean;
+    /** Concluded: the comments can be read, nothing can be added or changed. */
+    archived: boolean;
     /** Number of the current version, the one the link shows. */
     version: number;
     contentUrl: string;

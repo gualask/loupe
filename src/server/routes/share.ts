@@ -18,7 +18,7 @@ export function shareApiRoutes({ db }: AppDeps) {
         const body: SharedMockup = {
             mockupId: row.mockup.id,
             name: row.mockup.name,
-            readOnly: row.mockup.readOnly,
+            archived: row.mockup.archivedAt !== null,
             version: row.version.number,
             contentUrl: `/s/${row.mockup.shareToken}/content`,
             me: actor?.author ?? null,
@@ -59,7 +59,7 @@ export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
     const loadBridge = bridgeLoader(deps.bridgeFile);
     return new Hono<AppEnv>().get('/:token/content', async (c) => {
         // Access is checked on every request: the browser revalidates its copy (no-cache), so a
-        // disabled or expired link stops serving it.
+        // regenerated link stops serving it.
         const { version } = sharedMockup(deps.db, c);
         const bridge = await loadBridge();
         // The stored file is addressed by its hash; the bridge changes only with Loupe itself.

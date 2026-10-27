@@ -6,7 +6,7 @@ import { findMockupByShareToken } from '../db/mockups.ts';
 import type { UserRow } from '../db/users.ts';
 import { findViewerByKey, touchViewer, type ViewerRow } from '../db/viewers.ts';
 import { apiError } from '../http.ts';
-import { canManage, isShared } from '../mockups/access.ts';
+import { canManage } from '../mockups/access.ts';
 import type { AppEnv } from '../types.ts';
 import { viewerAuthor } from './present.ts';
 
@@ -15,17 +15,12 @@ const TOUCH_INTERVAL_MS = 60 * 1000;
 
 export type SharedMockupRow = NonNullable<ReturnType<typeof findMockupByShareToken>>;
 
-/**
- * The mockup behind a share token, if the request may open it. Viewers need the link to be
- * enabled and not expired; the editors who manage the mockup can always open it, e.g. to
- * preview it before sharing.
- */
+/** The mockup behind the request's share token, while that link exists. */
 export function findSharedMockup(db: Db, c: Context<AppEnv>) {
-    const row = findMockupByShareToken(db, c.req.param('token') ?? '');
-    return row && (isShared(row.mockup) || canManage(c.var.user, row.ownerId)) ? row : undefined;
+    return findMockupByShareToken(db, c.req.param('token') ?? '');
 }
 
-/** Like findSharedMockup, but answers 404 when the link is not available. */
+/** Like findSharedMockup, but answers 404 once the link was regenerated or its mockup deleted. */
 export function sharedMockup(db: Db, c: Context<AppEnv>) {
     const row = findSharedMockup(db, c);
     if (!row) throw apiError(404, 'not_found', 'This link is not available.');

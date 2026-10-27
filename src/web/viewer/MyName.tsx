@@ -1,11 +1,11 @@
 import { IconUserCircle, IconX } from '@tabler/icons-preact';
 import type { Author } from '../../shared/api/reviews.ts';
 import { Avatar } from '../components/Avatar.tsx';
-import { HEADER_BUTTON } from './styles.ts';
+import { IconButton } from '../ui/IconButton.tsx';
 
 /**
- * The viewer's own name, which they can change, with a one-time hint when they still have a
- * generated one.
+ * The viewer's own avatar, which opens the name dialog, with a one-time hint when they still have
+ * a generated name.
  */
 export function MyName({
     me,
@@ -19,24 +19,23 @@ export function MyName({
     onDismissHint: () => void;
 }) {
     return (
-        <div class="relative">
-            <button
-                type="button"
+        // Below md the hint spans the header, below its second row, instead of hanging
+        // off the avatar.
+        <div class="md:relative">
+            <IconButton
+                label={me ? `${me.displayName}: change your name` : 'Add your name'}
+                variant={me ? 'avatar' : 'ghost'}
+                size="md"
                 onClick={onName}
-                title={me ? 'Change your name' : 'Add your name'}
-                class={HEADER_BUTTON}
             >
-                {me ? <Avatar author={me} size={22} /> : <IconUserCircle size={18} />}
-                <span class="hidden max-w-32 truncate md:inline">
-                    {me ? me.displayName : 'Add your name'}
-                </span>
-            </button>
+                {me ? <Avatar author={me} size={26} /> : <IconUserCircle size={20} />}
+            </IconButton>
             {hint && me ? (
                 <div
                     role="status"
-                    class="absolute top-full right-0 z-30 mt-2 w-64 rounded-lg bg-stone-900 p-3 text-white text-xs shadow-lg"
+                    class="absolute inset-x-2 top-full z-30 mt-2 rounded-lg bg-stone-900 p-3 text-white text-xs shadow-lg md:inset-x-auto md:right-0 md:w-64"
                 >
-                    <span class="absolute -top-1 right-5 size-2 rotate-45 bg-stone-900" />
+                    <span class="absolute -top-1 right-3 hidden size-2 rotate-45 bg-stone-900 md:block" />
                     <div class="flex items-start gap-2">
                         <p class="flex-1">
                             You are commenting as <strong>{me.displayName}</strong>. Add your name

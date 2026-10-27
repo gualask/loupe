@@ -1,6 +1,8 @@
 import { IconX } from '@tabler/icons-preact';
+import { IconButton } from '../ui/IconButton.tsx';
 import { Composer } from './Composer.tsx';
 import { generalDraft, setAside } from './drafts.ts';
+import { PopoverHeader } from './Popover.tsx';
 import type { ReviewSession, ThreadTarget } from './session.ts';
 
 /**
@@ -40,28 +42,28 @@ export function NewComment({
     }
 
     return (
-        <div class="flex flex-col gap-2 p-3">
-            <div class="flex items-center justify-between text-sm">
-                <span class="font-semibold">
-                    {target.kind === 'pin' ? 'New pin' : 'General comment'}
-                </span>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    aria-label="Cancel (Esc)"
-                    class="rounded p-1 text-stone-500 hover:bg-stone-100"
-                >
+        <div>
+            <PopoverHeader
+                title={
+                    <span class="font-semibold">
+                        {target.kind === 'pin' ? 'New pin' : 'General comment'}
+                    </span>
+                }
+            >
+                <IconButton label="Cancel" shortcut="Esc" onClick={onClose}>
                     <IconX size={16} />
-                </button>
+                </IconButton>
+            </PopoverHeader>
+            <div class="flex flex-col gap-2 px-3 py-2.5">
+                {thread.notice ? <p class="text-amber-800 text-xs">{thread.notice}</p> : null}
+                <Composer
+                    placeholder="Add a comment…"
+                    initial={thread.body}
+                    draftKey={target.kind === 'general' ? generalDraft(mockupId) : undefined}
+                    onSubmit={submit}
+                    onCancel={onClose}
+                />
             </div>
-            {thread.notice ? <p class="max-w-72 text-amber-800 text-xs">{thread.notice}</p> : null}
-            <Composer
-                placeholder="Add a comment…"
-                initial={thread.body}
-                draftKey={target.kind === 'general' ? generalDraft(mockupId) : undefined}
-                onSubmit={submit}
-                onCancel={onClose}
-            />
         </div>
     );
 }

@@ -58,7 +58,7 @@ export function createIdentity({
     base: string;
     shared: Signal<SharedMockup>;
     key: string | null;
-    /** Whether changes are accepted here at all, e.g. not on a read-only mockup. */
+    /** Whether changes are accepted here at all: not on archived or outdated versions. */
     mayAct: () => boolean;
     /** Headers of a change, with the viewer key. */
     headers: () => Record<string, string>;

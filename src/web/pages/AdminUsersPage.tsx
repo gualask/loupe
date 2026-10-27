@@ -3,7 +3,7 @@ import type { AccountLink, AdminUser, Role } from '../../shared/api/auth.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
-import { formatDateTime } from '../lib/format.ts';
+import { formatDateTime, ROLE_LABELS } from '../lib/format.ts';
 import { useResource } from '../lib/resource.ts';
 import { currentUser } from '../lib/session.ts';
 import { Badge } from '../ui/Badge.tsx';
@@ -12,10 +12,23 @@ import { CopyField } from '../ui/CopyField.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
-import { INPUT_CLASS } from '../ui/styles.ts';
+import { Section } from '../ui/Section.tsx';
+import { Select } from '../ui/Select.tsx';
+import { CARD_CLASS } from '../ui/styles.ts';
 
-const ROLE_LABELS: Record<Role, string> = { editor: 'Editor', admin: 'Admin' };
 const ROLES = Object.keys(ROLE_LABELS) as Role[];
+
+/** A single-use account link to copy, with how long it works: "<label> until <date>." */
+function AccountLinkField({ link, label }: { link: AccountLink; label: string }) {
+    return (
+        <div class="flex flex-col gap-1.5">
+            <CopyField value={link.url} />
+            <p class="text-stone-500 text-xs">
+                {label} until {formatDateTime(link.expiresAt)}.
+            </p>
+        </div>
+    );
+}
 
 function InviteSection() {
     const [role, setRole] = useState<Role>('editor');
@@ -26,40 +39,27 @@ function InviteSection() {
         run(async () => setLink(await api.post<AccountLink>('/admin/invites', { role })));
 
     return (
-        <section class="rounded-xl border border-stone-200 bg-white p-5">
-            <h2 class="font-semibold">Invite someone</h2>
-            <p class="mt-1 text-sm text-stone-500">
-                Create a single-use link and send it yourself. It expires after 48 hours.
-            </p>
-            <div class="mt-4 flex flex-wrap items-center gap-2">
-                <select
-                    aria-label="Role"
-                    value={role}
-                    onChange={(e) => setRole(e.currentTarget.value as Role)}
-                    class={INPUT_CLASS}
-                >
-                    {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                            {ROLE_LABELS[r]}
-                        </option>
-                    ))}
-                </select>
-                <Button disabled={pending} onClick={createInvite}>
-                    Create invite link
-                </Button>
-            </div>
-            {link ? (
-                <div class="mt-4 flex flex-col gap-1.5">
-                    <CopyField value={link.url} />
-                    <p class="text-stone-500 text-xs">
-                        Valid until {formatDateTime(link.expiresAt)}.
-                    </p>
+        <div class={CARD_CLASS}>
+            <Section
+                title="Invite someone"
+                description="Create a single-use link and send it yourself. It expires after 48 hours."
+            >
+                <div class="flex flex-wrap items-center gap-2">
+                    <Select label="Role" value={role} onChange={(r) => setRole(r as Role)}>
+                        {ROLES.map((r) => (
+                            <option key={r} value={r}>
+                                {ROLE_LABELS[r]}
+                            </option>
+                        ))}
+                    </Select>
+                    <Button disabled={pending} onClick={createInvite}>
+                        Create invite link
+                    </Button>
                 </div>
-            ) : null}
-            <div class="mt-3">
+                {link ? <AccountLinkField link={link} label="Valid" /> : null}
                 <FormError message={error} />
-            </div>
-        </section>
+            </Section>
+        </div>
     );
 }
 
@@ -83,18 +83,23 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
         <li class="flex flex-col gap-3 px-5 py-4">
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <div class="min-w-40 flex-1">
-                    <p class={`font-medium ${user.disabled ? 'text-stone-400 line-through' : ''}`}>
-                        {user.displayName}
-                        {isSelf && <span class="ml-2 text-stone-400 text-xs">(you)</span>}
+                    <p class="flex flex-wrap items-center gap-2">
+                        <span
+                            class={`font-medium ${user.disabled ? 'text-stone-400 line-through' : ''}`}
+                        >
+                            {user.displayName}
+                        </span>
+                        <Badge>{user.disabled ? 'Disabled' : ROLE_LABELS[user.role]}</Badge>
+                        {isSelf && <span class="text-stone-400 text-xs">(you)</span>}
                     </p>
                     <p class="text-sm text-stone-500">@{user.username}</p>
                 </div>
-                <Badge>{user.disabled ? 'Disabled' : ROLE_LABELS[user.role]}</Badge>
                 {!isSelf && (
                     <div class="flex flex-wrap gap-1">
                         {!user.disabled && (
                             <Button
                                 variant="ghost"
+                                size="sm"
                                 disabled={pending}
                                 onClick={() =>
                                     update({
@@ -106,12 +111,18 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
                             </Button>
                         )}
                         {!user.disabled && (
-                            <Button variant="ghost" disabled={pending} onClick={createResetLink}>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={pending}
+                                onClick={createResetLink}
+                            >
                                 Reset link
                             </Button>
                         )}
                         <Button
                             variant="ghost"
+                            size="sm"
                             disabled={pending}
                             onClick={() => update({ disabled: !user.disabled })}
                         >
@@ -121,12 +132,7 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
                 )}
             </div>
             {resetLink ? (
-                <div class="flex flex-col gap-1.5">
-                    <CopyField value={resetLink.url} />
-                    <p class="text-stone-500 text-xs">
-                        Password reset link, valid until {formatDateTime(resetLink.expiresAt)}.
-                    </p>
-                </div>
+                <AccountLinkField link={resetLink} label="Password reset link, valid" />
             ) : null}
             <FormError message={error} />
         </li>
@@ -145,7 +151,7 @@ export function AdminUsersPage() {
                 <PageHeader title="Users" />
                 <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
                     {users.status === 'ready' ? (
-                        <ul class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
+                        <ul class={`divide-y divide-stone-200 ${CARD_CLASS}`}>
                             {users.data.map((user) => (
                                 <UserRow key={user.id} user={user} onChange={replace} />
                             ))}

@@ -1,6 +1,6 @@
 # Loupe
 
-Drop an HTML mockup, share a link, collect pinned feedback.
+Upload an HTML mockup, share a link, collect pinned feedback.
 
 Loupe is a small self-hosted app for design reviews. An editor uploads a self-contained HTML
 mockup and shares its link; reviewers place pins on precise elements of the page and comment on
@@ -15,7 +15,7 @@ them, together and in real time. Reviewers need no account, and no email server 
 - Anonymous reviewers, with no sign-up prompt: generated names they can change, colors and live presence
 - New versions on the same link, each starting a fresh round of feedback
 - A review per reviewer, with a verdict: approved or changes requested
-- Share links with expiry, revocation and read-only mode
+- Share links that can be replaced, and mockups archived when the work is done
 - Mockups isolated in a sandbox, so uploaded code cannot reach the app
 - Editor and admin accounts created through invite links
 - One container, one port, one volume

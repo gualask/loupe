@@ -33,6 +33,7 @@ import { canManage } from '../mockups/access.ts';
 import { deleteUnreferencedFiles, storeMockupFile } from '../mockups/files.ts';
 import { toMockup, toProject } from '../mockups/present.ts';
 import { createUploadReader } from '../mockups/upload.ts';
+import type { Hub } from '../review/hub.ts';
 import { toReviewerSummaries } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
@@ -45,7 +46,7 @@ export function isMockupUpload(path: string) {
     return /^\/api\/(projects\/[^/]+\/mockups|mockups\/[^/]+\/versions)$/.test(path);
 }
 
-export function projectRoutes({ db, config }: AppDeps) {
+export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
     /** The project, if it exists and the signed-in user manages it (404 otherwise). */
     function managedProject(c: Context<AppEnv>, id: string) {
         const row = findProject(db, id);
@@ -53,11 +54,11 @@ export function projectRoutes({ db, config }: AppDeps) {
         return row;
     }
 
+    /** The mockup with its project, if the signed-in user manages it (404 otherwise). */
     function managedMockup(c: Context<AppEnv>, id: string) {
         const row = findMockup(db, id);
         if (!row) throw notFound();
-        managedProject(c, row.mockup.projectId);
-        return row;
+        return { ...row, project: managedProject(c, row.mockup.projectId) };
     }
 
     /** Feedback on the current versions of the given mockups, looked up per mockup. */
@@ -72,7 +73,8 @@ export function projectRoutes({ db, config }: AppDeps) {
     }
 
     /** A mockup as the API shows it, with the feedback on its current version. */
-    const presentMockup = (row: MockupWithVersion) => toMockup(config, row, activityOf([row])(row));
+    const presentMockup = (row: ReturnType<typeof managedMockup>) =>
+        toMockup(config, row, row.project, activityOf([row])(row));
 
     const cleanUpFiles = () =>
         deleteUnreferencedFiles(config.dataDir, () => referencedFileHashes(db));
@@ -96,7 +98,7 @@ export function projectRoutes({ db, config }: AppDeps) {
             const activity = activityOf(rows);
             const body: ProjectDetail = {
                 ...toProject(row),
-                mockups: rows.map((m) => toMockup(config, m, activity(m))),
+                mockups: rows.map((m) => toMockup(config, m, row, activity(m))),
             };
             return c.json(body);
         })
@@ -134,29 +136,42 @@ export function projectRoutes({ db, config }: AppDeps) {
         .post('/mockups/:id/versions', upload.limit, async (c) => {
             // Same link and viewers; the new version starts without threads or reviews.
             const { mockup } = managedMockup(c, c.req.param('id'));
+            const archived = () =>
+                apiError(409, 'archived', 'Unarchive this mockup to upload a new version.');
+            // Before receiving the file, then again when storing it (insertVersion).
+            if (mockup.archivedAt) throw archived();
             const { bytes, fileInfo } = await upload.read(c);
-            const added = await storeMockupFile(config.dataDir, bytes, (sha256) =>
+            const result = await storeMockupFile(config.dataDir, bytes, (sha256) =>
                 insertVersion(db, mockup.id, {
                     sha256,
                     ...fileInfo,
                     uploadedBy: signedInUser(c).id,
                 }),
             );
-            if (!added) {
+            if (result === 'archived') {
+                await cleanUpFiles();
+                throw archived();
+            }
+            if (result === 'same_file') {
                 throw apiError(409, 'same_file', 'This file is the same as the current version.');
             }
             return c.json(presentMockup(managedMockup(c, mockup.id)), 201);
         })
         .get('/mockups/:id', (c) => c.json(presentMockup(managedMockup(c, c.req.param('id')))))
         .patch('/mockups/:id', async (c) => {
-            const { mockup } = managedMockup(c, c.req.param('id'));
-            const { shareExpiresAt, ...changes } = await parseJson(c, updateMockupRequestSchema);
+            const { mockup, version } = managedMockup(c, c.req.param('id'));
+            const { archived, ...changes } = await parseJson(c, updateMockupRequestSchema);
             updateMockup(db, mockup.id, {
                 ...changes,
-                ...(shareExpiresAt !== undefined && {
-                    shareExpiresAt: shareExpiresAt ? new Date(shareExpiresAt) : null,
+                // Archiving again keeps the date the work was first concluded.
+                ...(archived !== undefined && {
+                    archivedAt: archived ? (mockup.archivedAt ?? new Date()) : null,
                 }),
             });
+            // Open review spaces stop or resume accepting changes at once.
+            if (archived !== undefined && archived !== !!mockup.archivedAt) {
+                hub.publish(version.id, { type: 'archived', archived });
+            }
             return c.json(presentMockup(managedMockup(c, mockup.id)));
         })
         .post('/mockups/:id/share/regenerate', (c) => {

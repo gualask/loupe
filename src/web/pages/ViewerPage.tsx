@@ -15,7 +15,7 @@ export function ViewerPage() {
             <CenteredLoadStatus
                 resource={loaded}
                 missingTitle="Link not available"
-                missing="This review link is disabled, expired or does not exist. Ask whoever shared it for a new one."
+                missing="This review link no longer works or never existed. Ask whoever shared it for a new one."
             />
         );
     }

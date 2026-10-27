@@ -20,7 +20,7 @@ describe('viewers', () => {
         expect((await alice.client.get(base)).body).toEqual({
             mockupId: mockup.id,
             name: 'home',
-            readOnly: false,
+            archived: false,
             version: 1,
             contentUrl: expect.stringMatching(/^\/s\/[\w-]{43}\/content$/),
             me: alice.viewer,
@@ -78,11 +78,11 @@ describe('viewers', () => {
         expect((await editor.patch(`${base}/viewers/me`, { displayName: 'Ed' })).status).toBe(403);
     });
 
-    it('does not accept viewers on read-only mockups', async () => {
+    it('does not accept viewers on archived mockups', async () => {
         const { t, editor, mockup, base } = await createSharedMockup();
-        await editor.patch(`/api/mockups/${mockup.id}`, { readOnly: true });
+        await editor.patch(`/api/mockups/${mockup.id}`, { archived: true });
         const res = await t.client().post(`${base}/viewers`, { displayName: 'Alice' });
-        expect(res).toMatchObject({ status: 403, body: { error: 'read_only' } });
+        expect(res).toMatchObject({ status: 403, body: { error: 'archived' } });
     });
 });
 

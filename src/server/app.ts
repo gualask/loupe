@@ -99,7 +99,7 @@ export function createApp(
     app.route('/api/s', threadRoutes({ ...deps, hub, access }));
     app.route('/api/s', eventRoutes({ ...deps, hub, access }));
     // Every project route resolves the signed-in user and answers 401 without one.
-    app.route('/api', projectRoutes(deps));
+    app.route('/api', projectRoutes({ ...deps, hub }));
     app.all('/api/*', () => {
         throw notFound();
     });

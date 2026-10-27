@@ -5,8 +5,10 @@ import { useAction, useFormSubmit } from '../lib/form.ts';
 import { VERDICT_LABELS } from '../lib/review.ts';
 import { Button } from '../ui/Button.tsx';
 import { Dialog } from '../ui/Dialog.tsx';
+import { Field } from '../ui/Field.tsx';
 import { FormError } from '../ui/FormError.tsx';
-import { INPUT_CLASS } from '../ui/styles.ts';
+import { Textarea } from '../ui/Input.tsx';
+import { Notice } from '../ui/Notice.tsx';
 import { TextField } from '../ui/TextField.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
 import { SHORTCUTS } from './shortcuts.ts';
@@ -106,17 +108,22 @@ export function ReviewDialog({
                         </label>
                     ))}
                 </fieldset>
-                <label class="flex flex-col gap-1.5 font-medium text-sm text-stone-700">
-                    Summary (optional)
-                    <textarea
-                        rows={3}
-                        maxLength={5000}
-                        value={summary}
-                        onInput={(e) => setSummary(e.currentTarget.value)}
-                        class={`font-normal ${INPUT_CLASS}`}
-                    />
-                </label>
-                {outdated ? <NewVersionNotice class="text-amber-800 text-sm" /> : null}
+                <Field label="Summary (optional)">
+                    {(control) => (
+                        <Textarea
+                            {...control}
+                            rows={3}
+                            maxLength={5000}
+                            value={summary}
+                            onInput={(e) => setSummary(e.currentTarget.value)}
+                        />
+                    )}
+                </Field>
+                {outdated ? (
+                    <Notice tone="warning">
+                        <NewVersionNotice />
+                    </Notice>
+                ) : null}
                 <div class="flex justify-end gap-2">
                     <Button variant="ghost" onClick={onClose}>
                         Cancel

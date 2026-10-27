@@ -6,5 +6,4 @@ export const PIN_ANCHOR: PinAnchor = {
     offset: { x: 0.5, y: 0.25 },
     text: 'Get started',
     point: { x: 640, y: 380 },
-    viewport: { width: 1440, height: 900 },
 };

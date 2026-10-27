@@ -8,6 +8,7 @@ import { IconButton } from '../ui/IconButton.tsx';
 import { Composer } from './Composer.tsx';
 import { replyDraft } from './drafts.ts';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
+import { PopoverHeader } from './Popover.tsx';
 import type { ReviewSession } from './session.ts';
 
 function CommentItem({ comment, session }: { comment: Comment; session: ReviewSession }) {
@@ -23,9 +24,9 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
         <li class="group flex gap-2.5">
             <Avatar author={comment.author} />
             <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 text-sm">
+                <div class="flex min-w-0 items-center gap-2 text-sm">
                     <AuthorName author={comment.author} />
-                    <span class="text-stone-400 text-xs" title={comment.createdAt}>
+                    <span class="min-w-0 truncate text-stone-400 text-xs" title={comment.createdAt}>
                         {formatRelative(comment.createdAt)}
                         {comment.editedAt ? ' · edited' : ''}
                     </span>
@@ -81,42 +82,41 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
 export function ThreadView({
     thread,
     label,
-    hint,
     session,
     onClose,
 }: {
     thread: Thread;
     label: string;
-    /** Shown above the comments, e.g. a viewport mismatch. */
-    hint?: string;
     session: ReviewSession;
     onClose: () => void;
 }) {
     const { canModerate, mockupId } = session.shared.value;
+    // Not on archived or outdated versions, which accept no changes.
+    const canResolve = canModerate && session.canWrite.value;
     const resolved = thread.status === 'resolved';
 
     return (
         <div class="flex max-h-[min(32rem,70vh)] flex-col">
-            <header class="flex items-center gap-2 border-stone-100 border-b px-3 py-2 text-sm">
-                <span class="font-semibold">{label}</span>
-                {resolved ? <Badge tone="good">Resolved</Badge> : null}
-                <span class="ml-auto flex">
-                    {canModerate ? (
-                        <IconButton
-                            label={resolved ? 'Reopen' : 'Resolve'}
-                            onClick={() =>
-                                session.setStatus(thread.id, resolved ? 'open' : 'resolved')
-                            }
-                        >
-                            {resolved ? <IconRotate size={16} /> : <IconCheck size={16} />}
-                        </IconButton>
-                    ) : null}
-                    <IconButton label="Close (Esc)" onClick={onClose}>
-                        <IconX size={16} />
+            <PopoverHeader
+                title={
+                    <>
+                        <span class="font-semibold">{label}</span>
+                        {resolved ? <Badge tone="good">Resolved</Badge> : null}
+                    </>
+                }
+            >
+                {canResolve ? (
+                    <IconButton
+                        label={resolved ? 'Reopen' : 'Resolve'}
+                        onClick={() => session.setStatus(thread.id, resolved ? 'open' : 'resolved')}
+                    >
+                        {resolved ? <IconRotate size={16} /> : <IconCheck size={16} />}
                     </IconButton>
-                </span>
-            </header>
-            {hint ? <p class="bg-amber-50 px-3 py-1.5 text-amber-800 text-xs">{hint}</p> : null}
+                ) : null}
+                <IconButton label="Close" shortcut="Esc" onClick={onClose}>
+                    <IconX size={16} />
+                </IconButton>
+            </PopoverHeader>
             <ol class="flex flex-col gap-3 overflow-y-auto px-3 py-3">
                 {thread.comments.map((comment) => (
                     <CommentItem key={comment.id} comment={comment} session={session} />
@@ -136,7 +136,7 @@ export function ThreadView({
                         onCancel={onClose}
                     />
                 ) : (
-                    <p class="text-stone-500 text-xs">This mockup is read-only.</p>
+                    <p class="text-stone-500 text-xs">This mockup is archived.</p>
                 )}
             </footer>
         </div>

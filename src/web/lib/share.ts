@@ -1,12 +1,11 @@
 import type { Mockup } from '../../shared/api/projects.ts';
 
 /** The token at the end of a mockup's share link (`<public URL>/s/<token>`). */
-export function shareToken(mockup: Mockup) {
-    return mockup.shareUrl.slice(mockup.shareUrl.lastIndexOf('/') + 1);
-}
+const shareToken = (mockup: Mockup) => mockup.shareUrl.slice(mockup.shareUrl.lastIndexOf('/') + 1);
 
-export function shareState(mockup: Mockup) {
-    if (!mockup.shareEnabled) return 'Not shared';
-    if (mockup.shareExpiresAt && new Date(mockup.shareExpiresAt) <= new Date()) return 'Expired';
-    return 'Shared';
-}
+/** The review space of a mockup, within this app; with `viewerId`, filtered to their pins. */
+export const reviewSpaceHref = (mockup: Mockup, viewerId?: string) =>
+    `/s/${shareToken(mockup)}${viewerId ? `?viewer=${viewerId}` : ''}`;
+
+/** The sandboxed document of a mockup's current version. */
+export const mockupContentSrc = (mockup: Mockup) => `/s/${shareToken(mockup)}/content`;

@@ -57,17 +57,19 @@ describe('projects', () => {
     });
 });
 
-describe('mockup upload', () => {
+describe('mockups', () => {
     it('stores the file and reports external references', async () => {
         const { t, project, mockup } = await editorWithMockup();
         expect(mockup).toEqual({
             id: expect.any(String),
-            projectId: project.id,
+            project: {
+                id: project.id,
+                name: 'Shop',
+                owner: { id: project.owner.id, displayName: 'Eddie' },
+            },
             name: 'checkout',
             shareUrl: expect.stringMatching(/^http:\/\/loupe\.test\/s\/[\w-]{43}$/),
-            shareEnabled: true,
-            shareExpiresAt: null,
-            readOnly: false,
+            archivedAt: null,
             version: {
                 number: 1,
                 originalFilename: 'checkout.html',
@@ -94,6 +96,23 @@ describe('mockup upload', () => {
         expect(blank).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
         const empty = await editor.patch(`/api/mockups/${mockup.id}`, {});
         expect(empty).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
+    });
+
+    it('archives a mockup, keeping the date of the first archiving', async () => {
+        const { t, editor, mockup } = await editorWithMockup();
+        const archive = (archived: boolean) =>
+            editor.patch(`/api/mockups/${mockup.id}`, { archived });
+        const shared = async () =>
+            (await t.client().get(`/api/s/${tokenFromUrl(mockup.shareUrl)}`)).body.archived;
+
+        const archived = await archive(true);
+        expect(archived).toMatchObject({ status: 200 });
+        expect(archived.body).toEqual({ ...mockup, archivedAt: expect.any(String) });
+        expect(await shared()).toBe(true);
+        expect((await archive(true)).body.archivedAt).toBe(archived.body.archivedAt);
+
+        expect((await archive(false)).body).toEqual(mockup);
+        expect(await shared()).toBe(false);
     });
 
     it('rejects files that are not HTML', async () => {
@@ -171,7 +190,7 @@ describe('share links', () => {
             expect(again.headers.get('content-security-policy')).toMatch(/^sandbox allow-scripts;/);
         }
 
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
+        await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
         const revoked = await t.app.request(content, { headers: { 'if-none-match': etag } });
         expect(revoked.status).toBe(404);
     });
@@ -183,30 +202,13 @@ describe('share links', () => {
         expect(res.body).toEqual({
             mockupId: mockup.id,
             name: 'checkout',
-            readOnly: false,
+            archived: false,
             version: 1,
             contentUrl: `/s/${token}/content`,
             me: null,
             canModerate: false,
             review: null,
         });
-    });
-
-    it('hides disabled or expired links from viewers but not from the owner', async () => {
-        const { t, editor, mockup } = await editorWithMockup();
-        const content = `/s/${tokenFromUrl(mockup.shareUrl)}/content`;
-
-        await editor.patch(`/api/mockups/${mockup.id}`, { shareEnabled: false });
-        expect((await t.client().get(content)).status).toBe(404);
-        expect((await editor.get(content)).status).toBe(200);
-
-        const past = new Date(Date.now() - 1000).toISOString();
-        const updated = await editor.patch(`/api/mockups/${mockup.id}`, {
-            shareEnabled: true,
-            shareExpiresAt: past,
-        });
-        expect(updated.body).toMatchObject({ shareEnabled: true, shareExpiresAt: past });
-        expect((await t.client().get(content)).status).toBe(404);
     });
 
     it('invalidates the old link when it is regenerated', async () => {
@@ -222,10 +224,10 @@ describe('share links', () => {
     it('does not let other editors manage the mockup', async () => {
         const { t, admin, mockup } = await editorWithMockup();
         const { editor: other } = await inviteEditor(t, admin, 'fran');
-        expect((await other.patch(`/api/mockups/${mockup.id}`, { readOnly: true })).status).toBe(
+        expect((await other.patch(`/api/mockups/${mockup.id}`, { archived: true })).status).toBe(
             404,
         );
-        expect((await admin.patch(`/api/mockups/${mockup.id}`, { readOnly: true })).status).toBe(
+        expect((await admin.patch(`/api/mockups/${mockup.id}`, { archived: true })).status).toBe(
             200,
         );
     });
@@ -286,6 +288,16 @@ describe('mockup versions', () => {
         });
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.version.number).toBe(1);
     });
+
+    it('refuses new versions of an archived mockup', async () => {
+        const { editor, mockup } = await editorWithMockup();
+        await editor.patch(`/api/mockups/${mockup.id}`, { archived: true });
+        const next = htmlFile('<!doctype html><html><body>v2</body></html>', 'checkout.html');
+        expect(await editor.post(`/api/mockups/${mockup.id}/versions`, next)).toMatchObject({
+            status: 409,
+            body: { error: 'archived' },
+        });
+    });
 });
 
 describe('mockup feedback', () => {
@@ -318,7 +330,7 @@ describe('mockup feedback', () => {
             lastActivityAt: expect.any(String),
         };
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual(activity);
-        const listed = await editor.get(`/api/projects/${mockup.projectId}`);
+        const listed = await editor.get(`/api/projects/${mockup.project.id}`);
         expect(listed.body.mockups[0].activity).toEqual(activity);
     });
 

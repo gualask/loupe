@@ -61,7 +61,6 @@ export function computeAnchor(el: Element, clientX: number, clientY: number): Pi
         },
         ...(text && { text }),
         point: { x: Math.round(clientX + scrollX), y: Math.round(clientY + scrollY) },
-        viewport: { width: innerWidth, height: innerHeight },
     };
 }
 

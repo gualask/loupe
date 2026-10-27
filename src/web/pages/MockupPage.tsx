@@ -6,7 +6,7 @@ import { AppShell } from '../components/AppShell.tsx';
 import { HtmlFileButton } from '../components/HtmlFileButton.tsx';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { MockupMenu } from '../components/MockupMenu.tsx';
-import { ReviewsPanel } from '../components/ReviewsPanel.tsx';
+import { ReviewersPanel } from '../components/ReviewersPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
@@ -20,7 +20,7 @@ import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { Notice } from '../ui/Notice.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
-import { buttonClass, CARD_CLASS } from '../ui/styles.ts';
+import { buttonClass, CARD_CLASS, ICON } from '../ui/styles.ts';
 import { TextField } from '../ui/TextField.tsx';
 
 function RenameForm({ mockup, onDone }: { mockup: Mockup; onDone: (mockup?: Mockup) => void }) {
@@ -99,7 +99,7 @@ export function MockupPage() {
                                         title="Same link and reviewers; the new version starts without comments."
                                         onFile={uploadFile}
                                     >
-                                        <IconUpload size={16} />
+                                        <IconUpload size={ICON.md} />
                                         {upload.pending ? (
                                             'Uploading…'
                                         ) : (
@@ -112,7 +112,7 @@ export function MockupPage() {
                                     </HtmlFileButton>
                                 )}
                                 <a href={reviewSpaceHref(mockup)} class={buttonClass()}>
-                                    <IconMessages size={16} />
+                                    <IconMessages size={ICON.md} />
                                     Open review space
                                 </a>
                                 <MockupMenu
@@ -150,7 +150,7 @@ export function MockupPage() {
                                 disabled={change.pending}
                                 onClick={() => archive(false)}
                             >
-                                <IconArchiveOff size={16} />
+                                <IconArchiveOff size={ICON.md} />
                                 Unarchive
                             </Button>
                         </div>
@@ -160,7 +160,7 @@ export function MockupPage() {
                 {mockup.version.externalRefs.length ? (
                     <Notice tone="warning">
                         <p class="flex items-center gap-1.5 font-medium">
-                            <IconAlertTriangle size={16} />
+                            <IconAlertTriangle size={ICON.md} />
                             Not self-contained
                         </p>
                         <p class="mt-1 text-xs">
@@ -176,7 +176,7 @@ export function MockupPage() {
                     </Notice>
                 ) : null}
                 {/* Side by side on wide screens, within the window: only the preview and the
-                    reviews scroll, each on its own, so sharing stays in reach. Columns may shrink
+                    reviewers scroll, each on its own, so sharing stays in reach. Columns may shrink
                     below their content, so long names truncate instead of widening the page. */}
                 <div class="grid grid-cols-[minmax(0,1fr)] gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div class={`overflow-hidden ${CARD_CLASS}`}>
@@ -193,7 +193,7 @@ export function MockupPage() {
                             <SharePanel mockup={mockup} onChange={replaceMockup} />
                         </div>
                         <div class={`flex flex-col overflow-hidden lg:min-h-0 ${CARD_CLASS}`}>
-                            <ReviewsPanel key={mockup.version.number} mockup={mockup} />
+                            <ReviewersPanel key={mockup.version.number} mockup={mockup} />
                         </div>
                     </div>
                 </div>

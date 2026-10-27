@@ -5,17 +5,17 @@ import { sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import type { BridgeMessage, PinPosition, ShortcutKey } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { useBridge } from './bridge.ts';
-import { HelpDialog, NameDialog, ReviewDialog } from './dialogs.tsx';
+import { HelpDialog, NameDialog } from './dialogs.tsx';
 import { useDraftRecovery } from './drafts.ts';
 import { ErrorToast } from './ErrorToast.tsx';
 import { filterThreads, type ThreadFilter } from './filters.ts';
-import { MyName } from './MyName.tsx';
 import { NewComment, type NewThread } from './NewComment.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
 import { Popover } from './Popover.tsx';
+import { ProfileMenu } from './ProfileMenu.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
-import { FinishButton, ReviewTools } from './ReviewTools.tsx';
+import { ReviewTools, SaveStatus } from './ReviewTools.tsx';
 import { useReviewSession } from './session.ts';
 import { useShortcuts } from './shortcuts.ts';
 import { ThreadPanel } from './ThreadPanel.tsx';
@@ -24,7 +24,7 @@ import { ThreadView } from './ThreadView.tsx';
 // Below this width the side panel covers the mockup instead of sitting beside it (Tailwind md).
 const OVERLAY_PANEL_QUERY = '(max-width: 767.98px)';
 
-type DialogName = 'name' | 'review' | 'help';
+type DialogName = 'name' | 'help';
 
 const panelCoversMockup = () => matchMedia(OVERLAY_PANEL_QUERY).matches;
 
@@ -239,48 +239,38 @@ export function ReviewSpace({
                 name={shared.name}
                 archived={shared.archived}
                 backHref={isEditor ? `/mockups/${shared.mockupId}` : undefined}
+                status={<SaveStatus state={session.saveState.value} />}
                 tools={
                     <ReviewTools
                         commentRef={commentButton}
                         inspecting={inspecting}
-                        pinsHidden={pinsHidden}
                         mayWrite={mayWrite}
-                        saveState={session.saveState.value}
                         onPin={startPin}
                         onComment={startComment}
-                        onTogglePins={() => setPinsHidden((hidden) => !hidden)}
                     />
                 }
                 viewportWidth={viewportWidth}
+                pinsHidden={pinsHidden}
                 me={
-                    canRename ? (
-                        <MyName
-                            me={me}
-                            hint={session.identity.nameHint.value}
-                            onName={() => setDialog('name')}
-                            onDismissHint={session.identity.dismissNameHint}
-                        />
-                    ) : null
+                    <ProfileMenu
+                        me={me}
+                        canRename={canRename}
+                        hint={session.identity.nameHint.value}
+                        onName={() => setDialog('name')}
+                        onHelp={() => setDialog('help')}
+                        onDismissHint={session.identity.dismissNameHint}
+                    />
                 }
                 others={
-                    // The viewer's own avatar is the name button, not one of the others.
-                    canRename && me
+                    // Their own avatar is the profile menu, not one of the others.
+                    me
                         ? session.presence.value.filter((author) => !sameAuthor(author, me))
                         : session.presence.value
-                }
-                finish={
-                    isEditor ? null : (
-                        <FinishButton
-                            review={shared.review}
-                            disabled={!mayWrite}
-                            onClick={() => withIdentity(() => setDialog('review'))}
-                        />
-                    )
                 }
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}
                 onViewport={setViewportWidth}
-                onHelp={() => setDialog('help')}
+                onTogglePins={() => setPinsHidden((hidden) => !hidden)}
                 onTogglePanel={() => setPanelOpen((open) => !open)}
             />
             {outdated ? (
@@ -332,14 +322,6 @@ export function ReviewSpace({
                         await session.identity.setName(name);
                         setDialog(null);
                     }}
-                    onClose={() => setDialog(null)}
-                />
-            ) : null}
-            {dialog === 'review' ? (
-                <ReviewDialog
-                    review={shared.review}
-                    outdated={outdated}
-                    onSubmit={session.submitReview}
                     onClose={() => setDialog(null)}
                 />
             ) : null}

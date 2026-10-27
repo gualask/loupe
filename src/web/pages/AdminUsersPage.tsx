@@ -90,9 +90,9 @@ function UserRow({ user, onChange }: { user: AdminUser; onChange: (user: AdminUs
                             {user.displayName}
                         </span>
                         <Badge>{user.disabled ? 'Disabled' : ROLE_LABELS[user.role]}</Badge>
-                        {isSelf && <span class="text-stone-400 text-xs">(you)</span>}
+                        {isSelf && <span class="text-stone-500 text-xs">(you)</span>}
                     </p>
-                    <p class="text-sm text-stone-500">@{user.username}</p>
+                    <p class="text-stone-500 text-xs">@{user.username}</p>
                 </div>
                 {!isSelf && (
                     <div class="flex flex-wrap gap-1">
@@ -151,7 +151,7 @@ export function AdminUsersPage() {
                 <PageHeader title="Users" />
                 <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
                     {users.status === 'ready' ? (
-                        <ul class={`divide-y divide-stone-200 ${CARD_CLASS}`}>
+                        <ul class={`divide-y divide-stone-100 ${CARD_CLASS}`}>
                             {users.data.map((user) => (
                                 <UserRow key={user.id} user={user} onChange={replace} />
                             ))}

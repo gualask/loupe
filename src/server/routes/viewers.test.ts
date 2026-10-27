@@ -25,7 +25,6 @@ describe('viewers', () => {
             contentUrl: expect.stringMatching(/^\/s\/[\w-]{43}\/content$/),
             me: alice.viewer,
             canModerate: false,
-            review: null,
         });
     });
 

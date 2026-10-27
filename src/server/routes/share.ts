@@ -2,11 +2,9 @@ import { readFile, stat } from 'node:fs/promises';
 import { Hono } from 'hono';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import { sha256 } from '../auth/crypto.ts';
-import { findReview } from '../db/reviews.ts';
 import { injectBridge, mockupHeaders } from '../mockups/document.ts';
 import { readMockupFile } from '../mockups/files.ts';
 import { shareActor, sharedMockup } from '../review/context.ts';
-import { toReview } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 /** Share-link metadata, mounted under /api/s. */
@@ -14,7 +12,6 @@ export function shareApiRoutes({ db }: AppDeps) {
     return new Hono<AppEnv>().get('/:token', (c) => {
         const row = sharedMockup(db, c);
         const actor = shareActor(db, c, row);
-        const review = actor?.kind === 'viewer' && findReview(db, row.version.id, actor.viewer.id);
         const body: SharedMockup = {
             mockupId: row.mockup.id,
             name: row.mockup.name,
@@ -23,7 +20,6 @@ export function shareApiRoutes({ db }: AppDeps) {
             contentUrl: `/s/${row.mockup.shareToken}/content`,
             me: actor?.author ?? null,
             canModerate: actor?.kind === 'editor',
-            review: review ? toReview(review) : null,
         };
         return c.json(body);
     });

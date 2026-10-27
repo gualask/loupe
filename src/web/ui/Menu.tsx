@@ -1,13 +1,16 @@
 import { IconCheck, IconDots } from '@tabler/icons-preact';
 import { type ComponentChildren, Fragment } from 'preact';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { type IconButtonSize, type IconButtonVariant, iconButtonClass } from './styles.ts';
+import { Kbd } from './Kbd.tsx';
+import { ICON, type IconButtonSize, type IconButtonVariant, iconButtonClass } from './styles.ts';
 
 export type MenuItem = {
     label: string;
     /** Tells apart items with the same label, such as two people sharing a name. */
     id?: string;
     icon?: ComponentChildren;
+    /** The key that does the same, shown at the end of the item. */
+    shortcut?: string;
     onSelect: () => void;
     /** One of a set of choices: whether it is the current one, marked with a check. */
     checked?: boolean;
@@ -34,7 +37,7 @@ const itemsOf = (menu: HTMLElement | null) => [
  */
 export function Menu({
     label,
-    icon = <IconDots size={18} />,
+    icon = <IconDots size={ICON.lg} />,
     variant,
     size,
     align = 'end',
@@ -155,7 +158,7 @@ export function Menu({
                     {header ? (
                         <div
                             id={`${id}-header`}
-                            class="mb-1 border-stone-200 border-b px-2.5 pt-1.5 pb-2.5"
+                            class="mb-1 border-stone-100 border-b px-2.5 pt-1.5 pb-2.5"
                         >
                             {header}
                         </div>
@@ -171,7 +174,7 @@ export function Menu({
                             <Fragment key={item.id ?? item.label}>
                                 {i > 0 &&
                                 (item.separate || (item.danger && !items[i - 1]?.danger)) ? (
-                                    <hr class="my-1 border-stone-200" />
+                                    <hr class="my-1 border-stone-100" />
                                 ) : null}
                                 <button
                                     type="button"
@@ -184,18 +187,23 @@ export function Menu({
                                     class={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm outline-none ${
                                         item.danger
                                             ? 'text-red-700 hover:bg-red-50 focus-visible:bg-red-50'
-                                            : 'text-stone-700 hover:bg-stone-100 focus-visible:bg-stone-100'
+                                            : 'text-stone-900 hover:bg-stone-100 focus-visible:bg-stone-100'
                                     }`}
                                 >
                                     {item.checked === undefined ? (
                                         item.icon
                                     ) : (
                                         <IconCheck
-                                            size={16}
+                                            size={ICON.md}
                                             class={item.checked ? '' : 'invisible'}
                                         />
                                     )}
                                     <span class="truncate">{item.label}</span>
+                                    {item.shortcut ? (
+                                        <span class="ml-auto pl-4">
+                                            <Kbd>{item.shortcut}</Kbd>
+                                        </span>
+                                    ) : null}
                                 </button>
                             </Fragment>
                         ))}

@@ -25,8 +25,7 @@ import {
     listProjects,
     updateProject,
 } from '../db/projects.ts';
-import { countSubmittedReviews, listReviews } from '../db/reviews.ts';
-import { countThreadsByViewer, threadActivity } from '../db/threads.ts';
+import { countThreadsByViewer, lastCommentsByViewer, threadActivity } from '../db/threads.ts';
 import { listViewers } from '../db/viewers.ts';
 import { apiError, notFound, parseJson } from '../http.ts';
 import { canManage } from '../mockups/access.ts';
@@ -65,11 +64,7 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
     function activityOf(rows: MockupWithVersion[]) {
         const versionIds = rows.map((row) => row.version.id);
         const threadsOf = threadActivity(db, versionIds);
-        const reviewsOf = countSubmittedReviews(db, versionIds);
-        return ({ version }: MockupWithVersion) => ({
-            ...threadsOf(version.id),
-            submittedReviews: reviewsOf(version.id),
-        });
+        return ({ version }: MockupWithVersion) => threadsOf(version.id);
     }
 
     /** A mockup as the API shows it, with the feedback on its current version. */
@@ -134,7 +129,7 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             return c.json(presentMockup(managedMockup(c, id)), 201);
         })
         .post('/mockups/:id/versions', upload.limit, async (c) => {
-            // Same link and viewers; the new version starts without threads or reviews.
+            // Same link and viewers; the new version starts without threads.
             const { mockup } = managedMockup(c, c.req.param('id'));
             const archived = () =>
                 apiError(409, 'archived', 'Unarchive this mockup to upload a new version.');
@@ -179,13 +174,13 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             updateMockup(db, mockup.id, { shareToken: randomToken() });
             return c.json(presentMockup(managedMockup(c, mockup.id)));
         })
-        .get('/mockups/:id/reviews', (c) => {
+        .get('/mockups/:id/reviewers', (c) => {
             const { mockup, version } = managedMockup(c, c.req.param('id'));
             return c.json(
                 toReviewerSummaries(
                     listViewers(db, mockup.id),
                     countThreadsByViewer(db, version.id),
-                    listReviews(db, version.id),
+                    lastCommentsByViewer(db, version.id),
                 ),
             );
         })

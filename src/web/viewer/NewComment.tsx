@@ -1,5 +1,6 @@
 import { IconX } from '@tabler/icons-preact';
 import { IconButton } from '../ui/IconButton.tsx';
+import { ICON } from '../ui/styles.ts';
 import { Composer } from './Composer.tsx';
 import { generalDraft, setAside } from './drafts.ts';
 import { PopoverHeader } from './Popover.tsx';
@@ -51,7 +52,7 @@ export function NewComment({
                 }
             >
                 <IconButton label="Cancel" shortcut="Esc" onClick={onClose}>
-                    <IconX size={16} />
+                    <IconX size={ICON.md} />
                 </IconButton>
             </PopoverHeader>
             <div class="flex flex-col gap-2 px-3 py-2.5">

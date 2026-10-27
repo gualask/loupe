@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { storage } from '../lib/storage.ts';
 import { IconButton } from '../ui/IconButton.tsx';
 import { Textarea } from '../ui/Input.tsx';
+import { ICON } from '../ui/styles.ts';
 
 /**
  * Comment box: Enter sends, Shift+Enter adds a line, Esc cancels. With `draftKey`, unsent text
@@ -83,7 +84,7 @@ export function Composer({
                 disabled={!text.trim()}
                 onClick={submit}
             >
-                <IconSend2 size={18} />
+                <IconSend2 size={ICON.lg} />
             </IconButton>
         </div>
     );

@@ -1,37 +1,30 @@
-import {
-    IconAlertTriangle,
-    IconChevronRight,
-    IconFileTypeHtml,
-    IconMessage,
-} from '@tabler/icons-preact';
+import { IconAlertTriangle, IconChevronRight, IconFileTypeHtml } from '@tabler/icons-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Mockup, type MockupActivity, NAME_MAX_LENGTH } from '../../shared/api/projects.ts';
 import { useFormSubmit } from '../lib/form.ts';
 import { formatBytes, formatDate, formatRelative, plural } from '../lib/format.ts';
 import { renameMockup } from '../lib/mockups.ts';
-import { formatThreadCounts } from '../lib/review.ts';
+import { Badge } from '../ui/Badge.tsx';
 import { Button } from '../ui/Button.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { Input } from '../ui/Input.tsx';
-import { CARD_CLASS, ROW_HOVER_CLASS } from '../ui/styles.ts';
+import { CARD_CLASS, ICON, ROW_HOVER_CLASS } from '../ui/styles.ts';
 import { MockupMenu } from './MockupMenu.tsx';
+import { ThreadCounts } from './ThreadCounts.tsx';
 
 function Activity({ activity }: { activity: MockupActivity }) {
     if (!activity.lastActivityAt)
-        return <span class="text-stone-400 text-xs">No comments yet</span>;
+        return <span class="text-stone-500 text-xs">No comments yet</span>;
     return (
-        <span class="flex flex-col text-xs">
-            <span class="flex items-center gap-1.5 text-stone-700">
-                <IconMessage size={14} class="text-stone-400" />
-                {formatThreadCounts(activity.openThreads, activity.resolvedThreads)}
-            </span>
+        <span class="flex flex-col gap-0.5 text-xs">
+            <ThreadCounts open={activity.openThreads} resolved={activity.resolvedThreads} />
             <span class="text-stone-500">last {formatRelative(activity.lastActivityAt)}</span>
         </span>
     );
 }
 
 // Columns of the mockup list, shared by its header and its rows; the last one fits the menu.
-const MOCKUP_COLUMNS = 'md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_1.75rem]';
+const MOCKUP_COLUMNS = 'md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_5rem_6rem_1.75rem]';
 
 /** The mockup name in an inline form: Enter saves, Escape cancels. */
 function RenameRow({ mockup, onDone }: { mockup: Mockup; onDone: (mockup?: Mockup) => void }) {
@@ -46,7 +39,7 @@ function RenameRow({ mockup, onDone }: { mockup: Mockup; onDone: (mockup?: Mocku
     return (
         <li class="px-5 py-3">
             <form class="flex flex-wrap items-center gap-3" onSubmit={submit}>
-                <IconFileTypeHtml size={22} class="shrink-0 text-stone-400" />
+                <IconFileTypeHtml size={ICON.xl} class="shrink-0 text-stone-400" />
                 <Input
                     aria-label="Mockup name"
                     required
@@ -93,30 +86,35 @@ function MockupRow({
             class={`relative flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 ${ROW_HOVER_CLASS} ${MOCKUP_COLUMNS}`}
         >
             <div class="flex min-w-48 flex-1 items-center gap-3">
-                <IconFileTypeHtml size={22} class="shrink-0 text-stone-400" />
+                <IconFileTypeHtml size={ICON.xl} class="shrink-0 text-stone-400" />
                 <div class="min-w-0">
-                    <a
-                        href={`/mockups/${mockup.id}`}
-                        class="block truncate font-medium after:absolute after:inset-0"
-                    >
-                        {mockup.name}
-                    </a>
-                    <p class="truncate text-stone-500 text-xs">
-                        {mockup.version.number > 1 ? `v${mockup.version.number} · ` : ''}
-                        {mockup.version.originalFilename} · {formatBytes(mockup.version.sizeBytes)}
-                    </p>
+                    <div class="flex min-w-0 items-center gap-2">
+                        <a
+                            href={`/mockups/${mockup.id}`}
+                            class="truncate font-medium after:absolute after:inset-0"
+                        >
+                            {mockup.name}
+                        </a>
+                        {mockup.version.number > 1 ? (
+                            <Badge>{`v${mockup.version.number}`}</Badge>
+                        ) : null}
+                    </div>
+                    <p class="truncate text-stone-500 text-xs">{mockup.version.originalFilename}</p>
                     {external ? (
                         <p
                             class="flex items-center gap-1 text-amber-700 text-xs"
                             title="This file loads external resources"
                         >
-                            <IconAlertTriangle size={14} />
+                            <IconAlertTriangle size={ICON.sm} />
                             {plural(external, 'external resource')}
                         </p>
                     ) : null}
                 </div>
             </div>
             <Activity activity={mockup.activity} />
+            <span class="text-stone-500 text-xs tabular-nums md:text-right">
+                {formatBytes(mockup.version.sizeBytes)}
+            </span>
             <span class="text-stone-500 text-xs md:text-right">
                 {formatDate(mockup.version.createdAt)}
             </span>
@@ -149,14 +147,15 @@ function MockupTable({
     return (
         <div class={`overflow-hidden ${CARD_CLASS}`}>
             <div
-                class={`hidden gap-x-4 border-stone-200 border-b bg-stone-50 px-5 py-2 font-medium text-stone-500 text-xs ${MOCKUP_COLUMNS}`}
+                class={`hidden gap-x-4 border-stone-100 border-b bg-stone-50 px-5 py-2 font-medium text-stone-500 text-xs ${MOCKUP_COLUMNS}`}
             >
                 <span>Mockup</span>
                 <span>Comments</span>
+                <span class="text-right">Size</span>
                 <span class="text-right">Uploaded</span>
                 <span class="sr-only">Actions</span>
             </div>
-            <ul class="divide-y divide-stone-200">
+            <ul class="divide-y divide-stone-100">
                 {mockups.map((mockup) =>
                     mockup.id === renamingId ? (
                         <RenameRow
@@ -202,7 +201,7 @@ export function MockupList({ mockups, ...actions }: RowActions & { mockups: Mock
                         class="-ml-1 flex w-fit items-center gap-1 rounded-md px-1 py-0.5 font-medium text-sm text-stone-600 hover:text-stone-900"
                     >
                         <IconChevronRight
-                            size={16}
+                            size={ICON.md}
                             class={`transition-transform ${showArchived ? 'rotate-90' : ''}`}
                         />
                         Archived ({archived.length})

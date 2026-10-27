@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pins anchored to page elements, picked with an inspector-style selector, that follow layout changes
 - General comments, threaded replies, editing, deletion, and resolve or reopen by editors
 - Anonymous reviewers with generated names they can change, colors and live presence, with no account or sign-up prompt
-- Reviews per reviewer with a verdict, listed to editors with their open and resolved comments
+- Reviewers listed to editors with their open and resolved comments and last activity
 - Real-time updates, saving with automatic retry while offline, and unsent drafts kept on reload
 - Viewport switcher, keyboard shortcuts and a review space usable on phones
 - Admin and editor accounts through single-use setup, invite and password-reset links

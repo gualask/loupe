@@ -39,11 +39,6 @@ export const updateCommentRequestSchema = z.object({ body: bodySchema });
 
 export const updateThreadRequestSchema = z.object({ status: z.enum(['open', 'resolved']) });
 
-export const submitReviewRequestSchema = z.object({
-    verdict: z.enum(['approved', 'changes_requested']),
-    summary: z.string().trim().max(5000).default(''),
-});
-
 /** Who wrote something, or who is present. Editors have no color. */
 export type Author =
     | { kind: 'viewer'; id: string; displayName: string; colorIndex: number }
@@ -81,29 +76,23 @@ export type Thread = {
     comments: Comment[];
 };
 
-export type Review = {
-    viewerId: string;
-    status: 'in_progress' | 'submitted';
-    verdict: 'approved' | 'changes_requested' | null;
-    summary: string;
-    submittedAt: string | null;
-};
-
 export type RegisteredViewer = { key: string; viewer: Author };
 
 /** A viewer of a mockup as listed to its editors. */
 export type ReviewerSummary = {
     viewer: Extract<Author, { kind: 'viewer' }>;
-    review: Review | null;
     threads: { open: number; resolved: number };
-    lastSeenAt: string;
+    /**
+     * When they last wrote or edited a comment on this version; null before. Opening the link
+     * alone is not recorded.
+     */
+    lastActivityAt: string | null;
 };
 
 /** Payload of each message on the share-link event stream. */
 export type ShareEvent =
     | { type: 'thread'; thread: Thread }
     | { type: 'thread-deleted'; id: string }
-    | { type: 'review'; review: Review }
     | { type: 'presence'; participants: Author[] }
     /** A viewer changed their name: it shows wherever they appear. */
     | { type: 'viewer'; viewer: Extract<Author, { kind: 'viewer' }> }

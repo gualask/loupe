@@ -2,6 +2,7 @@ import { IconArchive, IconArchiveOff, IconPencil, IconTrash } from '@tabler/icon
 import type { Mockup } from '../../shared/api/projects.ts';
 import { Menu } from '../ui/Menu.tsx';
 import type { IconButtonSize } from '../ui/styles.ts';
+import { ICON } from '../ui/styles.ts';
 
 /** The actions on a mockup, the same in the project list and on the mockup page. */
 export function MockupMenu({
@@ -26,21 +27,21 @@ export function MockupMenu({
             size={size}
             disabled={disabled}
             items={[
-                { label: 'Rename', icon: <IconPencil size={16} />, onSelect: onRename },
+                { label: 'Rename', icon: <IconPencil size={ICON.md} />, onSelect: onRename },
                 archived
                     ? {
                           label: 'Unarchive',
-                          icon: <IconArchiveOff size={16} />,
+                          icon: <IconArchiveOff size={ICON.md} />,
                           onSelect: () => onSetArchived(false),
                       }
                     : {
                           label: 'Archive',
-                          icon: <IconArchive size={16} />,
+                          icon: <IconArchive size={ICON.md} />,
                           onSelect: () => onSetArchived(true),
                       },
                 {
                     label: 'Delete…',
-                    icon: <IconTrash size={16} />,
+                    icon: <IconTrash size={ICON.md} />,
                     danger: true,
                     onSelect: onDelete,
                 },

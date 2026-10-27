@@ -1,6 +1,6 @@
-import { IconZoomScan } from '@tabler/icons-preact';
 import type { ComponentChildren } from 'preact';
-import { CARD_CLASS } from './styles.ts';
+import { Logo } from './Logo.tsx';
+import { CARD_CLASS, TEXT } from './styles.ts';
 
 /** A full-page screen with its content in the middle. */
 export function CenteredScreen({ children }: { children: ComponentChildren }) {
@@ -12,12 +12,9 @@ export function CenteredCard({ title, children }: { title: string; children: Com
     return (
         <CenteredScreen>
             <div class="flex w-full max-w-sm flex-col items-center gap-6">
-                <div class="flex items-center gap-2 font-semibold text-lg">
-                    <IconZoomScan size={24} stroke={1.75} />
-                    Loupe
-                </div>
+                <Logo />
                 <section class={`w-full p-6 shadow-sm ${CARD_CLASS}`}>
-                    <h1 class="mb-5 font-semibold text-xl tracking-tight">{title}</h1>
+                    <h1 class={`mb-5 ${TEXT.title}`}>{title}</h1>
                     {children}
                 </section>
             </div>

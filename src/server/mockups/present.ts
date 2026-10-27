@@ -26,7 +26,6 @@ export function toProject(row: ProjectWithOwner & { mockupCount: number }): Proj
 export type ActivityRow = {
     openThreads: number;
     resolvedThreads: number;
-    submittedReviews: number;
     lastActivityAt: Date | null;
 };
 

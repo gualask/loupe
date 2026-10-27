@@ -60,19 +60,6 @@ CREATE TABLE `projects` (
 	CONSTRAINT `fk_projects_owner_id_users_id_fk` FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `reviews` (
-	`id` text PRIMARY KEY,
-	`version_id` text NOT NULL,
-	`viewer_id` text NOT NULL,
-	`status` text DEFAULT 'in_progress' NOT NULL,
-	`verdict` text,
-	`summary` text DEFAULT '' NOT NULL,
-	`submitted_at` integer,
-	`created_at` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
-	CONSTRAINT `fk_reviews_version_id_mockup_versions_id_fk` FOREIGN KEY (`version_id`) REFERENCES `mockup_versions`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_reviews_viewer_id_viewers_id_fk` FOREIGN KEY (`viewer_id`) REFERENCES `viewers`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id_hash` text PRIMARY KEY,
 	`user_id` text NOT NULL,
@@ -117,7 +104,6 @@ CREATE TABLE `viewers` (
 	`display_name` text NOT NULL,
 	`color_index` integer NOT NULL,
 	`created_at` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
-	`last_seen_at` integer NOT NULL,
 	CONSTRAINT `fk_viewers_mockup_id_mockups_id_fk` FOREIGN KEY (`mockup_id`) REFERENCES `mockups`(`id`) ON DELETE CASCADE
 );
 --> statement-breakpoint
@@ -125,7 +111,6 @@ CREATE INDEX `comments_thread_idx` ON `comments` (`thread_id`);--> statement-bre
 CREATE UNIQUE INDEX `mockup_versions_number_idx` ON `mockup_versions` (`mockup_id`,`number`);--> statement-breakpoint
 CREATE INDEX `mockups_project_idx` ON `mockups` (`project_id`);--> statement-breakpoint
 CREATE INDEX `projects_owner_idx` ON `projects` (`owner_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `reviews_version_viewer_idx` ON `reviews` (`version_id`,`viewer_id`);--> statement-breakpoint
 CREATE INDEX `sessions_user_idx` ON `sessions` (`user_id`);--> statement-breakpoint
 CREATE INDEX `threads_version_idx` ON `threads` (`version_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `threads_number_idx` ON `threads` (`version_id`,`number`);--> statement-breakpoint

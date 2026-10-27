@@ -16,30 +16,12 @@ describe('event stream', () => {
 
         expect(await next()).toEqual({ type: 'presence', participants: [bob.viewer] });
 
-        // Alice's review stays private to Alice; her thread is shared with everyone.
         const id = crypto.randomUUID();
         await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
         expect(await next()).toMatchObject({
             type: 'thread',
             thread: { id, author: alice.viewer },
         });
-
-        await bob.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'Yo',
-        });
-        expect(await next()).toEqual({
-            type: 'review',
-            review: {
-                viewerId: bob.viewer.id,
-                status: 'in_progress',
-                verdict: null,
-                summary: '',
-                submittedAt: null,
-            },
-        });
-        expect(await next()).toMatchObject({ type: 'thread', thread: { author: bob.viewer } });
 
         await reader.cancel();
     });

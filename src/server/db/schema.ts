@@ -113,30 +113,8 @@ export const viewers = sqliteTable(
         displayName: text('display_name').notNull(),
         colorIndex: integer('color_index').notNull(),
         createdAt: createdAt(),
-        lastSeenAt: timestamp('last_seen_at').notNull(),
     },
     (t) => [index('viewers_mockup_idx').on(t.mockupId)],
-);
-
-export const reviews = sqliteTable(
-    'reviews',
-    {
-        id: id(),
-        versionId: text('version_id')
-            .notNull()
-            .references(() => mockupVersions.id, { onDelete: 'cascade' }),
-        viewerId: text('viewer_id')
-            .notNull()
-            .references(() => viewers.id, { onDelete: 'cascade' }),
-        status: text('status', { enum: ['in_progress', 'submitted'] })
-            .notNull()
-            .default('in_progress'),
-        verdict: text('verdict', { enum: ['approved', 'changes_requested'] }),
-        summary: text('summary').notNull().default(''),
-        submittedAt: timestamp('submitted_at'),
-        createdAt: createdAt(),
-    },
-    (t) => [uniqueIndex('reviews_version_viewer_idx').on(t.versionId, t.viewerId)],
 );
 
 export const threads = sqliteTable(

@@ -1,4 +1,5 @@
 import { IconX } from '@tabler/icons-preact';
+import { ICON } from '../ui/styles.ts';
 
 /** A change the server rejected, shown over the review space until dismissed. */
 export function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -9,7 +10,7 @@ export function ErrorToast({ message, onDismiss }: { message: string; onDismiss:
         >
             {message}
             <button type="button" aria-label="Dismiss" onClick={onDismiss}>
-                <IconX size={16} />
+                <IconX size={ICON.md} />
             </button>
         </div>
     );

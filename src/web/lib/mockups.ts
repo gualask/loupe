@@ -14,15 +14,10 @@ export const renameMockup = (mockup: Mockup, name: string) =>
 export const setArchived = (mockup: Mockup, archived: boolean) =>
     api.patch<Mockup>(`/mockups/${mockup.id}`, { archived });
 
-/** The feedback a new version would hide, e.g. "3 comment threads and 1 review"; empty without. */
-function hiddenFeedback({ openThreads, resolvedThreads, submittedReviews }: MockupActivity) {
+/** The feedback a new version would hide, e.g. "3 comment threads"; empty without. */
+function hiddenFeedback({ openThreads, resolvedThreads }: MockupActivity) {
     const threads = openThreads + resolvedThreads;
-    return [
-        threads ? plural(threads, 'comment thread') : '',
-        submittedReviews ? plural(submittedReviews, 'review') : '',
-    ]
-        .filter(Boolean)
-        .join(' and ');
+    return threads ? plural(threads, 'comment thread') : '';
 }
 
 /** Uploads the next version, first confirming when it would hide feedback on the current one. */

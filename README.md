@@ -14,7 +14,7 @@ them, together and in real time. Reviewers need no account, and no email server 
 - General comments, threads, resolve and reopen
 - Anonymous reviewers, with no sign-up prompt: generated names they can change, colors and live presence
 - New versions on the same link, each starting a fresh round of feedback
-- A review per reviewer, with a verdict: approved or changes requested
+- Each reviewer listed to editors with their open and resolved comments
 - Share links that can be replaced, and mockups archived when the work is done
 - Mockups isolated in a sandbox, so uploaded code cannot reach the app
 - Editor and admin accounts created through invite links

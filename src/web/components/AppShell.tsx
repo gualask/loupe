@@ -1,11 +1,14 @@
-import { IconLogout, IconSelector, IconUsers, IconZoomScan } from '@tabler/icons-preact';
+import { IconLogout, IconSelector, IconUsers } from '@tabler/icons-preact';
 import { type ComponentChildren, Fragment } from 'preact';
 import { useLocation } from 'preact-iso';
 import type { User } from '../../shared/api/auth.ts';
 import { ROLE_LABELS } from '../lib/format.ts';
 import { currentUser, logout } from '../lib/session.ts';
 import { useWorkspaceOwners, type Workspace, workspaceHref } from '../lib/workspaces.ts';
+import { Badge } from '../ui/Badge.tsx';
+import { Logo } from '../ui/Logo.tsx';
 import { Menu, type MenuItem } from '../ui/Menu.tsx';
+import { ICON, TOP_BAR_CLASS } from '../ui/styles.ts';
 import { Avatar } from './Avatar.tsx';
 
 /** A page above the current one, linked from the top bar. */
@@ -42,7 +45,7 @@ function WorkspaceSwitcher({ current, me }: { current: Workspace; me: User }) {
     return (
         <Menu
             label="Switch workspace"
-            icon={<IconSelector size={16} />}
+            icon={<IconSelector size={ICON.md} />}
             align="start"
             items={[
                 choice('My workspace', me.id),
@@ -65,7 +68,7 @@ function AccountMenu({ user }: { user: User }) {
     const items: MenuItem[] = [
         {
             label: 'Sign out',
-            icon: <IconLogout size={16} />,
+            icon: <IconLogout size={ICON.md} />,
             separate: true,
             onSelect: () => void signOut(),
         },
@@ -73,7 +76,7 @@ function AccountMenu({ user }: { user: User }) {
     if (user.role === 'admin') {
         items.unshift({
             label: 'Users',
-            icon: <IconUsers size={16} />,
+            icon: <IconUsers size={ICON.md} />,
             onSelect: () => route('/admin/users'),
         });
     }
@@ -84,13 +87,16 @@ function AccountMenu({ user }: { user: User }) {
             variant="avatar"
             size="md"
             // The same avatar an editor has in review spaces.
-            icon={<Avatar author={{ kind: 'editor', ...user }} size={26} />}
+            icon={<Avatar author={{ kind: 'editor', ...user }} size="lg" />}
             header={
                 <>
-                    <p class="truncate font-medium text-sm text-stone-900">{user.displayName}</p>
-                    <p class="truncate text-stone-500 text-xs">
-                        @{user.username} · {ROLE_LABELS[user.role]}
-                    </p>
+                    <div class="flex items-center gap-2">
+                        <p class="truncate font-medium text-sm text-stone-900">
+                            {user.displayName}
+                        </p>
+                        <Badge>{ROLE_LABELS[user.role]}</Badge>
+                    </div>
+                    <p class="truncate text-stone-500 text-xs">@{user.username}</p>
                 </>
             }
             items={items}
@@ -125,11 +131,10 @@ export function AppShell({
 
     return (
         <div class={`flex min-h-dvh flex-col ${fitScreen ? 'lg:h-dvh' : ''}`}>
-            <header class="flex h-14 shrink-0 items-center gap-4 border-stone-200 border-b bg-white px-4 sm:px-6 lg:px-8">
+            <header class={`flex items-center gap-4 ${TOP_BAR_CLASS}`}>
                 <nav aria-label="Breadcrumb" class="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                    <a href="/" class="flex shrink-0 items-center gap-2 font-semibold text-base">
-                        <IconZoomScan size={22} stroke={1.75} />
-                        Loupe
+                    <a href="/" class="shrink-0">
+                        <Logo />
                     </a>
                     {crumbs.map(({ href, label }, i) => (
                         <Fragment key={href}>

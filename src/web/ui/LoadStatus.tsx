@@ -4,6 +4,7 @@ import type { Resource } from '../lib/resource.ts';
 import { Button } from './Button.tsx';
 import { CenteredCard, CenteredScreen } from './CenteredCard.tsx';
 import { FormError } from './FormError.tsx';
+import { ICON, TEXT } from './styles.ts';
 
 // Fast loads finish before the spinner shows, so it does not flash.
 const SPINNER_DELAY_MS = 300;
@@ -16,8 +17,8 @@ function Spinner() {
     }, []);
     if (!shown) return null;
     return (
-        <p role="status" class="flex items-center gap-2 text-sm text-stone-500">
-            <IconLoader2 size={16} class="animate-spin" />
+        <p role="status" class={`flex items-center gap-2 ${TEXT.secondary}`}>
+            <IconLoader2 size={ICON.md} class="animate-spin" />
             Loading…
         </p>
     );
@@ -26,7 +27,7 @@ function Spinner() {
 /** What stands in for a resource that is not loaded: a spinner, `missing`, or a retry. */
 export function LoadStatus<T>({ resource, missing }: { resource: Resource<T>; missing?: string }) {
     if (resource.status === 'loading') return <Spinner />;
-    if (resource.status === 'missing') return <p class="text-stone-500">{missing}</p>;
+    if (resource.status === 'missing') return <p class={TEXT.secondary}>{missing}</p>;
     if (resource.status === 'failed') {
         return (
             <div class="flex flex-col items-start gap-3">
@@ -60,7 +61,7 @@ export function CenteredLoadStatus<T>({
     if (resource.status === 'missing') {
         return (
             <CenteredCard title={missingTitle}>
-                <p class="text-sm text-stone-600">{missing}</p>
+                <p class={TEXT.secondary}>{missing}</p>
             </CenteredCard>
         );
     }

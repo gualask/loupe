@@ -1,6 +1,6 @@
 import { IconCheck, IconCopy } from '@tabler/icons-preact';
 import { useEffect, useState } from 'preact/hooks';
-import { FIELD_CLASS } from './styles.ts';
+import { FIELD_CLASS, ICON } from './styles.ts';
 
 /**
  * Copies `text`. The Clipboard API exists only in secure contexts, and a self-hosted Loupe may be
@@ -59,7 +59,7 @@ export function CopyField({ value }: { value: string }) {
                           : 'text-stone-500'
                 }`}
             >
-                {state === 'copied' ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                {state === 'copied' ? <IconCheck size={ICON.md} /> : <IconCopy size={ICON.md} />}
                 {state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : 'Copy'}
             </span>
         </button>

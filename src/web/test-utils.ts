@@ -41,7 +41,6 @@ export const SHARED: SharedMockup = {
     contentUrl: '/s/tok/content',
     me: ANN,
     canModerate: false,
-    review: null,
 };
 
 /** A comment by Ann on `threadId`. */

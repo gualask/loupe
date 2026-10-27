@@ -16,6 +16,7 @@ import { EmptyState } from '../ui/EmptyState.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
+import { ICON } from '../ui/styles.ts';
 
 export function ProjectPage() {
     const { params } = useRoute();
@@ -78,7 +79,7 @@ export function ProjectPage() {
                                     title="A single self-contained .html file"
                                     onFile={uploadFile}
                                 >
-                                    <IconUpload size={16} />
+                                    <IconUpload size={ICON.md} />
                                     {upload.pending ? 'Uploading…' : 'Upload mockup'}
                                 </HtmlFileButton>
                                 <ProjectMenu

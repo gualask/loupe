@@ -31,7 +31,7 @@ export function SharePanel({
                     type="button"
                     disabled={pending}
                     onClick={regenerate}
-                    class="font-medium text-stone-700 underline underline-offset-2 hover:text-stone-900"
+                    class="font-medium text-stone-900 underline underline-offset-2 hover:text-stone-900"
                 >
                     Create a new link
                 </button>

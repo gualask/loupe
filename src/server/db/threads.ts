@@ -110,6 +110,21 @@ export function countThreadsByViewer(db: Db, versionId: string) {
         .all();
 }
 
+/** When each viewer last wrote or edited a comment on a version, including replies. */
+export function lastCommentsByViewer(db: Db, versionId: string) {
+    return db
+        .select({
+            viewerId: comments.authorViewerId,
+            written: max(comments.createdAt),
+            edited: max(comments.editedAt),
+        })
+        .from(comments)
+        .innerJoin(threads, eq(threads.id, comments.threadId))
+        .where(eq(threads.versionId, versionId))
+        .groupBy(comments.authorViewerId)
+        .all();
+}
+
 /** Thread counts and the latest comment time of the given versions, looked up per version. */
 export function threadActivity(db: Db, versionIds: string[]) {
     const counts = db

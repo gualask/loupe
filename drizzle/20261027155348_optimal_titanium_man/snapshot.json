@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "a03d07cb-e0f8-467c-82e8-faf39792f32f",
+  "id": "87c5ed7b-00ae-40f3-bb1b-a69795d22eef",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -24,10 +24,6 @@
     },
     {
       "name": "projects",
-      "entityType": "tables"
-    },
-    {
-      "name": "reviews",
       "entityType": "tables"
     },
     {
@@ -427,86 +423,6 @@
       "entityType": "columns"
     },
     {
-      "table": "reviews",
-      "name": "id",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "version_id",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "viewer_id",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "status",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "'in_progress'",
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "verdict",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "summary",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "''",
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "submitted_at",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "reviews",
-      "name": "created_at",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
       "table": "sessions",
       "name": "id_hash",
       "type": "text",
@@ -797,16 +713,6 @@
       "entityType": "columns"
     },
     {
-      "table": "viewers",
-      "name": "last_seen_at",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
       "table": "comments",
       "name": "comments_thread_idx",
       "columns": [
@@ -862,24 +768,6 @@
         }
       ],
       "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
-      "table": "reviews",
-      "name": "reviews_version_viewer_idx",
-      "columns": [
-        {
-          "value": "version_id",
-          "isExpression": false
-        },
-        {
-          "value": "viewer_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
       "where": null,
       "origin": "manual",
       "entityType": "indexes"
@@ -1080,36 +968,6 @@
       "entityType": "fks"
     },
     {
-      "table": "reviews",
-      "name": "fk_reviews_version_id_mockup_versions_id_fk",
-      "columns": [
-        "version_id"
-      ],
-      "tableTo": "mockup_versions",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
-      "table": "reviews",
-      "name": "fk_reviews_viewer_id_viewers_id_fk",
-      "columns": [
-        "viewer_id"
-      ],
-      "tableTo": "viewers",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
       "table": "sessions",
       "name": "fk_sessions_user_id_users_id_fk",
       "columns": [
@@ -1238,15 +1096,6 @@
     {
       "table": "projects",
       "name": "projects_pk",
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "table": "reviews",
-      "name": "reviews_pk",
       "columns": [
         "id"
       ],

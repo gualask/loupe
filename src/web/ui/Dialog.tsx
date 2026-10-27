@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
+import { TEXT } from './styles.ts';
 
 /**
  * Modal dialog on the native <dialog> element: focus trap, Esc and backdrop for free. The browser
@@ -22,7 +23,7 @@ export function Dialog({
             onClose={onClose}
             class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl bg-white p-6 text-stone-900 shadow-xl backdrop:bg-stone-900/30"
         >
-            <h2 class="mb-4 font-semibold text-lg tracking-tight">{title}</h2>
+            <h2 class={`mb-4 ${TEXT.heading}`}>{title}</h2>
             {children}
         </dialog>
     );

@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { TEXT } from './styles.ts';
 
 /**
  * A titled block of a card or panel, with an optional description and a note on the right. A
@@ -13,7 +14,7 @@ export function Section({
     children,
 }: {
     title: string;
-    description?: string;
+    description?: ComponentChildren;
     aside?: ComponentChildren;
     flush?: boolean;
     children: ComponentChildren;
@@ -21,10 +22,10 @@ export function Section({
     const header = (
         <div>
             <div class="flex items-center justify-between gap-2">
-                <h2 class="font-semibold">{title}</h2>
+                <h2 class={TEXT.heading}>{title}</h2>
                 {aside}
             </div>
-            {description ? <p class="mt-1 text-sm text-stone-500">{description}</p> : null}
+            {description ? <div class={`mt-1 ${TEXT.secondary}`}>{description}</div> : null}
         </div>
     );
     if (!flush) {

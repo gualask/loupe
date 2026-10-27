@@ -91,3 +91,27 @@ docker stop loupe
 docker run --rm -v loupe-data:/data -v "$PWD":/backup alpine tar czf /backup/loupe-data.tgz -C /data .
 docker start loupe
 ```
+
+## Data and privacy
+
+Loupe keeps everything in the `/data` volume and sends nothing to other services. If you publish
+it, this is what your privacy notice needs to cover.
+
+- **Accounts** (admins and editors): username, display name, a password hash, role, and when the
+  account was created or disabled. Sessions keep only a hash of the session id, with when they
+  were created, last used and expire.
+- **Viewers** (people with a share link): per mockup, the name they chose or a generated one, a
+  color, when they joined and a hash of their viewer key; then their pins, comments and edits,
+  with their times. Opening a link is not recorded: editors see when a viewer last commented,
+  never when they only looked.
+- **Presence**: who has the review space open is kept in memory only and shown to the others on
+  the same link while they are there.
+- **In the viewer's browser**: `localStorage` holds the viewer key of each mockup, the chosen name
+  and comments not sent yet.
+- **Not stored**: IP addresses, user agents and request logs. The server logs only its start, the
+  setup link and errors.
+- **Retention**: viewer data lasts as long as its mockup; deleting a mockup or project deletes its
+  viewers and threads. Used and expired account links and expired sessions are deleted
+  automatically.
+- **External resources**: with `LOUPE_MOCKUP_EXTERNAL=allow`, mockups may load files from other
+  servers (CDNs, web fonts), which then see the address of whoever opens the mockup.

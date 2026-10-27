@@ -9,15 +9,9 @@ type Member = { participant: Author | null; send: (event: ShareEvent) => void };
 export function createHub() {
     const rooms = new Map<string, Set<Member>>();
 
-    /** Sends an event to everyone in a room, or only to the participants `to` accepts. */
-    function publish(
-        room: string,
-        event: ShareEvent,
-        to?: (participant: Author | null) => boolean,
-    ) {
-        for (const member of rooms.get(room) ?? []) {
-            if (!to || to(member.participant)) member.send(event);
-        }
+    /** Sends an event to everyone in a room. */
+    function publish(room: string, event: ShareEvent) {
+        for (const member of rooms.get(room) ?? []) member.send(event);
     }
 
     function publishPresence(room: string) {

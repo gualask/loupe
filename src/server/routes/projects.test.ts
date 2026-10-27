@@ -80,7 +80,6 @@ describe('mockups', () => {
             activity: {
                 openThreads: 0,
                 resolvedThreads: 0,
-                submittedReviews: 0,
                 lastActivityAt: null,
             },
             createdAt: expect.any(String),
@@ -207,7 +206,6 @@ describe('share links', () => {
             contentUrl: `/s/${token}/content`,
             me: null,
             canModerate: false,
-            review: null,
         });
     });
 
@@ -301,19 +299,17 @@ describe('mockup versions', () => {
 });
 
 describe('mockup feedback', () => {
-    it('counts threads and submitted reviews, and dates the latest comment', async () => {
+    it('counts threads and dates the latest comment', async () => {
         const { editor, mockup, base, viewer } = await createSharedMockup();
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual({
             openThreads: 0,
             resolvedThreads: 0,
-            submittedReviews: 0,
             lastActivityAt: null,
         });
 
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
         await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
-        await alice.client.put(`${base}/review`, { verdict: 'approved' });
         // Editors' threads count too.
         await editor.post(`${base}/threads`, {
             id: crypto.randomUUID(),
@@ -326,7 +322,6 @@ describe('mockup feedback', () => {
         const activity = {
             openThreads: 1,
             resolvedThreads: 1,
-            submittedReviews: 1,
             lastActivityAt: expect.any(String),
         };
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual(activity);
@@ -337,7 +332,7 @@ describe('mockup feedback', () => {
     it('lists viewers to the editors of the mockup only', async () => {
         const { t, admin, mockup } = await createSharedMockup();
         const { editor: fran } = await inviteEditor(t, admin, 'fran');
-        expect((await fran.get(`/api/mockups/${mockup.id}/reviews`)).status).toBe(404);
-        expect((await admin.get(`/api/mockups/${mockup.id}/reviews`)).body).toEqual([]);
+        expect((await fran.get(`/api/mockups/${mockup.id}/reviewers`)).status).toBe(404);
+        expect((await admin.get(`/api/mockups/${mockup.id}/reviewers`)).body).toEqual([]);
     });
 });

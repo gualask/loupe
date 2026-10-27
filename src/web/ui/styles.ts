@@ -11,16 +11,48 @@ export const TONES = {
 
 export type Tone = keyof typeof TONES;
 
+/**
+ * Icon sizes: `sm` beside 12 px text, `md` in buttons and menus, `lg` for icon-only buttons in
+ * bars and beside headings, `xl` for the logo and file icons.
+ */
+export const ICON = { sm: 14, md: 16, lg: 18, xl: 22 };
+
+/** Avatar sizes: `sm` inside a line of text, `md` in lists and comments, `lg` in bars. */
+export const AVATAR = { sm: 18, md: 24, lg: 26 };
+
+/** The bar at the top of every page and of the review space: same height, edges and gutters. */
+export const TOP_BAR_CLASS =
+    'min-h-14 shrink-0 border-stone-200 border-b bg-white px-4 sm:px-6 lg:px-8';
+
 /** The white surface of cards, lists and panels. */
 export const CARD_CLASS = 'rounded-xl border border-stone-200 bg-white';
+
+/**
+ * Text by level of importance. Only headings are semibold; names and labels are medium. Text
+ * takes three grays: stone-900 for content, stone-600 for sentences that explain it and
+ * stone-500 for details around it. Lighter grays are for icons and dividers: as text they fall
+ * below readable contrast.
+ */
+export const TEXT = {
+    /** The one title of a page. */
+    title: 'font-semibold text-2xl tracking-tight text-stone-900',
+    /** A section of a page, a dialog, or what a toolbar works on. */
+    heading: 'font-semibold text-base text-stone-900',
+    /** Sentences that explain: descriptions, empty states, hints. */
+    secondary: 'text-sm text-stone-600',
+    /** Details around content: dates, counts, file names, usernames. */
+    meta: 'text-xs text-stone-500',
+};
 
 // Hover and open (menu triggers) tint of ghost controls; visible on white and on the page.
 const GHOST_TINT = 'hover:bg-stone-200/70 aria-expanded:bg-stone-200/70';
 
 const BUTTON_VARIANTS = {
     primary: 'border-transparent bg-stone-900 text-white hover:bg-stone-700',
-    secondary: 'border-stone-300 bg-white text-stone-800 hover:border-stone-400 hover:bg-stone-100',
+    secondary: 'border-stone-300 bg-white text-stone-900 hover:border-stone-400 hover:bg-stone-100',
     ghost: `border-transparent text-stone-600 hover:text-stone-900 ${GHOST_TINT}`,
+    // Ghost at full strength: the main tools of a toolbar, among ghost buttons.
+    tool: `border-transparent text-stone-900 ${GHOST_TINT}`,
 };
 
 // md matches the height of inputs; sm fits toolbars and dense rows.

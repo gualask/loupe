@@ -1,8 +1,9 @@
-import { IconFolder, IconPlus } from '@tabler/icons-preact';
+import { IconFileTypeHtml, IconFolder, IconPlus } from '@tabler/icons-preact';
 import { useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import type { Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
+import { Avatar } from '../components/Avatar.tsx';
 import { ProjectForm } from '../components/ProjectForm.tsx';
 import { ProjectMenu } from '../components/ProjectMenu.tsx';
 import { api } from '../lib/api.ts';
@@ -17,7 +18,7 @@ import { EmptyState } from '../ui/EmptyState.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
-import { CARD_CLASS } from '../ui/styles.ts';
+import { CARD_CLASS, ICON } from '../ui/styles.ts';
 
 function ProjectCard({
     project,
@@ -39,7 +40,7 @@ function ProjectCard({
             class={`relative flex flex-col gap-2 p-5 transition hover:border-stone-400 hover:shadow-sm ${CARD_CLASS}`}
         >
             <div class="-my-1 -mr-2 flex items-center gap-2">
-                <IconFolder size={18} class="shrink-0 text-stone-400" />
+                <IconFolder size={ICON.lg} class="shrink-0 text-stone-400" />
                 <a
                     href={`/projects/${project.id}`}
                     class="min-w-0 flex-1 truncate font-medium after:absolute after:inset-0"
@@ -58,10 +59,19 @@ function ProjectCard({
             {project.description ? (
                 <p class="line-clamp-2 text-sm text-stone-600">{project.description}</p>
             ) : null}
-            <p class="mt-auto text-stone-500 text-xs">
-                {plural(project.mockupCount, 'mockup')} · created {formatDate(project.createdAt)}
-                {showOwner ? ` · ${project.owner.displayName}` : ''}
-            </p>
+            {showOwner ? (
+                <p class="flex min-w-0 items-center gap-1.5 text-stone-500 text-xs">
+                    <Avatar author={{ kind: 'editor', ...project.owner }} size="sm" />
+                    <span class="truncate">{project.owner.displayName}</span>
+                </p>
+            ) : null}
+            <div class="mt-auto flex items-center justify-between gap-3 text-stone-500 text-xs">
+                <span class="flex items-center gap-1">
+                    <IconFileTypeHtml size={ICON.sm} class="text-stone-400" />
+                    {plural(project.mockupCount, 'mockup')}
+                </span>
+                <span>Created {formatDate(project.createdAt)}</span>
+            </div>
         </div>
     );
 }
@@ -101,7 +111,7 @@ export function HomePage() {
                     actions={
                         creating || someoneElses ? null : (
                             <Button onClick={() => setCreating(true)}>
-                                <IconPlus size={16} />
+                                <IconPlus size={ICON.md} />
                                 New project
                             </Button>
                         )

@@ -48,6 +48,26 @@ Server code runs directly through Node's type stripping, with no build step:
 Only server runtime packages belong in `dependencies`; everything bundled by Vite (Preact, icons,
 router) is a `devDependency`, so the production image stays small.
 
+### UI consistency
+
+The web app draws every visual value from the scales in `src/web/ui/styles.ts`, so screens stay
+consistent:
+
+- text by role with `TEXT` (`title`, `heading`, `secondary`, `meta`): only headings are
+  semibold, names and labels medium; text takes stone-900, stone-600 or stone-500, lighter grays
+  are for icons and decorations only;
+- icon sizes with `ICON`, avatar sizes with `Avatar`'s `size` (`sm`, `md`, `lg`);
+- surfaces and bars with `CARD_CLASS` and `TOP_BAR_CLASS`; dividers inside a surface are
+  stone-100, its outer border stone-200; floating surfaces cast `shadow-lg`, only dialogs
+  `shadow-xl`;
+- buttons with `buttonClass` and `iconButtonClass`; states with `Badge` and its `TONES`; keys with
+  `Kbd`; the logo with `Logo` or `LogoMark`.
+
+Reuse the components in `src/web/ui/` before writing markup that looks like them. When a value is
+missing, add it to the scale with the role it serves rather than writing it inline.
+`src/web/ui/styles.test.ts` fails on values off the scales; extend it with any new rule. Do not
+join pieces of text with "·": give them a hierarchy or their own element, such as a badge.
+
 ## Security Invariants
 
 Uploaded mockups are untrusted HTML. Never serve them from a route without the sandbox CSP

@@ -1,6 +1,6 @@
 import { IconChevronDown } from '@tabler/icons-preact';
 import type { ComponentChildren } from 'preact';
-import { FIELD_CLASS } from './styles.ts';
+import { FIELD_CLASS, ICON } from './styles.ts';
 
 /** A native select with its own chevron, kept inside the padding like the other inputs. */
 export function Select({
@@ -25,7 +25,7 @@ export function Select({
                 {children}
             </select>
             <IconChevronDown
-                size={16}
+                size={ICON.md}
                 aria-hidden="true"
                 class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-stone-500"
             />

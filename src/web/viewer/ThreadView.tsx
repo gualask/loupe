@@ -5,6 +5,7 @@ import { AuthorName, Avatar } from '../components/Avatar.tsx';
 import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
+import { ICON } from '../ui/styles.ts';
 import { Composer } from './Composer.tsx';
 import { replyDraft } from './drafts.ts';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
@@ -26,15 +27,22 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
             <div class="min-w-0 flex-1">
                 <div class="flex min-w-0 items-center gap-2 text-sm">
                     <AuthorName author={comment.author} />
-                    <span class="min-w-0 truncate text-stone-400 text-xs" title={comment.createdAt}>
+                    <span class="min-w-0 truncate text-stone-500 text-xs" title={comment.createdAt}>
                         {formatRelative(comment.createdAt)}
-                        {comment.editedAt ? ' · edited' : ''}
                     </span>
+                    {comment.editedAt ? (
+                        <span
+                            class="shrink-0 text-stone-500 text-xs italic"
+                            title={`Edited ${formatRelative(comment.editedAt)}`}
+                        >
+                            Edited
+                        </span>
+                    ) : null}
                     {/* Revealed on hover; always shown on touch screens, which cannot hover. */}
                     <span class="ml-auto flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                         {canEdit ? (
                             <IconButton label="Edit" onClick={() => setEditing(comment.body)}>
-                                <IconPencil size={15} />
+                                <IconPencil size={ICON.md} />
                             </IconButton>
                         ) : null}
                         {canDelete ? (
@@ -44,7 +52,7 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
                                     if (confirm('Delete this comment?')) session.remove(comment);
                                 }}
                             >
-                                <IconTrash size={15} />
+                                <IconTrash size={ICON.md} />
                             </IconButton>
                         ) : null}
                     </span>
@@ -67,9 +75,9 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
                         />
                     </div>
                 ) : comment.deleted ? (
-                    <p class="text-sm text-stone-400 italic">Comment deleted</p>
+                    <p class="text-sm text-stone-500 italic">Comment deleted</p>
                 ) : (
-                    <p class="whitespace-pre-wrap break-words text-sm text-stone-800">
+                    <p class="whitespace-pre-wrap break-words text-sm text-stone-900">
                         {comment.body}
                     </p>
                 )}
@@ -110,11 +118,11 @@ export function ThreadView({
                         label={resolved ? 'Reopen' : 'Resolve'}
                         onClick={() => session.setStatus(thread.id, resolved ? 'open' : 'resolved')}
                     >
-                        {resolved ? <IconRotate size={16} /> : <IconCheck size={16} />}
+                        {resolved ? <IconRotate size={ICON.md} /> : <IconCheck size={ICON.md} />}
                     </IconButton>
                 ) : null}
                 <IconButton label="Close" shortcut="Esc" onClick={onClose}>
-                    <IconX size={16} />
+                    <IconX size={ICON.md} />
                 </IconButton>
             </PopoverHeader>
             <ol class="flex flex-col gap-3 overflow-y-auto px-3 py-3">

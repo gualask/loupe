@@ -1,6 +1,10 @@
-import type { Author, Comment, Review, ReviewerSummary, Thread } from '../../shared/api/reviews.ts';
-import type { ReviewRow } from '../db/reviews.ts';
-import type { Authored, countThreadsByViewer, ThreadWithComments } from '../db/threads.ts';
+import type { Author, Comment, ReviewerSummary, Thread } from '../../shared/api/reviews.ts';
+import type {
+    Authored,
+    countThreadsByViewer,
+    lastCommentsByViewer,
+    ThreadWithComments,
+} from '../db/threads.ts';
 import type { ViewerRow } from '../db/viewers.ts';
 
 export function viewerAuthor(viewer: ViewerRow): Extract<Author, { kind: 'viewer' }> {
@@ -43,32 +47,28 @@ export function toThread(thread: ThreadWithComments): Thread {
     };
 }
 
-export function toReview(row: ReviewRow): Review {
-    return {
-        viewerId: row.viewerId,
-        status: row.status,
-        verdict: row.verdict,
-        summary: row.summary,
-        submittedAt: row.submittedAt?.toISOString() ?? null,
-    };
-}
-
-/** Every viewer of a mockup with their review and thread counts on the current version. */
+/**
+ * Every viewer of a mockup with their thread counts and last activity on the current version, the
+ * most recently active first and those without any after them.
+ */
 export function toReviewerSummaries(
     viewers: ViewerRow[],
     threadCounts: ReturnType<typeof countThreadsByViewer>,
-    reviews: ReviewRow[],
+    lastComments: ReturnType<typeof lastCommentsByViewer>,
 ): ReviewerSummary[] {
-    const reviewByViewer = new Map(reviews.map((r) => [r.viewerId, r]));
-    return viewers.map((viewer) => {
-        const review = reviewByViewer.get(viewer.id);
+    const summaries = viewers.map((viewer) => {
         const counts = threadCounts.filter((t) => t.viewerId === viewer.id);
         const countOf = (status: string) => counts.find((t) => t.status === status)?.n ?? 0;
+        const comments = lastComments.find((c) => c.viewerId === viewer.id);
+        const times = [comments?.written, comments?.edited]
+            .filter((at): at is Date => !!at)
+            .map((at) => at.getTime());
         return {
             viewer: viewerAuthor(viewer),
-            review: review ? toReview(review) : null,
             threads: { open: countOf('open'), resolved: countOf('resolved') },
-            lastSeenAt: viewer.lastSeenAt.toISOString(),
+            lastActivityAt: times.length ? new Date(Math.max(...times)).toISOString() : null,
         };
     });
+    // ISO times sort as text; viewers without activity go last.
+    return summaries.sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
 }

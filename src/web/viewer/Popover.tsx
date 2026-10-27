@@ -58,7 +58,7 @@ export function Popover({
     return (
         <div
             ref={ref}
-            class={`fixed z-30 overflow-hidden shadow-xl ${CARD_CLASS}`}
+            class={`fixed z-30 overflow-hidden shadow-lg ${CARD_CLASS}`}
             style={{ left: `${left}px`, top: `${top}px`, width: `${width}px` }}
         >
             {children}

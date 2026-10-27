@@ -1,4 +1,4 @@
-import { count, desc, eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { VIEWER_COLORS } from '../../shared/api/reviews.ts';
 import type { Db } from './client.ts';
 import { viewers } from './schema.ts';
@@ -23,7 +23,6 @@ export function insertViewer(
                 id: crypto.randomUUID(),
                 ...viewer,
                 colorIndex: arrived % VIEWER_COLORS,
-                lastSeenAt: new Date(),
             })
             .returning()
             .get();
@@ -34,17 +33,8 @@ export function findViewerByKey(db: Db, keyHash: string) {
     return db.select().from(viewers).where(eq(viewers.keyHash, keyHash)).get();
 }
 
-export function touchViewer(db: Db, id: string) {
-    db.update(viewers).set({ lastSeenAt: new Date() }).where(eq(viewers.id, id)).run();
-}
-
 export function listViewers(db: Db, mockupId: string) {
-    return db
-        .select()
-        .from(viewers)
-        .where(eq(viewers.mockupId, mockupId))
-        .orderBy(desc(viewers.lastSeenAt))
-        .all();
+    return db.select().from(viewers).where(eq(viewers.mockupId, mockupId)).all();
 }
 
 export function renameViewer(db: Db, id: string, displayName: string) {

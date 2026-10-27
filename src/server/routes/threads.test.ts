@@ -214,48 +214,65 @@ describe('comments', () => {
     });
 });
 
-describe('reviews', () => {
-    it('submits a verdict and reopens the review on new feedback', async () => {
+describe('reviewers', () => {
+    it('lists reviewers by their last activity, which opening the link does not change', async () => {
         const { editor, mockup, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
-        const verdict = { verdict: 'changes_requested', summary: 'See pins' };
-
-        expect((await editor.put(`${base}/review`, verdict)).status).toBe(403);
-        const submitted = await alice.client.put(`${base}/review`, verdict);
-        expect(submitted.body).toEqual({
-            viewerId: alice.viewer.id,
-            status: 'submitted',
-            verdict: 'changes_requested',
-            summary: 'See pins',
-            submittedAt: expect.any(String),
-        });
-        expect((await alice.client.get(base)).body.review).toEqual(submitted.body);
-
-        await alice.client.post(`${base}/threads`, {
+        const bob = await viewer('Bob');
+        const carol = await viewer('Carol');
+        const thread = await alice.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
-            kind: 'pin',
-            anchor: PIN_ANCHOR,
-            body: 'One more',
+            kind: 'general',
+            body: 'First',
         });
-        expect((await alice.client.get(base)).body.review).toMatchObject({
-            status: 'in_progress',
-            verdict: 'changes_requested',
+        // Each change later than the one before, at millisecond precision.
+        const later = () => new Promise((resolve) => setTimeout(resolve, 5));
+        await later();
+        const reply = await bob.client.post(`${base}/threads/${thread.body.id}/comments`, {
+            id: crypto.randomUUID(),
+            body: 'Agreed',
         });
+        const reviewers = async () =>
+            (await editor.get(`/api/mockups/${mockup.id}/reviewers`)).body;
+        const alicesRow = (lastActivityAt: string) => ({
+            viewer: alice.viewer,
+            threads: { open: 1, resolved: 0 },
+            lastActivityAt,
+        });
+        const bobsRow = {
+            viewer: bob.viewer,
+            threads: { open: 0, resolved: 0 },
+            lastActivityAt: reply.body.comments[1].createdAt,
+        };
+        const carolsRow = {
+            viewer: carol.viewer,
+            threads: { open: 0, resolved: 0 },
+            lastActivityAt: null,
+        };
+        const expected = [bobsRow, alicesRow(thread.body.comments[0].createdAt), carolsRow];
+        expect(await reviewers()).toEqual(expected);
 
-        const summaries = await editor.get(`/api/mockups/${mockup.id}/reviews`);
-        expect(summaries.body).toEqual([
-            {
-                viewer: alice.viewer,
-                review: expect.objectContaining({ status: 'in_progress' }),
-                threads: { open: 1, resolved: 0 },
-                lastSeenAt: expect.any(String),
-            },
+        // Reading the mockup and its threads is not activity.
+        await alice.client.get(base);
+        await alice.client.get(`${base}/threads`);
+        await carol.client.get(base);
+        expect(await reviewers()).toEqual(expected);
+
+        // Editing is.
+        await later();
+        const edited = await alice.client.patch(`${base}/comments/${thread.body.comments[0].id}`, {
+            body: 'First, edited',
+        });
+        expect(await reviewers()).toEqual([
+            alicesRow(edited.body.comments[0].editedAt),
+            bobsRow,
+            carolsRow,
         ]);
     });
 });
 
 describe('versions', () => {
-    it('starts a new version without threads or reviews, keeping the viewers', async () => {
+    it('starts a new version without threads, keeping the viewers', async () => {
         const { editor, mockup, base, viewer, uploadVersion } = await createSharedMockup();
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
@@ -265,7 +282,6 @@ describe('versions', () => {
             anchor: PIN_ANCHOR,
             body: 'Bigger',
         });
-        await alice.client.put(`${base}/review`, { verdict: 'changes_requested' });
         await bob.client.post(`${base}/threads`, {
             id: crypto.randomUUID(),
             kind: 'general',
@@ -276,7 +292,6 @@ describe('versions', () => {
         expect((await alice.client.get(base)).body).toMatchObject({
             version: 2,
             me: alice.viewer,
-            review: null,
         });
         expect((await alice.client.get(`${base}/threads`)).body).toEqual([]);
         const created = await alice.client.post(`${base}/threads`, {
@@ -288,21 +303,20 @@ describe('versions', () => {
         // Pins are numbered per version.
         expect(created.body).toMatchObject({ number: 1, author: alice.viewer });
         // Reviewers of earlier versions stay listed, without feedback on this one yet.
-        const reviewers = (await editor.get(`/api/mockups/${mockup.id}/reviews`)).body;
+        const reviewers = (await editor.get(`/api/mockups/${mockup.id}/reviewers`)).body;
         expect(reviewers).toHaveLength(2);
         expect(reviewers).toEqual(
             expect.arrayContaining([
                 {
                     viewer: alice.viewer,
-                    review: expect.objectContaining({ status: 'in_progress', verdict: null }),
                     threads: { open: 1, resolved: 0 },
-                    lastSeenAt: expect.any(String),
+                    lastActivityAt: expect.any(String),
                 },
                 {
                     viewer: bob.viewer,
-                    review: null,
                     threads: { open: 0, resolved: 0 },
-                    lastSeenAt: expect.any(String),
+                    // Nothing on this version yet.
+                    lastActivityAt: null,
                 },
             ]),
         );

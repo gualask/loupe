@@ -5,7 +5,6 @@ import type { SharedMockup } from '../../shared/api/projects.ts';
 import {
     type Author,
     type Comment,
-    type Review,
     type ShareEvent,
     sameAuthor,
     type Thread,
@@ -27,9 +26,8 @@ const visible = (thread: Thread) => thread.comments.some((c) => !c.deleted);
 export type ThreadTarget = { kind: 'pin'; anchor: PinAnchor } | { kind: 'general' };
 
 /**
- * Client state of a review space: threads, presence and the viewer's own review, kept in sync
- * through the event stream. Every change is applied optimistically and retried while offline
- * (docs/SPEC.md §5.1).
+ * Client state of a review space: threads and presence, kept in sync through the event stream.
+ * Every change is applied optimistically and retried while offline (docs/SPEC.md §5.1).
  */
 export function createReviewSession(
     token: string,
@@ -121,12 +119,6 @@ export function createReviewSession(
         shared.value = { ...shared.value, archived };
     }
 
-    function setReview(review: Review) {
-        if (me.value?.kind === 'viewer' && review.viewerId === me.value.id) {
-            shared.value = { ...shared.value, review };
-        }
-    }
-
     /** Shows a viewer's new name wherever they appear. */
     function showName(viewer: Extract<Author, { kind: 'viewer' }>) {
         const named = (author: Author) => (sameAuthor(author, viewer) ? viewer : author);
@@ -147,7 +139,6 @@ export function createReviewSession(
         else if (event.type === 'thread-deleted') {
             threads.value = threads.value.filter((t) => t.id !== event.id);
         } else if (event.type === 'presence') presence.value = event.participants;
-        else if (event.type === 'review') setReview(event.review);
         else if (event.type === 'viewer') showName(event.viewer);
         else if (event.type === 'archived') setArchived(event.archived);
     }
@@ -266,12 +257,6 @@ export function createReviewSession(
             void perform(() =>
                 api.patch<Thread>(`${base}/threads/${threadId}`, { status }, headers()),
             ).then((thread) => thread && upsert(thread));
-        },
-
-        async submitReview(input: { verdict: Review['verdict']; summary: string }) {
-            const review = await perform(() => api.put<Review>(`${base}/review`, input, headers()));
-            if (review) setReview(review);
-            return !!review;
         },
     };
 }

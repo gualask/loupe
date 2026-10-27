@@ -52,8 +52,6 @@ export const api = {
         request<T>('POST', path, body, headers),
     patch: <T>(path: string, body?: unknown, headers?: Headers) =>
         request<T>('PATCH', path, body, headers),
-    put: <T>(path: string, body?: unknown, headers?: Headers) =>
-        request<T>('PUT', path, body, headers),
     delete: (path: string, headers?: Headers) => request<void>('DELETE', path, undefined, headers),
     /** Posts `file` as the `file` field of a multipart form, as a file input would. */
     upload: <T>(path: string, file: File) => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Author, Review } from './reviews.ts';
+import type { Author } from './reviews.ts';
 import { updateSchema } from './update.ts';
 
 /** Longest name of a project or mockup, also set on the inputs. */
@@ -50,7 +50,6 @@ type MockupVersion = {
 export type MockupActivity = {
     openThreads: number;
     resolvedThreads: number;
-    submittedReviews: number;
     /** Time of the latest comment, or null without any. */
     lastActivityAt: string | null;
 };
@@ -83,6 +82,4 @@ export type SharedMockup = {
     me: Author | null;
     /** Whether `me` may resolve threads and delete any comment. */
     canModerate: boolean;
-    /** The viewer's own review of the current version. */
-    review: Review | null;
 };

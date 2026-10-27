@@ -2,14 +2,11 @@ import { Hono } from 'hono';
 import {
     createCommentRequestSchema,
     createThreadRequestSchema,
-    type Review,
-    submitReviewRequestSchema,
     updateCommentRequestSchema,
     updateThreadRequestSchema,
 } from '../../shared/api/reviews.ts';
 import { deleteComment, findComment, insertComment, updateCommentBody } from '../db/comments.ts';
 import { findVersion } from '../db/mockups.ts';
-import { reopenReview, submitReview } from '../db/reviews.ts';
 import {
     findThread,
     findThreadWithComments,
@@ -21,13 +18,12 @@ import { apiError, notFound, parseJson } from '../http.ts';
 import {
     authorIds,
     isAuthor,
-    type ShareActor,
     type SharedMockupRow,
     sharedMockup,
     shownVersion,
 } from '../review/context.ts';
 import type { Hub } from '../review/hub.ts';
-import { toReview, toThread } from '../review/present.ts';
+import { toThread } from '../review/present.ts';
 import type { ShareAccess } from '../review/share-access.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
@@ -39,7 +35,7 @@ const conflict = () =>
         'This conflicts with something that already exists. Reload and retry.',
     );
 
-/** Threads, comments and reviews of a share link, mounted under /api/s. */
+/** Threads and comments of a share link, mounted under /api/s. */
 export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: ShareAccess }) {
     const { writer } = access;
 
@@ -69,22 +65,6 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
         const thread = loadThread(id);
         hub.publish(row.version.id, { type: 'thread', thread });
         return thread;
-    }
-
-    /** A review is private to its viewer: only their own connections (e.g. other tabs) hear of it. */
-    function publishReview(row: SharedMockupRow, review: Review) {
-        hub.publish(
-            row.version.id,
-            { type: 'review', review },
-            (participant) => participant?.kind === 'viewer' && participant.id === review.viewerId,
-        );
-    }
-
-    /** Feedback from a viewer starts their review, or reopens a submitted one. */
-    function noteFeedback(row: SharedMockupRow, actor: ShareActor) {
-        if (actor.kind !== 'viewer') return;
-        const review = reopenReview(db, row.version.id, actor.viewer.id);
-        if (review) publishReview(row, toReview(review));
     }
 
     return new Hono<AppEnv>()
@@ -119,7 +99,6 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
                 { id: crypto.randomUUID(), body: input.body },
                 authorIds(actor),
             );
-            noteFeedback(row, actor);
             return c.json(publishThread(row, input.id), 201);
         })
         .patch('/:token/threads/:id', async (c) => {
@@ -144,7 +123,6 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
                 return c.json(loadThread(thread.id));
             }
             insertComment(db, { ...input, threadId: thread.id, ...authorIds(actor) });
-            noteFeedback(row, actor);
             return c.json(publishThread(row, thread.id), 201);
         })
         .patch('/:token/comments/:id', async (c) => {
@@ -170,17 +148,5 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
                 publishThread(row, threadId);
             }
             return c.body(null, 204);
-        })
-        .put('/:token/review', async (c) => {
-            const { row, actor } = writer(c);
-            if (actor.kind !== 'viewer') {
-                throw apiError(403, 'forbidden', 'Only viewers submit reviews.');
-            }
-            const input = await parseJson(c, submitReviewRequestSchema);
-            const review = submitReview(db, row.version.id, actor.viewer.id, input);
-            if (!review) throw apiError(500, 'internal_error', 'The review could not be saved.');
-            const body = toReview(review);
-            publishReview(row, body);
-            return c.json(body);
         });
 }

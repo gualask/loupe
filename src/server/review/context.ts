@@ -4,14 +4,11 @@ import { sha256 } from '../auth/crypto.ts';
 import type { Db } from '../db/client.ts';
 import { findMockupByShareToken } from '../db/mockups.ts';
 import type { UserRow } from '../db/users.ts';
-import { findViewerByKey, touchViewer, type ViewerRow } from '../db/viewers.ts';
+import { findViewerByKey, type ViewerRow } from '../db/viewers.ts';
 import { apiError } from '../http.ts';
 import { canManage } from '../mockups/access.ts';
 import type { AppEnv } from '../types.ts';
 import { viewerAuthor } from './present.ts';
-
-// Last activity is recorded at most this often per viewer.
-const TOUCH_INTERVAL_MS = 60 * 1000;
 
 export type SharedMockupRow = NonNullable<ReturnType<typeof findMockupByShareToken>>;
 
@@ -41,7 +38,7 @@ export function shownVersion(c: Context<AppEnv>, row: SharedMockupRow) {
 }
 
 /** Who is acting on a share link: an editor who manages the mockup, or a registered viewer. */
-export type ShareActor =
+type ShareActor =
     | { kind: 'editor'; user: UserRow; author: Author }
     | { kind: 'viewer'; viewer: ViewerRow; author: Author };
 
@@ -57,7 +54,6 @@ export function shareActor(db: Db, c: Context<AppEnv>, row: SharedMockupRow): Sh
     const key = c.req.header(VIEWER_KEY_HEADER);
     const viewer = key ? findViewerByKey(db, sha256(key)) : undefined;
     if (!viewer || viewer.mockupId !== row.mockup.id) return null;
-    if (Date.now() - viewer.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) touchViewer(db, viewer.id);
     return { kind: 'viewer', viewer, author: viewerAuthor(viewer) };
 }
 

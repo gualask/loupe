@@ -4,7 +4,7 @@ import { authorColor } from '../lib/colors.ts';
 import { formatRelative, plural } from '../lib/format.ts';
 import { IconButton } from '../ui/IconButton.tsx';
 import { Segmented } from '../ui/Segmented.tsx';
-import { ROW_HOVER_CLASS } from '../ui/styles.ts';
+import { ICON, ROW_HOVER_CLASS } from '../ui/styles.ts';
 import type { ThreadFilter } from './filters.ts';
 
 const FILTERS: { value: ThreadFilter; label: string }[] = [
@@ -37,15 +37,15 @@ function ThreadItem({
                 class={`flex w-full gap-3 px-4 py-3 text-left ${active ? 'bg-stone-100' : ROW_HOVER_CLASS}`}
             >
                 <span
-                    class={`grid size-6 shrink-0 place-items-center rounded-full font-semibold text-[11px] text-white ${thread.status === 'resolved' ? 'opacity-50' : ''}`}
+                    class={`grid size-6 shrink-0 place-items-center rounded-full font-semibold text-white text-xs ${thread.status === 'resolved' ? 'opacity-50' : ''}`}
                     style={{ background: authorColor(thread.author) }}
                 >
-                    {thread.kind === 'pin' ? label : <IconMessage size={13} />}
+                    {thread.kind === 'pin' ? label : <IconMessage size={ICON.sm} />}
                 </span>
                 <span class="min-w-0 flex-1">
                     <span class="flex items-baseline gap-2 text-sm">
                         <span class="truncate font-medium">{thread.author.displayName}</span>
-                        <span class="shrink-0 text-stone-400 text-xs">
+                        <span class="shrink-0 text-stone-500 text-xs">
                             {formatRelative(thread.createdAt)}
                         </span>
                     </span>
@@ -98,6 +98,7 @@ export function ThreadPanel({
             <div class="border-stone-100 border-b p-2">
                 <Segmented
                     label="Show"
+                    fill
                     options={FILTERS.filter((f) => f.value !== 'mine' || canFilterMine)}
                     value={filter}
                     onChange={onFilter}
@@ -108,7 +109,7 @@ export function ThreadPanel({
                     Comments by <span class="font-medium">{viewerName}</span>
                     <span class="ml-auto">
                         <IconButton label="Show everyone's comments" onClick={onClearViewer}>
-                            <IconX size={14} />
+                            <IconX size={ICON.sm} />
                         </IconButton>
                     </span>
                 </div>
@@ -127,7 +128,7 @@ export function ThreadPanel({
                     ))}
                 </ol>
             ) : (
-                <p class="p-6 text-center text-sm text-stone-500">
+                <p class="p-6 text-center text-sm text-stone-600">
                     {filter === 'open' ? 'No open comments yet.' : 'Nothing here.'}
                 </p>
             )}

@@ -2,6 +2,7 @@ import { IconCheck, IconPencil, IconRotate, IconTrash, IconX } from '@tabler/ico
 import { useState } from 'preact/hooks';
 import { type Comment, sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import { AuthorName, Avatar } from '../components/Avatar.tsx';
+import { confirmDialog } from '../lib/confirm.ts';
 import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
@@ -48,8 +49,13 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
                         {canDelete ? (
                             <IconButton
                                 label="Delete"
-                                onClick={() => {
-                                    if (confirm('Delete this comment?')) session.remove(comment);
+                                onClick={async () => {
+                                    const confirmed = await confirmDialog({
+                                        title: 'Delete this comment?',
+                                        confirmLabel: 'Delete',
+                                        danger: true,
+                                    });
+                                    if (confirmed) session.remove(comment);
                                 }}
                             >
                                 <IconTrash size={ICON.md} />

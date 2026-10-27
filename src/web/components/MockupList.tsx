@@ -1,16 +1,12 @@
 import { IconAlertTriangle, IconChevronRight, IconFileTypeHtml } from '@tabler/icons-preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { type Mockup, NAME_MAX_LENGTH } from '../../shared/api/projects.ts';
-import { useFormSubmit } from '../lib/form.ts';
+import { useState } from 'preact/hooks';
+import type { Mockup } from '../../shared/api/projects.ts';
 import { formatBytes, formatRelative, plural } from '../lib/format.ts';
-import { renameMockup } from '../lib/mockups.ts';
 import { Badge } from '../ui/Badge.tsx';
-import { Button } from '../ui/Button.tsx';
-import { FormError } from '../ui/FormError.tsx';
-import { Input } from '../ui/Input.tsx';
-import { type ItemColumn, ItemFormRow, ItemList, ItemRow } from '../ui/ItemList.tsx';
+import { type ItemColumn, ItemList, ItemRow } from '../ui/ItemList.tsx';
 import { ICON, TEXT } from '../ui/styles.ts';
 import { MockupMenu } from './MockupMenu.tsx';
+import { RenameMockupDialog } from './RenameMockupDialog.tsx';
 import { ThreadCounts } from './ThreadCounts.tsx';
 
 const COLUMNS: ItemColumn<Mockup>[] = [
@@ -41,47 +37,6 @@ const COLUMNS: ItemColumn<Mockup>[] = [
         cell: (m) => <span class={TEXT.meta}>{formatRelative(m.version.createdAt)}</span>,
     },
 ];
-
-/** The mockup name in an inline form: Enter saves, Escape cancels. */
-function RenameRow({ mockup, onDone }: { mockup: Mockup; onDone: (mockup?: Mockup) => void }) {
-    const [name, setName] = useState(mockup.name);
-    const input = useRef<HTMLInputElement>(null);
-    const { error, pending, submit } = useFormSubmit(async () => {
-        onDone(await renameMockup(mockup, name));
-    });
-
-    useEffect(() => input.current?.focus(), []);
-
-    return (
-        <ItemFormRow>
-            <form class="flex flex-wrap items-center gap-3" onSubmit={submit}>
-                <Input
-                    aria-label="Mockup name"
-                    required
-                    maxLength={NAME_MAX_LENGTH}
-                    value={name}
-                    ref={input}
-                    onInput={(e) => setName(e.currentTarget.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Escape') onDone();
-                    }}
-                    class="w-full max-w-md"
-                />
-                <Button type="submit" disabled={pending}>
-                    Save
-                </Button>
-                <Button variant="ghost" onClick={() => onDone()}>
-                    Cancel
-                </Button>
-            </form>
-            {error ? (
-                <div class="mt-2">
-                    <FormError message={error} />
-                </div>
-            ) : null}
-        </ItemFormRow>
-    );
-}
 
 function MockupRow({
     mockup,
@@ -134,37 +89,38 @@ type RowActions = {
     onDelete: (mockup: Mockup) => void;
 };
 
-/** A table of mockups, each renamed inline, archived, restored or deleted from its row. */
+/** A table of mockups, each renamed, archived, restored or deleted from its row. */
 function MockupTable({
     mockups,
     onRenamed,
     onSetArchived,
     onDelete,
 }: RowActions & { mockups: Mockup[] }) {
-    const [renamingId, setRenamingId] = useState<string>();
+    const [renaming, setRenaming] = useState<Mockup>();
     return (
-        <ItemList label="Mockup" columns={COLUMNS}>
-            {mockups.map((mockup) =>
-                mockup.id === renamingId ? (
-                    <RenameRow
-                        key={mockup.id}
-                        mockup={mockup}
-                        onDone={(updated) => {
-                            if (updated) onRenamed(updated);
-                            setRenamingId(undefined);
-                        }}
-                    />
-                ) : (
+        <>
+            <ItemList label="Mockup" columns={COLUMNS}>
+                {mockups.map((mockup) => (
                     <MockupRow
                         key={mockup.id}
                         mockup={mockup}
-                        onRename={() => setRenamingId(mockup.id)}
+                        onRename={() => setRenaming(mockup)}
                         onSetArchived={(archived) => onSetArchived(mockup, archived)}
                         onDelete={() => onDelete(mockup)}
                     />
-                ),
-            )}
-        </ItemList>
+                ))}
+            </ItemList>
+            {renaming ? (
+                <RenameMockupDialog
+                    mockup={renaming}
+                    onSaved={(updated) => {
+                        onRenamed(updated);
+                        setRenaming(undefined);
+                    }}
+                    onClose={() => setRenaming(undefined)}
+                />
+            ) : null}
+        </>
     );
 }
 

@@ -8,6 +8,7 @@ import { MockupPage } from './pages/MockupPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { ProjectPage } from './pages/ProjectPage.tsx';
 import { ViewerPage } from './pages/ViewerPage.tsx';
+import { ConfirmDialogHost } from './ui/ConfirmDialog.tsx';
 
 const Home = () => (
     <RequireUser>
@@ -36,6 +37,7 @@ const AdminUsers = () => (
 export function App() {
     return (
         <LocationProvider>
+            <ConfirmDialogHost />
             <Router>
                 <Route path="/" component={Home} />
                 <Route path="/projects/:id" component={Project} />

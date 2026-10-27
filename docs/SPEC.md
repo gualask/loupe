@@ -253,13 +253,13 @@ general comment box then opens with that text and a note asking to send, edit or
 - **Workspace**: list of own projects, most recently updated first: each row shows the name,
   description, open/resolved counts summed over the current versions of its mockups, mockup
   count and when it was last updated (latest of its creation, a version upload or a comment in
-  any of its mockups); its actions menu edits (inline) or deletes the project. Projects and
+  any of its mockups); its actions menu edits (in a dialog) or deletes the project. Projects and
   mockups are listed with the same table. The path in the top bar starts from the workspace of the page shown. Admins switch
   from there to any user's workspace or to all of them (`?owner=<user id>|all`); another user's
   workspace offers no New project, since new projects belong to whoever creates them. Mockups
   carry their project's owner, so a mockup page links back to the right workspace.
 - **Project**: list of mockups with version, file name and size, open/resolved counts and last
-  activity; each row's actions menu renames (inline), archives, unarchives or deletes its mockup.
+  activity; each row's actions menu renames (in a dialog), archives, unarchives or deletes its mockup.
   Every mockup the API returns carries this activity of its current version.
 - **Upload**: from the project page, pick an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
@@ -284,6 +284,9 @@ general comment box then opens with that text and a note asking to send, edit or
   space); renaming, archiving and deleting sit in an actions menu. A project page and a mockup
   page offer the same menu as their card or row in the list. Delete comes last, in red and set
   apart, and asks for confirmation since it cannot be undone.
+- **Dialogs**: creating or editing a project, renaming a mockup and every confirmation open a
+  modal dialog over the page, which stays inert behind it until the dialog is closed; Escape
+  and Cancel close it without changes, except while its request is running.
 - **Reviewers**: per mockup and for the current version, a list of viewers (color, name, thread
   counts open/resolved, last activity), the most recently active first, under a count of viewers
   and the open and resolved threads of the version.

@@ -4,20 +4,20 @@ import { useLocation } from 'preact-iso';
 import type { Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { Avatar } from '../components/Avatar.tsx';
-import { ProjectForm } from '../components/ProjectForm.tsx';
+import { ProjectDialog } from '../components/ProjectDialog.tsx';
 import { ProjectMenu } from '../components/ProjectMenu.tsx';
 import { ThreadCounts } from '../components/ThreadCounts.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
 import { formatRelative } from '../lib/format.ts';
-import { createProject, deleteProject, updateProject } from '../lib/projects.ts';
+import { deleteProject } from '../lib/projects.ts';
 import { useResource } from '../lib/resource.ts';
 import { signedInUser } from '../lib/session.ts';
 import { ownerFromQuery, resolveWorkspace, useWorkspaceOwners } from '../lib/workspaces.ts';
 import { Button } from '../ui/Button.tsx';
 import { EmptyState } from '../ui/EmptyState.tsx';
 import { FormError } from '../ui/FormError.tsx';
-import { type ItemColumn, ItemFormRow, ItemList, ItemRow } from '../ui/ItemList.tsx';
+import { type ItemColumn, ItemList, ItemRow } from '../ui/ItemList.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
 import { ICON, TEXT } from '../ui/styles.ts';
@@ -97,7 +97,7 @@ export function HomePage() {
     const resource = useResource('/projects', api.get<Project[]>);
     const projects = resource.status === 'ready' ? resource.data : undefined;
     const [creating, setCreating] = useState(false);
-    const [editingId, setEditingId] = useState<string>();
+    const [editing, setEditing] = useState<Project>();
     // Deletions from the rows.
     const change = useAction();
 
@@ -124,7 +124,7 @@ export function HomePage() {
                 <PageHeader
                     title="Projects"
                     actions={
-                        creating || someoneElses ? null : (
+                        someoneElses ? null : (
                             <Button onClick={() => setCreating(true)}>
                                 <IconPlus size={ICON.md} />
                                 New project
@@ -132,18 +132,8 @@ export function HomePage() {
                         )
                     }
                 />
-                {creating ? (
-                    <ProjectForm
-                        submitLabel="Create project"
-                        onSubmit={async (fields) => {
-                            const project = await createProject(fields);
-                            route(`/projects/${project.id}`);
-                        }}
-                        onCancel={() => setCreating(false)}
-                    />
-                ) : null}
                 <LoadStatus resource={resource} />
-                {shown?.length === 0 && !creating ? (
+                {shown?.length === 0 ? (
                     <EmptyState title="No projects yet">
                         {someoneElses
                             ? 'Projects created by this person will show up here.'
@@ -153,33 +143,35 @@ export function HomePage() {
                 <FormError message={change.error} />
                 {shown?.length ? (
                     <ItemList label="Project" columns={columns}>
-                        {shown.map((project) =>
-                            project.id === editingId ? (
-                                <ItemFormRow key={project.id}>
-                                    <ProjectForm
-                                        initial={project}
-                                        submitLabel="Save"
-                                        onSubmit={async (fields) => {
-                                            replaceProject(await updateProject(project, fields));
-                                            setEditingId(undefined);
-                                        }}
-                                        onCancel={() => setEditingId(undefined)}
-                                    />
-                                </ItemFormRow>
-                            ) : (
-                                <ProjectRow
-                                    key={project.id}
-                                    project={project}
-                                    columns={columns}
-                                    disabled={change.pending}
-                                    onEdit={() => setEditingId(project.id)}
-                                    onDelete={() => removeProject(project)}
-                                />
-                            ),
-                        )}
+                        {shown.map((project) => (
+                            <ProjectRow
+                                key={project.id}
+                                project={project}
+                                columns={columns}
+                                disabled={change.pending}
+                                onEdit={() => setEditing(project)}
+                                onDelete={() => removeProject(project)}
+                            />
+                        ))}
                     </ItemList>
                 ) : null}
             </div>
+            {creating ? (
+                <ProjectDialog
+                    onSaved={(project) => route(`/projects/${project.id}`)}
+                    onClose={() => setCreating(false)}
+                />
+            ) : null}
+            {editing ? (
+                <ProjectDialog
+                    project={editing}
+                    onSaved={(project) => {
+                        replaceProject(project);
+                        setEditing(undefined);
+                    }}
+                    onClose={() => setEditing(undefined)}
+                />
+            ) : null}
         </AppShell>
     );
 }

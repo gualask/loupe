@@ -1,47 +1,26 @@
 import { IconAlertTriangle, IconArchiveOff, IconMessages, IconUpload } from '@tabler/icons-preact';
 import { useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
-import { type Mockup, NAME_MAX_LENGTH } from '../../shared/api/projects.ts';
+import type { Mockup } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { HtmlFileButton } from '../components/HtmlFileButton.tsx';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { MockupMenu } from '../components/MockupMenu.tsx';
+import { RenameMockupDialog } from '../components/RenameMockupDialog.tsx';
 import { ReviewersPanel } from '../components/ReviewersPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
 import { formatDate } from '../lib/format.ts';
-import { deleteMockup, renameMockup, setArchived, uploadVersion } from '../lib/mockups.ts';
+import { deleteMockup, setArchived, uploadVersion } from '../lib/mockups.ts';
 import { useResource } from '../lib/resource.ts';
 import { mockupContentSrc, reviewSpaceHref } from '../lib/share.ts';
 import { Button } from '../ui/Button.tsx';
-import { FormCard } from '../ui/FormCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
 import { Notice } from '../ui/Notice.tsx';
 import { PageHeader } from '../ui/PageHeader.tsx';
 import { buttonClass, CARD_CLASS, ICON } from '../ui/styles.ts';
-import { TextField } from '../ui/TextField.tsx';
-
-function RenameForm({ mockup, onDone }: { mockup: Mockup; onDone: (mockup?: Mockup) => void }) {
-    const [name, setName] = useState(mockup.name);
-
-    return (
-        <FormCard
-            submitLabel="Save"
-            onSubmit={async () => onDone(await renameMockup(mockup, name))}
-            onCancel={() => onDone()}
-        >
-            <TextField
-                label="Mockup name"
-                required
-                maxLength={NAME_MAX_LENGTH}
-                value={name}
-                onInput={(e) => setName(e.currentTarget.value)}
-            />
-        </FormCard>
-    );
-}
 
 export function MockupPage() {
     const { params } = useRoute();
@@ -86,56 +65,45 @@ export function MockupPage() {
         >
             <div class="flex flex-col gap-6 lg:min-h-0 lg:flex-1">
                 {/* Frequent actions in sight; managing the mockup behind the menu, away from
-                    them, with Delete last. While renaming, the form replaces the actions. */}
+                    them, with Delete last. */}
                 <PageHeader
                     title={mockup.name}
                     actions={
-                        renaming ? null : (
-                            <>
-                                {mockup.archivedAt ? null : (
-                                    <HtmlFileButton
-                                        variant="ghost"
-                                        disabled={upload.pending}
-                                        title="Same link and reviewers; the new version starts without comments."
-                                        onFile={uploadFile}
-                                    >
-                                        <IconUpload size={ICON.md} />
-                                        {upload.pending ? (
-                                            'Uploading…'
-                                        ) : (
-                                            // Short on phones, so the actions fit on one row.
-                                            <span>
-                                                Upload
-                                                <span class="hidden sm:inline"> new version</span>
-                                            </span>
-                                        )}
-                                    </HtmlFileButton>
-                                )}
-                                <a href={reviewSpaceHref(mockup)} class={buttonClass()}>
-                                    <IconMessages size={ICON.md} />
-                                    Open review space
-                                </a>
-                                <MockupMenu
-                                    mockup={mockup}
-                                    size="lg"
-                                    disabled={change.pending}
-                                    onRename={() => setRenaming(true)}
-                                    onSetArchived={archive}
-                                    onDelete={remove}
-                                />
-                            </>
-                        )
+                        <>
+                            {mockup.archivedAt ? null : (
+                                <HtmlFileButton
+                                    variant="ghost"
+                                    disabled={upload.pending}
+                                    title="Same link and reviewers; the new version starts without comments."
+                                    onFile={uploadFile}
+                                >
+                                    <IconUpload size={ICON.md} />
+                                    {upload.pending ? (
+                                        'Uploading…'
+                                    ) : (
+                                        // Short on phones, so the actions fit on one row.
+                                        <span>
+                                            Upload
+                                            <span class="hidden sm:inline"> new version</span>
+                                        </span>
+                                    )}
+                                </HtmlFileButton>
+                            )}
+                            <a href={reviewSpaceHref(mockup)} class={buttonClass()}>
+                                <IconMessages size={ICON.md} />
+                                Open review space
+                            </a>
+                            <MockupMenu
+                                mockup={mockup}
+                                size="lg"
+                                disabled={change.pending}
+                                onRename={() => setRenaming(true)}
+                                onSetArchived={archive}
+                                onDelete={remove}
+                            />
+                        </>
                     }
                 />
-                {renaming ? (
-                    <RenameForm
-                        mockup={mockup}
-                        onDone={(updated) => {
-                            if (updated) replaceMockup(updated);
-                            setRenaming(false);
-                        }}
-                    />
-                ) : null}
                 {/* Right below the header, so a mistaken archiving is undone in place. */}
                 {mockup.archivedAt ? (
                     <Notice tone="neutral">
@@ -198,6 +166,16 @@ export function MockupPage() {
                     </div>
                 </div>
             </div>
+            {renaming ? (
+                <RenameMockupDialog
+                    mockup={mockup}
+                    onSaved={(updated) => {
+                        replaceMockup(updated);
+                        setRenaming(false);
+                    }}
+                    onClose={() => setRenaming(false)}
+                />
+            ) : null}
         </AppShell>
     );
 }

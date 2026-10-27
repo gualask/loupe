@@ -136,7 +136,8 @@ export function ReviewSpace({
     }
 
     function shortcut(key: ShortcutKey) {
-        if (dialog) return;
+        // Any dialog, its own or a confirmation, holds the keys until it closes.
+        if (document.querySelector('dialog[open]')) return;
         if (key === 'Escape') {
             if (inspecting) setInspecting(false);
             else if (composing) setComposing(null);

@@ -5,12 +5,12 @@ import type { Mockup, ProjectDetail } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { HtmlFileButton } from '../components/HtmlFileButton.tsx';
 import { MockupList } from '../components/MockupList.tsx';
-import { ProjectForm } from '../components/ProjectForm.tsx';
+import { ProjectDialog } from '../components/ProjectDialog.tsx';
 import { ProjectMenu } from '../components/ProjectMenu.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
 import { deleteMockup, setArchived, uploadMockup } from '../lib/mockups.ts';
-import { deleteProject, updateProject } from '../lib/projects.ts';
+import { deleteProject } from '../lib/projects.ts';
 import { useResource } from '../lib/resource.ts';
 import { EmptyState } from '../ui/EmptyState.tsx';
 import { FormError } from '../ui/FormError.tsx';
@@ -66,45 +66,30 @@ export function ProjectPage() {
     return (
         <AppShell workspace={project.owner}>
             <div class="flex flex-col gap-6">
-                {/* The primary action, then the menu of secondary ones, as on a mockup page.
-                    While editing, the form replaces the actions and the description. */}
+                {/* The primary action, then the menu of secondary ones, as on a mockup page. */}
                 <PageHeader
                     title={project.name}
-                    description={editing ? undefined : project.description}
+                    description={project.description}
                     actions={
-                        editing ? null : (
-                            <>
-                                <HtmlFileButton
-                                    disabled={upload.pending}
-                                    title="A single self-contained .html file"
-                                    onFile={uploadFile}
-                                >
-                                    <IconUpload size={ICON.md} />
-                                    {upload.pending ? 'Uploading…' : 'Upload mockup'}
-                                </HtmlFileButton>
-                                <ProjectMenu
-                                    project={project}
-                                    size="lg"
-                                    disabled={change.pending}
-                                    onEdit={() => setEditing(true)}
-                                    onDelete={remove}
-                                />
-                            </>
-                        )
+                        <>
+                            <HtmlFileButton
+                                disabled={upload.pending}
+                                title="A single self-contained .html file"
+                                onFile={uploadFile}
+                            >
+                                <IconUpload size={ICON.md} />
+                                {upload.pending ? 'Uploading…' : 'Upload mockup'}
+                            </HtmlFileButton>
+                            <ProjectMenu
+                                project={project}
+                                size="lg"
+                                disabled={change.pending}
+                                onEdit={() => setEditing(true)}
+                                onDelete={remove}
+                            />
+                        </>
                     }
                 />
-                {editing ? (
-                    <ProjectForm
-                        initial={project}
-                        submitLabel="Save"
-                        onSubmit={async (fields) => {
-                            const updated = await updateProject(project, fields);
-                            resource.update((p) => ({ ...p, ...updated }));
-                            setEditing(false);
-                        }}
-                        onCancel={() => setEditing(false)}
-                    />
-                ) : null}
                 <FormError message={upload.error ?? change.error} />
                 {project.mockups.length ? (
                     <MockupList
@@ -119,6 +104,16 @@ export function ProjectPage() {
                     </EmptyState>
                 )}
             </div>
+            {editing ? (
+                <ProjectDialog
+                    project={project}
+                    onSaved={(updated) => {
+                        resource.update((p) => ({ ...p, ...updated }));
+                        setEditing(false);
+                    }}
+                    onClose={() => setEditing(false)}
+                />
+            ) : null}
         </AppShell>
     );
 }

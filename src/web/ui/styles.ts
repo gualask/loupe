@@ -53,6 +53,8 @@ const BUTTON_VARIANTS = {
     ghost: `border-transparent text-stone-600 hover:text-stone-900 ${GHOST_TINT}`,
     // Ghost at full strength: the main tools of a toolbar, among ghost buttons.
     tool: `border-transparent text-stone-900 ${GHOST_TINT}`,
+    // Confirms an irreversible action, in red like the menu item asking for it.
+    danger: 'border-transparent bg-red-700 text-white hover:bg-red-800',
 };
 
 // md matches the height of inputs; sm fits toolbars and dense rows.

@@ -1,5 +1,6 @@
 import type { Mockup, ThreadTotals } from '../../shared/api/projects.ts';
 import { api } from './api.ts';
+import { confirmDialog } from './confirm.ts';
 import { plural } from './format.ts';
 
 // Every change to a mockup goes through here, with the confirmation it needs. A change the user
@@ -25,28 +26,36 @@ export async function uploadVersion(mockup: Mockup, file: File) {
     // Reviewers may have commented since the page loaded.
     const { activity, version } = await api.get<Mockup>(`/mockups/${mockup.id}`);
     const hidden = hiddenFeedback(activity);
-    if (
-        hidden &&
-        !confirm(
-            `Upload version ${version.number + 1}? The ${hidden} on version ${version.number} will no longer be shown. The share link stays the same.`,
-        )
-    ) {
-        return undefined;
+    if (hidden) {
+        const confirmed = await confirmDialog({
+            title: `Upload version ${version.number + 1}?`,
+            message: `The ${hidden} on version ${version.number} will no longer be shown. The share link stays the same.`,
+            confirmLabel: 'Upload',
+        });
+        if (!confirmed) return undefined;
     }
     return api.upload<Mockup>(`/mockups/${mockup.id}/versions`, file);
 }
 
 export async function regenerateShareLink(mockup: Mockup) {
-    if (!confirm('Create a new link? The current link will stop working for everyone.')) {
-        return undefined;
-    }
+    const confirmed = await confirmDialog({
+        title: 'Create a new link?',
+        message: 'The current link will stop working for everyone.',
+        confirmLabel: 'Create new link',
+        danger: true,
+    });
+    if (!confirmed) return undefined;
     return api.post<Mockup>(`/mockups/${mockup.id}/share/regenerate`);
 }
 
 export async function deleteMockup(mockup: Mockup) {
-    if (!confirm(`Delete "${mockup.name}" and all its comments? This cannot be undone.`)) {
-        return false;
-    }
+    const confirmed = await confirmDialog({
+        title: `Delete "${mockup.name}"?`,
+        message: 'Its comments will be lost too. This cannot be undone.',
+        confirmLabel: 'Delete mockup',
+        danger: true,
+    });
+    if (!confirmed) return false;
     await api.delete(`/mockups/${mockup.id}`);
     return true;
 }

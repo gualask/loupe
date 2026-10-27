@@ -1,9 +1,8 @@
 import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
-import { useAction } from '../lib/form.ts';
 import { Button } from '../ui/Button.tsx';
-import { Dialog } from '../ui/Dialog.tsx';
-import { FormError } from '../ui/FormError.tsx';
+import { Dialog, DialogActions } from '../ui/Dialog.tsx';
+import { FormDialog } from '../ui/FormDialog.tsx';
 import { Kbd } from '../ui/Kbd.tsx';
 import { TextField } from '../ui/TextField.tsx';
 import { SHORTCUTS } from './shortcuts.ts';
@@ -19,37 +18,25 @@ export function NameDialog({
     onClose: () => void;
 }) {
     const [name, setName] = useState(current);
-    const { error, pending, run } = useAction();
 
     return (
-        <Dialog title="Your name" onClose={onClose}>
-            <form
-                class="flex flex-col gap-4"
-                onSubmit={(e) => {
-                    e.preventDefault();
-                    run(() => onSubmit(name));
-                }}
-            >
-                <TextField
-                    label="Name"
-                    hint="Shown next to your comments and pins to everyone with this link. It is not verified."
-                    maxLength={60}
-                    value={name}
-                    onInput={(e) => setName(e.currentTarget.value)}
-                    // Typing replaces the current name, often a generated one.
-                    onFocus={(e) => e.currentTarget.select()}
-                />
-                <FormError message={error} />
-                <div class="flex justify-end gap-2">
-                    <Button variant="ghost" disabled={pending} onClick={onClose}>
-                        Cancel
-                    </Button>
-                    <Button type="submit" disabled={pending || !name.trim()}>
-                        Save
-                    </Button>
-                </div>
-            </form>
-        </Dialog>
+        <FormDialog
+            title="Your name"
+            submitLabel="Save"
+            canSubmit={name.trim() !== ''}
+            onSubmit={() => onSubmit(name)}
+            onClose={onClose}
+        >
+            <TextField
+                label="Name"
+                hint="Shown next to your comments and pins to everyone with this link. It is not verified."
+                maxLength={60}
+                value={name}
+                onInput={(e) => setName(e.currentTarget.value)}
+                // Typing replaces the current name, often a generated one.
+                onFocus={(e) => e.currentTarget.select()}
+            />
+        </FormDialog>
     );
 }
 
@@ -66,11 +53,11 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
                     </Fragment>
                 ))}
             </dl>
-            <div class="mt-6 flex justify-end">
+            <DialogActions>
                 <Button variant="secondary" onClick={onClose}>
                     Close
                 </Button>
-            </div>
+            </DialogActions>
         </Dialog>
     );
 }

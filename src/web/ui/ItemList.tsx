@@ -101,8 +101,3 @@ export function ItemRow<T>({
         </li>
     );
 }
-
-/** A form in place of a row, such as one editing its item. */
-export function ItemFormRow({ children }: { children: ComponentChildren }) {
-    return <li class="bg-stone-50 px-5 py-4">{children}</li>;
-}

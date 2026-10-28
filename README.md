@@ -1,3 +1,5 @@
+<img src="src/web/brand/logo.svg" alt="" width="56" height="56">
+
 # Loupe
 
 Upload an HTML mockup, share a link, collect pinned feedback.

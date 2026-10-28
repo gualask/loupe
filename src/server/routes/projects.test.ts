@@ -2,6 +2,7 @@ import { existsSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../../shared/api/projects.ts';
+import { awaitsReply, type Thread } from '../../shared/api/reviews.ts';
 import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
 import {
     createSharedMockup,
@@ -38,7 +39,7 @@ describe('projects', () => {
             description: 'Q4',
             owner: { id: expect.any(String), displayName: 'Eddie' },
             mockupCount: 0,
-            activity: { openThreads: 0, resolvedThreads: 0 },
+            activity: { openThreads: 0, resolvedThreads: 0, awaitingThreads: 0 },
             createdAt: expect.any(String),
             updatedAt: created.body.createdAt,
         });
@@ -71,7 +72,7 @@ describe('projects', () => {
                 p.activity,
                 p.updatedAt,
             ]);
-        const none = { openThreads: 0, resolvedThreads: 0 };
+        const none = { openThreads: 0, resolvedThreads: 0, awaitingThreads: 0 };
         expect(await listed()).toEqual([
             [quiet.body.id, none, quiet.body.createdAt],
             [project.id, none, mockup.version.createdAt],
@@ -85,7 +86,7 @@ describe('projects', () => {
         const second = await thread('Larger buttons');
         const commentedAt = second.body.comments[0].createdAt;
         expect(await listed()).toEqual([
-            [project.id, { openThreads: 1, resolvedThreads: 1 }, commentedAt],
+            [project.id, { openThreads: 1, resolvedThreads: 1, awaitingThreads: 1 }, commentedAt],
             [quiet.body.id, none, quiet.body.createdAt],
         ]);
 
@@ -123,6 +124,7 @@ describe('mockups', () => {
             activity: {
                 openThreads: 0,
                 resolvedThreads: 0,
+                awaitingThreads: 0,
                 lastActivityAt: null,
             },
             createdAt: expect.any(String),
@@ -347,6 +349,7 @@ describe('mockup feedback', () => {
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual({
             openThreads: 0,
             resolvedThreads: 0,
+            awaitingThreads: 0,
             lastActivityAt: null,
         });
 
@@ -360,11 +363,60 @@ describe('mockup feedback', () => {
         const activity = {
             openThreads: 1,
             resolvedThreads: 1,
+            // The open thread is the editor's own, with no answer yet.
+            awaitingThreads: 0,
             lastActivityAt: expect.any(String),
         };
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.activity).toEqual(activity);
         const listed = await editor.get(`/api/projects/${mockup.project.id}`);
         expect(listed.body.mockups[0].activity).toEqual(activity);
+    });
+
+    it("counts the open threads whose latest comment is a reviewer's", async () => {
+        const { editor, mockup, project, base, viewer } = await createSharedMockup();
+        // The count of the mockup, which its project sums and the review space marks thread by
+        // thread with the shared rule (the space marks none on archived mockups).
+        const awaiting = async () => {
+            const own = (await editor.get(`/api/mockups/${mockup.id}`)).body;
+            const listed = (await editor.get(`/api/projects/${project.id}`)).body;
+            expect(listed.activity.awaitingThreads).toBe(own.activity.awaitingThreads);
+            if (!own.archivedAt) {
+                const threads: Thread[] = (await editor.get(`${base}/threads`)).body;
+                expect(threads.filter(awaitsReply)).toHaveLength(own.activity.awaitingThreads);
+            }
+            return own.activity.awaitingThreads;
+        };
+        const reply = (
+            client: typeof editor,
+            threadId: string,
+            body: string,
+            id = crypto.randomUUID(),
+        ) => client.post(`${base}/threads/${threadId}/comments`, { id, body });
+
+        const { client: alice } = await viewer('Alice');
+        const pin = await alice.post(`${base}/threads`, newThread('Larger buttons'));
+        const question = await editor.post(`${base}/threads`, newThread('Is the menu clear?'));
+        expect(await awaiting()).toBe(1);
+
+        await reply(editor, pin.body.id, 'Done in the next version');
+        expect(await awaiting()).toBe(0);
+
+        const answerId = crypto.randomUUID();
+        await reply(alice, question.body.id, 'Not really', answerId);
+        await reply(alice, pin.body.id, 'Thanks');
+        expect(await awaiting()).toBe(2);
+
+        // A deleted reply hands the thread back to whoever wrote before it.
+        await alice.delete(`${base}/comments/${answerId}`);
+        expect(await awaiting()).toBe(1);
+
+        // Archived mockups accept no replies, so nothing waits on them.
+        await editor.patch(`/api/mockups/${mockup.id}`, { archived: true });
+        expect(await awaiting()).toBe(0);
+        await editor.patch(`/api/mockups/${mockup.id}`, { archived: false });
+
+        await editor.patch(`${base}/threads/${pin.body.id}`, { status: 'resolved' });
+        expect(await awaiting()).toBe(0);
     });
 
     it('lists viewers to the editors of the mockup only', async () => {

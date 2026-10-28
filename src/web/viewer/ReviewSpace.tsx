@@ -302,6 +302,8 @@ export function ReviewSpace({
                         orphaned={orphaned}
                         filter={filter}
                         canFilterMine={!!me}
+                        // Not where no reply can be written: archived mockups, older versions.
+                        markAwaiting={shared.canModerate && mayWrite}
                         viewerName={viewerName}
                         activeId={openId}
                         onFilter={setFilter}

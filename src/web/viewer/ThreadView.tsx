@@ -5,6 +5,7 @@ import { AuthorName, Avatar } from '../components/Avatar.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
+import { Button } from '../ui/Button.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
 import { ICON } from '../ui/styles.ts';
 import { Composer } from './Composer.tsx';
@@ -119,13 +120,16 @@ export function ThreadView({
                     </>
                 }
             >
+                {/* Spelled out and set apart from Close, so the two are not mistaken. */}
                 {canResolve ? (
-                    <IconButton
-                        label={resolved ? 'Reopen' : 'Resolve'}
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => session.setStatus(thread.id, resolved ? 'open' : 'resolved')}
                     >
                         {resolved ? <IconRotate size={ICON.md} /> : <IconCheck size={ICON.md} />}
-                    </IconButton>
+                        {resolved ? 'Reopen' : 'Resolve'}
+                    </Button>
                 ) : null}
                 <IconButton label="Close" shortcut="Esc" onClick={onClose}>
                     <IconX size={ICON.md} />

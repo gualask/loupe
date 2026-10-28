@@ -11,10 +11,11 @@ import { ReviewersPanel } from '../components/ReviewersPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
-import { formatDate } from '../lib/format.ts';
+import { formatDate, formatDateTime } from '../lib/format.ts';
 import { deleteMockup, setArchived, uploadVersion } from '../lib/mockups.ts';
 import { useResource } from '../lib/resource.ts';
 import { mockupContentSrc, reviewSpaceHref } from '../lib/share.ts';
+import { Badge } from '../ui/Badge.tsx';
 import { Button } from '../ui/Button.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
@@ -56,6 +57,9 @@ export function MockupPage() {
             if (await deleteMockup(mockup)) route(projectHref);
         });
 
+    // Where and when the current version came from, on hover of its badge.
+    const uploaded = `Uploaded ${formatDateTime(mockup.version.createdAt)} from ${mockup.version.originalFilename}`;
+
     return (
         <AppShell
             fitScreen
@@ -67,6 +71,8 @@ export function MockupPage() {
                     them, with Delete last. */}
                 <PageHeader
                     title={mockup.name}
+                    // Which version the link shows, since its comments start from zero.
+                    badges={<Badge title={uploaded}>{`v${mockup.version.number}`}</Badge>}
                     actions={
                         <>
                             {mockup.archivedAt ? null : (

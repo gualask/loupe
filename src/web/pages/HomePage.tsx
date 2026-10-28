@@ -4,6 +4,7 @@ import { useLocation } from 'preact-iso';
 import type { Project } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
 import { Avatar } from '../components/Avatar.tsx';
+import { AwaitingBadge } from '../components/AwaitingBadge.tsx';
 import { ProjectDialog } from '../components/ProjectDialog.tsx';
 import { ProjectMenu } from '../components/ProjectMenu.tsx';
 import { ThreadCounts } from '../components/ThreadCounts.tsx';
@@ -24,7 +25,7 @@ import { ICON, TEXT } from '../ui/styles.ts';
 
 const commentsColumn: ItemColumn<Project> = {
     label: 'Comments',
-    width: '9rem',
+    width: '11rem',
     cell: (p) => (
         <ThreadCounts open={p.activity.openThreads} resolved={p.activity.resolvedThreads} />
     ),
@@ -77,6 +78,7 @@ function ProjectRow({
             href={`/projects/${project.id}`}
             icon={<IconFolder size={ICON.lg} />}
             name={project.name}
+            badges={<AwaitingBadge count={project.activity.awaitingThreads} />}
             detail={project.description}
             menu={
                 <ProjectMenu

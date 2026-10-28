@@ -1,6 +1,7 @@
 import { countDistinct, desc, eq, type SQL, sql } from 'drizzle-orm';
 import type { Db } from './client.ts';
 import { comments, mockups, mockupVersions, projects, threads, users } from './schema.ts';
+import { awaitsReplySql } from './threads.ts';
 
 export type ProjectRow = typeof projects.$inferSelect;
 
@@ -19,7 +20,10 @@ const updatedAt = sql`max(
     coalesce(max(${comments.createdAt}), 0)
 )`.mapWith(projects.createdAt);
 
-/** Projects with owner, mockup count, threads on current versions and last update. */
+/**
+ * Projects with owner, mockup count, threads on current versions (and those waiting for an
+ * editor among them) and last update.
+ */
 function selectProjects(db: Db, where: SQL | undefined) {
     return db
         .select({
@@ -28,6 +32,7 @@ function selectProjects(db: Db, where: SQL | undefined) {
             mockupCount: countDistinct(mockups.id),
             openThreads: threadsWith('open'),
             resolvedThreads: threadsWith('resolved'),
+            awaitingThreads: countDistinct(sql`case when ${awaitsReplySql} then ${threads.id} end`),
             updatedAt,
         })
         .from(projects)

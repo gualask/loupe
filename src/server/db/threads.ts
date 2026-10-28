@@ -1,7 +1,8 @@
-import { count, eq, inArray, max, type SQL, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, max, type SQL, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import type { PinAnchor } from '../../shared/anchor.ts';
 import type { Db } from './client.ts';
-import { comments, mockupVersions, threads, users, viewers } from './schema.ts';
+import { comments, mockups, mockupVersions, threads, users, viewers } from './schema.ts';
 
 type ThreadRow = typeof threads.$inferSelect;
 type CommentRow = typeof comments.$inferSelect;
@@ -15,6 +16,30 @@ export type ThreadWithComments = Authored<ThreadRow> & { comments: Authored<Comm
 const userRef = { id: users.id, displayName: users.displayName };
 // Insertion order: timestamps can tie within a millisecond, rowids cannot.
 const byInsertion = (table: typeof threads | typeof comments) => sql`${table}.rowid`;
+
+// Aliased, so the subqueries below cannot be confused with tables the outer query joins. In a
+// sql template an alias renders as its name alone: `from` names the table before it.
+const latestComment = alias(comments, 'latest_comment');
+const awaitedVersion = alias(mockupVersions, 'awaited_version');
+const awaitedMockup = alias(mockups, 'awaited_mockup');
+
+/**
+ * Whether a thread waits for an editor: it is open, on a mockup not archived (which accepts no
+ * replies), and its latest visible comment is a reviewer's, a new thread or a reply to an editor.
+ * Reads the `threads` row of the outer query; the web app marks the same threads (`awaitsReply`
+ * in shared/api/reviews.ts).
+ */
+export const awaitsReplySql = sql`(${threads.status} = 'open'
+    and not exists (
+        select 1 from ${mockupVersions} ${awaitedVersion}
+        inner join ${mockups} ${awaitedMockup} on ${awaitedMockup.id} = ${awaitedVersion.mockupId}
+        where ${awaitedVersion.id} = ${threads.versionId} and ${awaitedMockup.archivedAt} is not null
+    )
+    and (
+        select ${latestComment.authorViewerId} is not null from ${comments} ${latestComment}
+        where ${latestComment.threadId} = ${threads.id} and ${latestComment.deletedAt} is null
+        order by ${latestComment}.rowid desc limit 1
+    ))`;
 
 function loadThreads(db: Db, where: SQL | undefined): ThreadWithComments[] {
     const rows = db
@@ -125,13 +150,22 @@ export function lastCommentsByViewer(db: Db, versionId: string) {
         .all();
 }
 
-/** Thread counts and the latest comment time of the given versions, looked up per version. */
+/**
+ * Thread counts, those waiting for an editor among them, and the latest comment time of the
+ * given versions, looked up per version.
+ */
 export function threadActivity(db: Db, versionIds: string[]) {
     const counts = db
         .select({ versionId: threads.versionId, status: threads.status, n: count() })
         .from(threads)
         .where(inArray(threads.versionId, versionIds))
         .groupBy(threads.versionId, threads.status)
+        .all();
+    const awaiting = db
+        .select({ versionId: threads.versionId, n: count() })
+        .from(threads)
+        .where(and(inArray(threads.versionId, versionIds), awaitsReplySql))
+        .groupBy(threads.versionId)
         .all();
     const latest = db
         .select({ versionId: threads.versionId, at: max(comments.createdAt) })
@@ -146,6 +180,7 @@ export function threadActivity(db: Db, versionIds: string[]) {
         return {
             openThreads: countOf('open'),
             resolvedThreads: countOf('resolved'),
+            awaitingThreads: awaiting.find((a) => a.versionId === versionId)?.n ?? 0,
             lastActivityAt: latest.find((l) => l.versionId === versionId)?.at ?? null,
         };
     };

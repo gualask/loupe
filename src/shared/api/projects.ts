@@ -50,8 +50,16 @@ type MockupVersion = {
     createdAt: string;
 };
 
-/** Open and resolved threads, of a mockup's current version or summed over a project. */
-export type ThreadTotals = { openThreads: number; resolvedThreads: number };
+/**
+ * Open and resolved threads, and those among the open ones waiting for an editor, of a mockup's
+ * current version or summed over a project.
+ */
+export type ThreadTotals = {
+    openThreads: number;
+    resolvedThreads: number;
+    /** Open threads whose latest comment is a reviewer's: they wait for an editor. */
+    awaitingThreads: number;
+};
 
 /** Feedback on a mockup's current version. */
 type MockupActivity = ThreadTotals & {

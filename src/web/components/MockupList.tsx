@@ -5,6 +5,7 @@ import { formatBytes, formatRelative, plural } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { type ItemColumn, ItemList, ItemRow } from '../ui/ItemList.tsx';
 import { ICON, TEXT } from '../ui/styles.ts';
+import { AwaitingBadge } from './AwaitingBadge.tsx';
 import { MockupMenu } from './MockupMenu.tsx';
 import { RenameMockupDialog } from './RenameMockupDialog.tsx';
 import { ThreadCounts } from './ThreadCounts.tsx';
@@ -12,7 +13,7 @@ import { ThreadCounts } from './ThreadCounts.tsx';
 const COLUMNS: ItemColumn<Mockup>[] = [
     {
         label: 'Comments',
-        width: '9rem',
+        width: '11rem',
         cell: ({ activity }) => (
             <span class="flex flex-col gap-0.5">
                 <ThreadCounts open={activity.openThreads} resolved={activity.resolvedThreads} />
@@ -61,9 +62,8 @@ function MockupRow({
             name={mockup.name}
             badges={
                 <>
-                    {mockup.version.number > 1 ? (
-                        <Badge>{`v${mockup.version.number}`}</Badge>
-                    ) : null}
+                    <Badge>{`v${mockup.version.number}`}</Badge>
+                    <AwaitingBadge count={mockup.activity.awaitingThreads} />
                     {external ? (
                         <Badge tone="warning" title="This file loads external resources">
                             <IconAlertTriangle size={ICON.sm} />

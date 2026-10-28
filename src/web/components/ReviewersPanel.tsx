@@ -28,11 +28,6 @@ export function ReviewersPanel({ mockup }: { mockup: Mockup }) {
     return (
         <Section
             title="Reviewers"
-            aside={
-                reviewers?.length ? (
-                    <span class="text-sm text-stone-500">{reviewers.length}</span>
-                ) : null
-            }
             description={
                 // Editors' threads count too, before any reviewer joins.
                 reviewers?.length || openThreads || resolvedThreads ? (

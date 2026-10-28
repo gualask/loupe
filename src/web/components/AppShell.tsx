@@ -14,10 +14,12 @@ import { Avatar } from './Avatar.tsx';
 /** A page above the current one, linked from the top bar. */
 type Crumb = { href: string; label: string };
 
-/** The workspace a page belongs to, as the first step of its path. */
-function workspaceCrumb(workspace: Workspace, me: User): Crumb {
-    // Editors only ever see their own.
-    if (me.role !== 'admin') return { href: '/', label: 'Workspace' };
+/**
+ * The workspace a page belongs to, as the first step of its path; admins only. Editors have
+ * only their own, which the logo already leads to.
+ */
+function workspaceCrumb(workspace: Workspace, me: User): Crumb | undefined {
+    if (me.role !== 'admin') return undefined;
     if (workspace === 'all') return { href: workspaceHref('all', me.id), label: 'All workspaces' };
     return {
         href: workspaceHref(workspace.id, me.id),
@@ -107,9 +109,10 @@ function AccountMenu({ user }: { user: User }) {
 /**
  * Layout for signed-in pages: a full-width top bar with the path to the page and the account menu.
  * Pages inside a workspace pass it once known, with `trail`, the pages between the workspace and
- * them (the page shows its own title); the path starts from the workspace, where admins can switch
- * to another. With `fitScreen`, wide screens get a page exactly as tall as the window, which the
- * page fills instead of scrolling.
+ * them (the page shows its own title); for admins the path starts from the workspace, where they
+ * can switch to another. A step that is the page shown is marked as such instead of linked. With
+ * `fitScreen`, wide screens get a page exactly as tall as the window, which the page fills
+ * instead of scrolling.
  */
 export function AppShell({
     workspace,
@@ -122,8 +125,10 @@ export function AppShell({
     fitScreen?: boolean;
     children: ComponentChildren;
 }) {
+    const { url } = useLocation();
     const user = currentUser.value;
-    const crumbs = user && workspace ? [workspaceCrumb(workspace, user), ...trail] : [];
+    const first = user && workspace ? workspaceCrumb(workspace, user) : undefined;
+    const crumbs = first ? [first, ...trail] : trail;
     const switcher =
         user?.role === 'admin' && workspace ? (
             <WorkspaceSwitcher current={workspace} me={user} />
@@ -145,9 +150,18 @@ export function AppShell({
                             <span
                                 class={`flex min-w-8 items-center gap-0.5 ${i < crumbs.length - 1 ? 'shrink-[3]' : ''}`}
                             >
-                                <a href={href} class="truncate text-stone-600 hover:text-stone-900">
-                                    {label}
-                                </a>
+                                {href === url ? (
+                                    <span aria-current="page" class="truncate text-stone-900">
+                                        {label}
+                                    </span>
+                                ) : (
+                                    <a
+                                        href={href}
+                                        class="truncate text-stone-600 hover:text-stone-900"
+                                    >
+                                        {label}
+                                    </a>
+                                )}
                                 {i === 0 ? switcher : null}
                             </span>
                         </Fragment>

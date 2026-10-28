@@ -10,6 +10,7 @@ import {
 import type { ComponentChildren } from 'preact';
 import { type Author, authorKey } from '../../shared/api/reviews.ts';
 import { Avatar } from '../components/Avatar.tsx';
+import { useDocumentTitle } from '../lib/document-title.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
 import { LogoMark } from '../ui/Logo.tsx';
@@ -66,6 +67,7 @@ export function ReviewHeader({
     onTogglePins: () => void;
     onTogglePanel: () => void;
 }) {
+    useDocumentTitle(`Review of ${name}`);
     return (
         // Above the side panel, which covers the mockup on narrow screens: the profile menu and
         // the name hint open over it. From md, equal side columns keep the tools centered whatever

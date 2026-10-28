@@ -34,7 +34,9 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
   belongs to the mockup, not to a version, so they keep their identity across versions.
 - **Thread**: either a **pin** (anchored to a DOM element) or a **general** comment. Has a status:
   `open` while something is left to do, `resolved` once an editor closed it. A version needs no
-  more work when none of its threads is open.
+  more work when none of its threads is open. An open thread **awaits reply** while its latest
+  visible comment is a viewer's: a new pin or comment, or an answer to an editor. Archived
+  mockups have none, since they accept no replies.
 - **Comment**: a message inside a thread. The first comment is the thread's body; the rest are
   replies from viewers or editors. A deleted comment is blanked but keeps its place; a thread left
   without any visible comment is deleted.
@@ -194,7 +196,8 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
   comments (§4.3) and the shortcuts help, except on touch screens. With none of these, the avatar
   opens nothing.
 - **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
-  marked. Editors can open it filtered to one viewer (`?viewer=<id>`).
+  marked, and for editors the threads that await their reply (§2). Editors can open it
+  filtered to one viewer (`?viewer=<id>`).
 - **Narrower screens**: below 1024 px the review actions show icons only and the viewport
   switcher is hidden. Below 768 px (e.g. phones) the side panel covers the mockup instead of
   sitting beside it, starts closed and closes when a thread opens or a pin or comment starts, and
@@ -258,16 +261,20 @@ general comment box then opens with that text and a note asking to send, edit or
 ## 6. Editor experience
 
 - **Workspace**: list of own projects, most recently updated first: each row shows the name,
-  description, open/resolved counts summed over the current versions of its mockups, mockup
-  count and when it was last updated (latest of its creation, a version upload or a comment in
-  any of its mockups); its actions menu edits (in a dialog) or deletes the project. Projects and
-  mockups are listed with the same table. The path in the top bar starts from the workspace of the page shown. Admins switch
-  from there to any user's workspace or to all of them (`?owner=<user id>|all`); another user's
+  description, open/resolved counts summed over the current versions of its mockups, a badge
+  with the threads among them that await reply (§2), when there are any, mockup count and when
+  it was last updated (latest of its creation, a version upload or a comment in any of its
+  mockups); its actions menu edits (in a dialog) or deletes the project. Projects and mockups are
+  listed with the same table. The path in the top bar starts from the logo, which leads to one's
+  own workspace; for admins it continues with the workspace of the page shown (not linked on the
+  workspace page itself), from where they switch to any user's workspace or to all of them
+  (`?owner=<user id>|all`). Editors, with a single workspace, get no such step; another user's
   workspace offers no New project, since new projects belong to whoever creates them. Mockups
   carry their project's owner, so a mockup page links back to the right workspace.
-- **Project**: list of mockups with version, file name and size, open/resolved counts and last
-  activity; each row's actions menu renames (in a dialog), archives, unarchives or deletes its mockup.
-  Every mockup the API returns carries this activity of its current version.
+- **Project**: list of mockups with version, file name and size, open/resolved counts, a badge
+  with the threads that await reply, and last activity; each row's actions menu renames (in a
+  dialog), archives, unarchives or deletes its mockup. Every mockup the API returns carries this
+  activity of its current version.
 - **Upload**: from the project page, pick an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
   self-contained.
@@ -287,6 +294,8 @@ general comment box then opens with that text and a note asking to send, edit or
   The project lists archived mockups in a separate section, closed by default, where each can be
   unarchived; the mockup page shows the archiving date with an Unarchive button, so a mistaken
   click is undone in place. The date of the first archiving is kept until then.
+- **Mockup page**: the name with the number of the current version, whose upload time and file
+  name show on hover.
 - **Actions**: the mockup page shows its frequent actions (upload a new version, open the review
   space); renaming, archiving and deleting sit in an actions menu. A project page and a mockup
   page offer the same menu as their card or row in the list. Delete comes last, in red and set
@@ -295,8 +304,8 @@ general comment box then opens with that text and a note asking to send, edit or
   modal dialog over the page, which stays inert behind it until the dialog is closed; Escape
   and Cancel close it without changes, except while its request is running.
 - **Reviewers**: per mockup and for the current version, a list of viewers (color, name, thread
-  counts open/resolved, last activity), the most recently active first, under a count of viewers
-  and the open and resolved threads of the version.
+  counts open/resolved, last activity), the most recently active first, under the open and resolved
+  threads of the version.
   Last activity is the latest comment or edit on the current version: opening
   the link is not recorded, so editors never learn when a viewer only looked.
   The list scrolls on its own beside the share link, which stays in reach; on narrow screens it
@@ -304,6 +313,9 @@ general comment box then opens with that text and a note asking to send, edit or
   without feedback until they comment on the current one. Selecting a viewer opens the mockup
   filtered to their pins.
 - **Moderation**: reply to any thread, resolve/reopen, delete any comment.
+
+Every page, the review space included, names the browser tab after what it shows (e.g.
+"landing — Loupe", "Review of landing — Loupe"), so tabs and history entries can be told apart.
 
 Pages, share links and account links tell an item that does not exist (404) from one that could
 not be loaded, e.g. offline or a server error, which offers to retry. Buttons that send a request

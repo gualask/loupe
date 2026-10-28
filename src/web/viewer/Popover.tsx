@@ -99,7 +99,7 @@ export function PopoverHeader({
     return (
         <header class="flex items-center gap-2 border-stone-100 border-b py-1.5 pr-1.5 pl-3 text-sm">
             {title}
-            <span class="ml-auto flex">{children}</span>
+            <span class="ml-auto flex items-center gap-2">{children}</span>
         </header>
     );
 }

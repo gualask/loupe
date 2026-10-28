@@ -1,5 +1,5 @@
 import { IconMessage, IconX } from '@tabler/icons-preact';
-import type { Thread } from '../../shared/api/reviews.ts';
+import { awaitsReply, type Thread } from '../../shared/api/reviews.ts';
 import { authorColor } from '../lib/colors.ts';
 import { formatRelative, plural } from '../lib/format.ts';
 import { IconButton } from '../ui/IconButton.tsx';
@@ -18,12 +18,14 @@ function ThreadItem({
     thread,
     label,
     orphaned,
+    markAwaiting,
     active,
     onSelect,
 }: {
     thread: Thread;
     label: string;
     orphaned: boolean;
+    markAwaiting: boolean;
     active: boolean;
     onSelect: () => void;
 }) {
@@ -51,6 +53,14 @@ function ThreadItem({
                     </span>
                     <span class="line-clamp-2 text-sm text-stone-600">{first?.body}</span>
                     <span class="mt-1 flex gap-2 text-stone-500 text-xs empty:hidden">
+                        {markAwaiting && awaitsReply(thread) ? (
+                            <span
+                                class="font-medium text-amber-700"
+                                title="The latest comment is a reviewer's"
+                            >
+                                Awaiting reply
+                            </span>
+                        ) : null}
                         {replies > 0 ? <span>{plural(replies, 'reply', 'replies')}</span> : null}
                         {thread.status === 'resolved' ? (
                             <span class="text-emerald-700">Resolved</span>
@@ -74,6 +84,7 @@ export function ThreadPanel({
     orphaned,
     filter,
     canFilterMine,
+    markAwaiting,
     viewerName,
     activeId,
     onFilter,
@@ -85,6 +96,8 @@ export function ThreadPanel({
     orphaned: Set<string>;
     filter: ThreadFilter;
     canFilterMine: boolean;
+    /** Editors only: marks the threads waiting for their reply. */
+    markAwaiting: boolean;
     /** Set when an editor opened the space filtered to one viewer. */
     viewerName: string | undefined;
     activeId: string | null;
@@ -122,6 +135,7 @@ export function ThreadPanel({
                             thread={thread}
                             label={labels.get(thread.id) ?? ''}
                             orphaned={orphaned.has(thread.id)}
+                            markAwaiting={markAwaiting}
                             active={thread.id === activeId}
                             onSelect={() => onSelect(thread)}
                         />

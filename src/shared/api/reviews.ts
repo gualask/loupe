@@ -82,6 +82,15 @@ export type Thread = {
     comments: Comment[];
 };
 
+/**
+ * Whether a thread waits for an editor: it is open and its latest visible comment is a
+ * reviewer's, a new thread or a reply to an editor. The server counts the same threads.
+ */
+export function awaitsReply(thread: Thread) {
+    const latest = thread.comments.findLast((c) => !c.deleted);
+    return thread.status === 'open' && latest?.author.kind === 'viewer';
+}
+
 export type RegisteredViewer = { key: string; viewer: Author };
 
 /** A viewer of a mockup as listed to its editors. */

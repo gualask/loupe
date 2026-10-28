@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
+import type { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import type { MockupRow } from '../db/mockups.ts';
-import { apiError } from '../http.ts';
+import { apiError, parseJson } from '../http.ts';
 import { createWindowLimiter } from '../rate-limit.ts';
 import type { AppEnv } from '../types.ts';
 import { shareActor, sharedMockup, shownVersion } from './context.ts';
@@ -13,7 +14,9 @@ function checkNotArchived(mockup: MockupRow) {
 
 /**
  * Access to a share link, for its event stream, new reviewers and every change. One instance
- * serves all share-link routes, so each limit counts across them.
+ * serves all share-link routes, so each limit counts across them. A request body is read before
+ * access is checked: with no await between the checks and the route's write, the mockup cannot
+ * be archived, replaced or deleted in between.
  */
 export function createShareAccess(db: Db) {
     // Far above a person typing comments; stops scripts flooding a mockup.
@@ -54,17 +57,24 @@ export function createShareAccess(db: Db) {
         return { row, actor };
     }
 
-    /** The mockup a new reviewer joins; archived mockups take none. */
-    function joiner(c: Context<AppEnv>) {
+    /** `writer` for a change that comes with a body, read first. */
+    async function writerWith<T extends z.ZodType>(c: Context<AppEnv>, schema: T) {
+        const input = await parseJson(c, schema);
+        return { ...writer(c), input };
+    }
+
+    /** The mockup a new reviewer joins, with the request body; archived mockups take none. */
+    async function joiner<T extends z.ZodType>(c: Context<AppEnv>, schema: T) {
+        const input = await parseJson(c, schema);
         const row = sharedMockup(db, c);
         checkNotArchived(row.mockup);
         if (!registrations.take(row.mockup.id)) {
             throw apiError(429, 'too_many_requests', 'Too many new reviewers, retry later.');
         }
-        return row;
+        return { ...row, input };
     }
 
-    return { currentVersion, writer, joiner };
+    return { currentVersion, writer, writerWith, joiner };
 }
 
 export type ShareAccess = ReturnType<typeof createShareAccess>;

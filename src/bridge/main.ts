@@ -108,7 +108,9 @@ function start() {
                 return;
             }
             const plain = !(event.metaKey || event.ctrlKey || event.altKey);
-            if (plain && isShortcut(event.key) && !isEditable(event.target)) {
+            // The target is retargeted to the outermost shadow host, e.g. of a web component's
+            // input; the path starts at the element actually typed into.
+            if (plain && isShortcut(event.key) && !isEditable(event.composedPath()[0] ?? null)) {
                 post({ type: 'loupe:key', key: event.key });
             }
         },

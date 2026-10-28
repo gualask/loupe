@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, expect } from 'vitest';
+import type { PinAnchor } from '../shared/anchor.ts';
 import { createApp } from './app.ts';
 import { issueSetupLinkIfNeeded } from './auth/accounts.ts';
 import { loadConfig } from './config.ts';
@@ -14,6 +15,18 @@ const tempDirs: string[] = [];
 afterAll(() => {
     for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * The body of a request creating a general thread, or a pin on `anchor`, with its first comment;
+ * new ids unless given.
+ */
+export function newThread(
+    body: string,
+    { id = crypto.randomUUID(), anchor }: { id?: string; anchor?: PinAnchor } = {},
+) {
+    const comment = { id: crypto.randomUUID(), body };
+    return anchor ? { id, kind: 'pin', anchor, comment } : { id, kind: 'general', comment };
+}
 
 /** An app on a fresh in-memory database, plus a client that keeps cookies like a browser. */
 export function createTestApp() {

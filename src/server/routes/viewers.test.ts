@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSharedMockup, openStream } from '../test-utils.ts';
+import { createSharedMockup, newThread, openStream } from '../test-utils.ts';
 
 describe('viewers', () => {
     it('registers viewers with a color in order of arrival', async () => {
@@ -44,7 +44,7 @@ describe('viewers', () => {
         const alice = await viewer();
         const bob = await viewer('Bob');
         const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        await alice.client.post(`${base}/threads`, newThread('Hi', { id }));
         const bobStream = await openStream(t, `${base}/events`, bob.key);
         await bobStream.next(); // presence: Bob
         const aliceStream = await openStream(t, `${base}/events`, alice.key);

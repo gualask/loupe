@@ -34,6 +34,7 @@ describe('bridgePins', () => {
             listed: [open],
             labels,
             openId: 'resolved',
+            hidden: false,
             draft: null,
         });
         expect(pins).toEqual([
@@ -44,6 +45,7 @@ describe('bridgePins', () => {
                 color: authorColor(ANN),
                 muted: false,
                 active: false,
+                hidden: false,
             },
             {
                 id: 'resolved',
@@ -52,27 +54,32 @@ describe('bridgePins', () => {
                 color: authorColor(ANN),
                 muted: true,
                 active: true,
+                hidden: false,
             },
         ]);
     });
 
-    it('adds the pin being placed', () => {
+    it('adds the pin being placed, drawn even when the others are hidden', () => {
         const pins = bridgePins({
-            threads: [],
-            listed: [],
+            threads,
+            listed: [open],
             labels,
             openId: null,
+            hidden: true,
             draft: { anchor: PIN_ANCHOR, author: ANN },
         });
-        expect(pins).toEqual([
-            {
-                id: DRAFT_PIN,
-                anchor: PIN_ANCHOR,
-                label: '+',
-                color: authorColor(ANN),
-                muted: false,
-                active: true,
-            },
+        expect(pins.map(({ id, hidden }) => ({ id, hidden }))).toEqual([
+            { id: 'open', hidden: true },
+            { id: DRAFT_PIN, hidden: false },
         ]);
+        expect(pins[1]).toEqual({
+            id: DRAFT_PIN,
+            anchor: PIN_ANCHOR,
+            label: '+',
+            color: authorColor(ANN),
+            muted: false,
+            active: true,
+            hidden: false,
+        });
     });
 });

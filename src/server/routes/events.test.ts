@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSharedMockup, openStream } from '../test-utils.ts';
+import { createSharedMockup, newThread, openStream } from '../test-utils.ts';
 
 afterEach(() => {
     vi.useRealTimers();
@@ -17,7 +17,7 @@ describe('event stream', () => {
         expect(await next()).toEqual({ type: 'presence', participants: [bob.viewer] });
 
         const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        await alice.client.post(`${base}/threads`, newThread('Hi', { id }));
         expect(await next()).toMatchObject({
             type: 'thread',
             thread: { id, author: alice.viewer },

@@ -14,7 +14,7 @@ import {
     listThreads,
     updateThreadStatus,
 } from '../db/threads.ts';
-import { apiError, notFound, parseJson } from '../http.ts';
+import { apiError, notFound } from '../http.ts';
 import {
     authorIds,
     isAuthor,
@@ -37,7 +37,7 @@ const conflict = () =>
 
 /** Threads and comments of a share link, mounted under /api/s. */
 export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: ShareAccess }) {
-    const { writer } = access;
+    const { writer, writerWith } = access;
 
     function threadOf(row: SharedMockupRow, id: string) {
         const thread = findThread(db, id);
@@ -78,8 +78,7 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
             return c.json(listThreads(db, version.id).map(toThread));
         })
         .post('/:token/threads', async (c) => {
-            const { row, actor } = writer(c);
-            const input = await parseJson(c, createThreadRequestSchema);
+            const { row, actor, input } = await writerWith(c, createThreadRequestSchema);
             const existing = findThread(db, input.id);
             if (existing) {
                 // A retried request: answer with the thread it already created.
@@ -88,6 +87,7 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
                 }
                 return c.json(loadThread(existing.id));
             }
+            if (findComment(db, input.comment.id)) throw conflict();
             insertThread(
                 db,
                 {
@@ -96,25 +96,25 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
                     kind: input.kind,
                     anchor: input.kind === 'pin' ? input.anchor : null,
                 },
-                { id: crypto.randomUUID(), body: input.body },
+                input.comment,
                 authorIds(actor),
             );
             return c.json(publishThread(row, input.id), 201);
         })
         .patch('/:token/threads/:id', async (c) => {
-            const { row, actor } = writer(c);
+            const { row, actor, input } = await writerWith(c, updateThreadRequestSchema);
             if (actor.kind !== 'editor') {
                 throw apiError(403, 'forbidden', 'Only editors resolve threads.');
             }
             const thread = threadOf(row, c.req.param('id'));
-            const { status } = await parseJson(c, updateThreadRequestSchema);
-            if (status !== thread.status) updateThreadStatus(db, thread.id, status, actor.user.id);
+            if (input.status !== thread.status) {
+                updateThreadStatus(db, thread.id, input.status, actor.user.id);
+            }
             return c.json(publishThread(row, thread.id));
         })
         .post('/:token/threads/:id/comments', async (c) => {
-            const { row, actor } = writer(c);
+            const { row, actor, input } = await writerWith(c, createCommentRequestSchema);
             const thread = threadOf(row, c.req.param('id'));
-            const input = await parseJson(c, createCommentRequestSchema);
             const existing = findComment(db, input.id);
             if (existing) {
                 if (existing.comment.threadId !== thread.id || !isAuthor(actor, existing.comment)) {
@@ -126,13 +126,12 @@ export function threadRoutes({ db, hub, access }: AppDeps & { hub: Hub; access: 
             return c.json(publishThread(row, thread.id), 201);
         })
         .patch('/:token/comments/:id', async (c) => {
-            const { row, actor } = writer(c);
+            const { row, actor, input } = await writerWith(c, updateCommentRequestSchema);
             const found = commentOf(row, c.req.param('id'));
             if (!isAuthor(actor, found.comment)) {
                 throw apiError(403, 'forbidden', 'You can only edit your own comments.');
             }
-            const { body } = await parseJson(c, updateCommentRequestSchema);
-            updateCommentBody(db, found.comment.id, body);
+            updateCommentBody(db, found.comment.id, input.body);
             return c.json(publishThread(row, found.comment.threadId));
         })
         .delete('/:token/comments/:id', (c) => {

@@ -14,18 +14,23 @@ export function pinLabels(threads: Thread[]) {
     return new Map(pins.map((t) => [t.id, String(t.number ?? ++next)]));
 }
 
-/** The pins to draw in the mockup: those of the listed threads, the open one and the draft. */
+/**
+ * The pins to draw in the mockup: those of the listed threads, the open one and the draft.
+ * `hidden` hides all but the draft, which the bridge still places, so orphans stay known.
+ */
 export function bridgePins({
     threads,
     listed,
     labels,
     openId,
+    hidden,
     draft,
 }: {
     threads: Thread[];
     listed: Thread[];
     labels: Map<string, string>;
     openId: string | null;
+    hidden: boolean;
     draft: { anchor: PinAnchor; author: Author } | null;
 }): BridgePin[] {
     const pins: BridgePin[] = threads
@@ -38,6 +43,7 @@ export function bridgePins({
             color: authorColor(t.author),
             muted: t.status === 'resolved',
             active: t.id === openId,
+            hidden,
         }));
     if (draft) {
         pins.push({
@@ -47,6 +53,7 @@ export function bridgePins({
             color: authorColor(draft.author),
             muted: false,
             active: true,
+            hidden: false,
         });
     }
     return pins;

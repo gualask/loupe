@@ -24,7 +24,10 @@ export function createMarkers(layer: HTMLElement, onClick: (id: string) => void)
                     layer.append(marker);
                     markers.set(pin.id, marker);
                 }
-                marker.className = `pin${pin.muted ? ' muted' : ''}${pin.active ? ' active' : ''}`;
+                marker.classList.add('pin');
+                marker.classList.toggle('muted', pin.muted);
+                marker.classList.toggle('active', pin.active);
+                marker.classList.toggle('off', pin.hidden);
                 marker.textContent = pin.label;
                 marker.style.setProperty('--color', pin.color);
             }

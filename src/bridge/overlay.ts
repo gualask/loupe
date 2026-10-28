@@ -26,7 +26,7 @@ const STYLE = `
 .pin.muted { opacity: 0.55; }
 .pin.active { outline: 3px solid var(--color); outline-offset: 2px; }
 .pin.orphaned { border-style: dashed; }
-.pin[hidden] { display: none; }
+.pin[hidden], .pin.off { display: none; }
 `;
 
 export function createOverlay() {

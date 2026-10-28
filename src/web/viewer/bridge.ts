@@ -10,14 +10,18 @@ import {
  * Connects to the bridge running inside the mockup iframe. Only messages from that iframe's
  * window are accepted, and they are validated: mockup code can post them too.
  *
- * Pass `onFrameLoad` to the iframe's load event: the bridge starts before the document loads,
- * so this also covers a `loupe:ready` posted before this hook started listening.
+ * `connection` changes whenever a bridge may have started, 0 before the first: the mockup can
+ * reload its frame, which starts a new bridge that knows nothing yet, so state sent to the bridge
+ * is sent again then. Pass `onFrameLoad` to the iframe's load event: the bridge starts before
+ * the document loads, so this also covers a `loupe:ready` posted before this hook started
+ * listening.
  */
 export function useBridge(
     frame: RefObject<HTMLIFrameElement | null>,
     onMessage: (message: BridgeMessage) => void,
 ) {
-    const [ready, setReady] = useState(false);
+    const [connection, setConnection] = useState(0);
+    const connect = useCallback(() => setConnection((n) => n + 1), []);
     const handler = useRef(onMessage);
     handler.current = onMessage;
 
@@ -26,12 +30,12 @@ export function useBridge(
             if (!frame.current || event.source !== frame.current.contentWindow) return;
             const parsed = bridgeMessageSchema.safeParse(event.data);
             if (!parsed.success) return;
-            if (parsed.data.type === 'loupe:ready') setReady(true);
+            if (parsed.data.type === 'loupe:ready') connect();
             handler.current(parsed.data);
         }
         window.addEventListener('message', listen);
         return () => window.removeEventListener('message', listen);
-    }, [frame]);
+    }, [frame, connect]);
 
     const send = useCallback(
         (message: AppMessage) => {
@@ -41,7 +45,5 @@ export function useBridge(
         [frame],
     );
 
-    const onFrameLoad = useCallback(() => setReady(true), []);
-
-    return { ready, send, onFrameLoad };
+    return { connection, send, onFrameLoad: connect };
 }

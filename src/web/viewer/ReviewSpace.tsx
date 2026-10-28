@@ -11,7 +11,7 @@ import { ErrorToast } from './ErrorToast.tsx';
 import { filterThreads, type ThreadFilter } from './filters.ts';
 import { NewComment, type NewThread } from './NewComment.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
-import { Popover } from './Popover.tsx';
+import { Popover, type PopoverPoint } from './Popover.tsx';
 import { ProfileMenu } from './ProfileMenu.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
@@ -67,11 +67,11 @@ export function ReviewSpace({
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
 
-    // A replaced version accepts nothing more: placing a pin stops.
+    // Once the space closes to changes, archived or replaced, placing a pin stops.
     const outdated = session.outdated.value;
     useEffect(() => {
-        if (outdated) setInspecting(false);
-    }, [outdated]);
+        if (!mayWrite) setInspecting(false);
+    }, [mayWrite]);
 
     useDraftRecovery(session, () => {
         if (!session.canWrite.value) return;
@@ -86,10 +86,11 @@ export function ReviewSpace({
     const openThread = threads.find((t) => t.id === openId);
 
     const pins = bridgePins({
-        threads: pinsHidden ? [] : threads,
+        threads,
         listed,
         labels,
         openId,
+        hidden: pinsHidden,
         draft:
             composing?.target.kind === 'pin' && me
                 ? { anchor: composing.target.anchor, author: me }
@@ -165,22 +166,22 @@ export function ReviewSpace({
         }
     }
 
-    const { ready, send, onFrameLoad } = useBridge(frame, onBridgeMessage);
+    const { connection, send, onFrameLoad } = useBridge(frame, onBridgeMessage);
 
     // Pins are rebuilt on every render; comparing them as JSON sends them to the mockup only
-    // when they actually change.
+    // when they actually change, or when a new bridge started.
     const pinsMessage = JSON.stringify(pins);
     useEffect(() => {
-        if (ready) send({ type: 'loupe:pins', pins: JSON.parse(pinsMessage) });
-    }, [ready, send, pinsMessage]);
+        if (connection) send({ type: 'loupe:pins', pins: JSON.parse(pinsMessage) });
+    }, [connection, send, pinsMessage]);
     useEffect(() => {
-        if (ready) send({ type: 'loupe:inspect', enabled: inspecting });
-    }, [ready, send, inspecting]);
+        if (connection) send({ type: 'loupe:inspect', enabled: inspecting });
+    }, [connection, send, inspecting]);
 
     useShortcuts(shortcut);
 
     /** Where a popover goes: next to its pin, or below the comment button. */
-    function popoverPoint(pinId: string | null) {
+    function popoverPoint(pinId: string | null): PopoverPoint {
         const position = pinId ? positions.get(pinId) : undefined;
         const frameRect = frame.current?.getBoundingClientRect();
         if (position && frameRect) {
@@ -201,7 +202,9 @@ export function ReviewSpace({
     let popover = null;
     if (composing) {
         popover = (
-            <Popover {...popoverPoint(composing.target.kind === 'pin' ? DRAFT_PIN : null)}>
+            <Popover
+                locate={() => popoverPoint(composing.target.kind === 'pin' ? DRAFT_PIN : null)}
+            >
                 <NewComment
                     thread={composing}
                     session={session}
@@ -211,9 +214,9 @@ export function ReviewSpace({
             </Popover>
         );
     } else if (openThread) {
-        const point = popoverPoint(openThread.kind === 'pin' && !pinsHidden ? openThread.id : null);
+        const pinId = openThread.kind === 'pin' && !pinsHidden ? openThread.id : null;
         popover = (
-            <Popover key={openThread.id} {...point}>
+            <Popover key={openThread.id} locate={() => popoverPoint(pinId)}>
                 <ThreadView
                     thread={openThread}
                     label={

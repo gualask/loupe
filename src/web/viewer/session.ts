@@ -77,11 +77,6 @@ export function createReviewSession(
         if (thread) upsert(change(thread));
     }
 
-    async function refresh() {
-        threads.value = await api.get<Thread[]>(`${base}/threads`, headers());
-        if (!outdated.value) loaded.value = true;
-    }
-
     const changes = createChangeQueue({
         onRejected: (err) => {
             // An editor's session ended: sign in again, then come back here.
@@ -97,7 +92,11 @@ export function createReviewSession(
                 error.value = errorMessage(err);
             }
         },
-        resync: refresh,
+        load: () => api.get<Thread[]>(`${base}/threads`, headers()),
+        show: (list) => {
+            threads.value = list;
+            if (!outdated.value) loaded.value = true;
+        },
     });
     const { perform } = changes;
 
@@ -157,7 +156,7 @@ export function createReviewSession(
         closeStream?.();
         closeStream = openEventStream<ShareEvent>(`/api${base}/events`, headers(), {
             // Events missed while disconnected are recovered by refetching.
-            onOpen: () => void refresh().catch(() => undefined),
+            onOpen: changes.resync,
             onEvent: handleEvent,
             onRefused: (code) => {
                 if (code === 'version_changed') outdated.value = true;
@@ -199,7 +198,11 @@ export function createReviewSession(
             });
             return applySaved(
                 perform(() =>
-                    api.post<Thread>(`${base}/threads`, { id, ...input, body }, headers()),
+                    api.post<Thread>(
+                        `${base}/threads`,
+                        { id, ...input, comment: { id: comment.id, body } },
+                        headers(),
+                    ),
                 ),
             );
         },

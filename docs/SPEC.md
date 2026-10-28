@@ -81,7 +81,10 @@ No email server is required. Every account flow is a **single-use link** that ex
   hour, so requests rarely write to the database.
   Signing in, or redeeming an account link, ends the browser's previous session; the account
   link page warns when someone is already signed in. When a session ends (expiry, logout in
-  another tab, reset, disabled account), open pages return to the login page.
+  another tab, reset, disabled account), open pages return to the login page at their next
+  request or when their window regains focus, which checks the session again; a page whose
+  browser has meanwhile signed in as someone else reloads as that user. A session that cannot be
+  checked, e.g. offline, offers to retry instead of signing out.
 - **CSRF**: Hono `csrf()` middleware (Origin check) on all state-changing routes.
 - **Brute force**: in-memory limit of 10 failed logins per username per 15 minutes. Account
   links carry 256-bit secrets and need no limit. The limit is per username, not per address:
@@ -173,7 +176,8 @@ mockup code cannot tamper with it.
 Selector strategy: unique `id` → `data-*` test/automation attributes → shortest unique
 `tag:nth-of-type` path. Resolution order: selector (verified against `text` when present) →
 text match → selector match whose text changed (a copy edit should not detach the pin) →
-`point`. Pins that fall back to `point` are listed as **orphaned** in the side panel.
+`point`. Pins that fall back to `point` are listed as **orphaned** in the side panel, also
+while pins are hidden.
 
 Pins are numbered 1, 2, 3… per version in order of creation. A number is never reused: the
 version counts every pin placed (`pin_count`), so deleting pin 2 leaves pin 3 as it was and the
@@ -210,12 +214,14 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 
 Comments are discrete actions, so there is no keystroke autosave. Every action (create, reply,
 edit, delete, resolve) is sent immediately with optimistic UI and a small status indicator:
-"Saving…" → "Saved ✓", or "Offline — retrying" with automatic retry. Actions are sent one at a
+"Saving…" → "Saved ✓", or "Offline — retrying" with automatic retry, also while the server
+answers with a 5xx error (e.g. a proxy's 502 while Loupe restarts). Actions are sent one at a
 time, in order, so a reply never reaches the server before its thread. Clients generate thread
-and comment ids, so a retried request is answered with what it already created. When the server
-rejects an action, the error is shown, its text goes back into its box, and the threads are
-reloaded once no other action is pending. Unsent replies and general comments are kept in
-`localStorage` per thread until the server has saved them, and restored on reload.
+and comment ids, including a thread's first comment, so a retried request is answered with what
+it already created. When the server rejects an action (4xx), the error is shown, its text goes
+back into its box, and the threads are reloaded once no other action is pending. Unsent replies
+and general comments are kept in `localStorage` per thread until the server has saved them, and
+restored on reload; a box reopened while its text is being sent starts empty.
 
 ### 5.2 Real time
 
@@ -225,7 +231,8 @@ which clients apply wherever the viewer appears, and the mockup being archived o
 which closes or reopens open review spaces to changes at once.
 Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The client reads the
 stream with `fetch`, so it can send the viewer key, reconnects with backoff, and refetches the
-threads on every (re)connection instead of replaying missed events. The stream sends a heartbeat every 25 seconds
+threads on every (re)connection instead of replaying missed events, once its pending actions
+are saved so the refetch does not hide them. The stream sends a heartbeat every 25 seconds
 and `X-Accel-Buffering: no`, so proxies neither drop it as idle nor hold events back.
 At every heartbeat the server checks the link again: once it is regenerated or its mockup
 deleted, open streams end, so a revoked link stops receiving events within 25 seconds. A 4xx

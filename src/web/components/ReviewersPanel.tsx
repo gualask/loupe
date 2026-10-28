@@ -34,7 +34,8 @@ export function ReviewersPanel({ mockup }: { mockup: Mockup }) {
                 ) : null
             }
             description={
-                reviewers?.length ? (
+                // Editors' threads count too, before any reviewer joins.
+                reviewers?.length || openThreads || resolvedThreads ? (
                     <ThreadCounts open={openThreads} resolved={resolvedThreads} />
                 ) : undefined
             }
@@ -85,7 +86,9 @@ export function ReviewersPanel({ mockup }: { mockup: Mockup }) {
                     ) : null}
                 </>
             ) : reviewers ? (
-                <p class="text-sm text-stone-600">Nobody has opened the share link yet.</p>
+                <p class="text-sm text-stone-600">
+                    No reviewers yet. People who open the share link appear here once they comment.
+                </p>
             ) : (
                 <LoadStatus resource={resource} />
             )}

@@ -32,11 +32,14 @@ function AccountLinkField({ link, label }: { link: AccountLink; label: string })
 
 function InviteSection() {
     const [role, setRole] = useState<Role>('editor');
-    const [link, setLink] = useState<AccountLink>();
+    // The role of the last link stays with it, whatever the select shows next.
+    const [invite, setInvite] = useState<{ role: Role; link: AccountLink }>();
     const { error, pending, run } = useAction();
 
     const createInvite = () =>
-        run(async () => setLink(await api.post<AccountLink>('/admin/invites', { role })));
+        run(async () =>
+            setInvite({ role, link: await api.post<AccountLink>('/admin/invites', { role }) }),
+        );
 
     return (
         <div class={CARD_CLASS}>
@@ -56,7 +59,12 @@ function InviteSection() {
                         Create invite link
                     </Button>
                 </div>
-                {link ? <AccountLinkField link={link} label="Valid" /> : null}
+                {invite ? (
+                    <AccountLinkField
+                        link={invite.link}
+                        label={`${ROLE_LABELS[invite.role]} invite, valid`}
+                    />
+                ) : null}
                 <FormError message={error} />
             </Section>
         </div>

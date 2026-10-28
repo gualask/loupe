@@ -28,12 +28,18 @@ export const renameViewerRequestSchema = z.object({
 
 // Clients generate thread and comment ids, so optimistic updates, retries and real-time events
 // all refer to the same id.
-export const createThreadRequestSchema = z.discriminatedUnion('kind', [
-    z.object({ id: z.uuid(), kind: z.literal('pin'), anchor: pinAnchorSchema, body: bodySchema }),
-    z.object({ id: z.uuid(), kind: z.literal('general'), body: bodySchema }),
-]);
-
 export const createCommentRequestSchema = z.object({ id: z.uuid(), body: bodySchema });
+
+/** A thread comes with its first comment. */
+export const createThreadRequestSchema = z.discriminatedUnion('kind', [
+    z.object({
+        id: z.uuid(),
+        kind: z.literal('pin'),
+        anchor: pinAnchorSchema,
+        comment: createCommentRequestSchema,
+    }),
+    z.object({ id: z.uuid(), kind: z.literal('general'), comment: createCommentRequestSchema }),
+]);
 
 export const updateCommentRequestSchema = z.object({ body: bodySchema });
 

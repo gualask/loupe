@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fakeStorage } from '../test-utils.ts';
-import { gatherDrafts, offerAtNextLoad, setAside } from './drafts.ts';
+import { gatherDrafts, offerAtNextLoad, sendDraft, setAside } from './drafts.ts';
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -34,6 +34,33 @@ describe('drafts', () => {
             'loupe:draft:m1:t1': 'A reply on this version',
             'loupe:draft:m2:old-thread': 'Another mockup',
             'loupe:draft:m1:general': 'A reply on version 1',
+        });
+    });
+
+    it('keeps text out of its box while it is sent, and puts it back unless saved', () => {
+        const items = fakeStorage({ 'loupe:draft:m1:t1': 'First' });
+        const settleFirst = sendDraft('draft:m1:t1', 'First');
+        expect([...items.keys()]).toEqual([expect.stringMatching(/^loupe:sending:draft:m1:t1:/)]);
+
+        const settleSecond = sendDraft('draft:m1:t1', 'Second');
+        settleFirst(true);
+        expect([...items.values()]).toEqual(['Second']);
+        // Rejected after something new was typed in the box.
+        items.set('loupe:draft:m1:t1', 'Third');
+        settleSecond(false);
+        expect(Object.fromEntries(items)).toEqual({ 'loupe:draft:m1:t1': 'Third\n\nSecond' });
+    });
+
+    it('puts text whose sending a reload cut short back into its box', () => {
+        const items = fakeStorage();
+        sendDraft('draft:m1:t1', 'Sent');
+        items.set('loupe:draft:m1:t1', 'Typed after');
+        sendDraft('draft:m1:general', 'Also sent');
+
+        expect(gatherDrafts('m1', new Set(['t1']))).toBe(false);
+        expect(Object.fromEntries(items)).toEqual({
+            'loupe:draft:m1:t1': 'Typed after\n\nSent',
+            'loupe:draft:m1:general': 'Also sent',
         });
     });
 

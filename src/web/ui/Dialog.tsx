@@ -37,12 +37,16 @@ export function Dialog({
     return (
         <dialog
             ref={ref}
+            // Escape, or the back gesture on Android.
             onCancel={(e) => {
                 e.preventDefault();
                 if (!busy) onClose();
             }}
-            onClose={() => {
-                if (mounted.current) onClose();
+            onClose={(e) => {
+                if (!mounted.current) return;
+                // Chromium closes a dialog that refused a cancel on the next one regardless.
+                if (busy) e.currentTarget.showModal();
+                else onClose();
             }}
             class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl bg-white p-6 text-stone-900 shadow-xl backdrop:bg-stone-900/30"
         >

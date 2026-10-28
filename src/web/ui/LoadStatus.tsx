@@ -29,16 +29,21 @@ export function LoadStatus<T>({ resource, missing }: { resource: Resource<T>; mi
     if (resource.status === 'loading') return <Spinner />;
     if (resource.status === 'missing') return <p class={TEXT.secondary}>{missing}</p>;
     if (resource.status === 'failed') {
-        return (
-            <div class="flex flex-col items-start gap-3">
-                <FormError message={resource.message} />
-                <Button variant="secondary" onClick={resource.retry}>
-                    Retry
-                </Button>
-            </div>
-        );
+        return <LoadFailed message={resource.message} onRetry={resource.retry} />;
     }
     return null;
+}
+
+/** Why something could not be loaded, with a retry. */
+function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+    return (
+        <div class="flex flex-col items-start gap-3">
+            <FormError message={message} />
+            <Button variant="secondary" onClick={onRetry}>
+                Retry
+            </Button>
+        </div>
+    );
 }
 
 /** The same for the full-page screens behind a link, where `missing` explains the dead link. */
@@ -65,9 +70,17 @@ export function CenteredLoadStatus<T>({
             </CenteredCard>
         );
     }
+    if (resource.status === 'failed') {
+        return <CenteredLoadFailed message={resource.message} onRetry={resource.retry} />;
+    }
+    return null;
+}
+
+/** A full-page screen for what could not be loaded, with a retry. */
+export function CenteredLoadFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
     return (
         <CenteredCard title="Could not load this page">
-            <LoadStatus resource={resource} />
+            <LoadFailed message={message} onRetry={onRetry} />
         </CenteredCard>
     );
 }

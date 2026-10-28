@@ -47,6 +47,8 @@ export type BridgePin = {
     muted: boolean;
     /** The pin whose thread is open. */
     active: boolean;
+    /** Placed, and reported in positions, but not drawn: the reviewer hid pins. */
+    hidden: boolean;
 };
 
 /** Messages from the app to the bridge. */

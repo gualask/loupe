@@ -12,6 +12,8 @@ import { useAction } from '../lib/form.ts';
 import { deleteMockup, setArchived, uploadMockup } from '../lib/mockups.ts';
 import { deleteProject } from '../lib/projects.ts';
 import { useResource } from '../lib/resource.ts';
+import { signedInUser } from '../lib/session.ts';
+import { workspaceHref } from '../lib/workspaces.ts';
 import { EmptyState } from '../ui/EmptyState.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { LoadStatus } from '../ui/LoadStatus.tsx';
@@ -21,11 +23,11 @@ import { ICON } from '../ui/styles.ts';
 export function ProjectPage() {
     const { params } = useRoute();
     const { route } = useLocation();
+    const me = signedInUser();
     const resource = useResource(`/projects/${params.id}`, api.get<ProjectDetail>);
     const [editing, setEditing] = useState(false);
-    const upload = useAction();
-    // Deletions and other changes made from the page or its rows.
-    const change = useAction();
+    // Uploads and the changes made from the page or its rows, one at a time.
+    const action = useAction();
 
     if (resource.status !== 'ready') {
         return (
@@ -37,14 +39,16 @@ export function ProjectPage() {
     const project = resource.data;
 
     const uploadFile = (file: File) =>
-        upload.run(async () => {
+        action.run(async () => {
             const mockup = await uploadMockup(project.id, file);
             route(`/mockups/${mockup.id}`);
-        });
+        }, 'upload');
 
     const remove = () =>
-        change.run(async () => {
-            if (await deleteProject(project, project.mockups.length)) route('/');
+        action.run(async () => {
+            if (await deleteProject(project, project.mockups.length)) {
+                route(workspaceHref(project.owner.id, me.id));
+            }
         });
 
     const updateMockups = (edit: (mockups: Mockup[]) => Mockup[]) =>
@@ -54,10 +58,10 @@ export function ProjectPage() {
         updateMockups((list) => list.map((m) => (m.id === updated.id ? updated : m)));
 
     const archiveMockup = (mockup: Mockup, archived: boolean) =>
-        change.run(async () => replaceMockup(await setArchived(mockup, archived)));
+        action.run(async () => replaceMockup(await setArchived(mockup, archived)));
 
     const removeMockup = (mockup: Mockup) =>
-        change.run(async () => {
+        action.run(async () => {
             if (await deleteMockup(mockup)) {
                 updateMockups((list) => list.filter((m) => m.id !== mockup.id));
             }
@@ -73,27 +77,28 @@ export function ProjectPage() {
                     actions={
                         <>
                             <HtmlFileButton
-                                disabled={upload.pending}
+                                disabled={action.pending}
                                 title="A single self-contained .html file"
                                 onFile={uploadFile}
                             >
                                 <IconUpload size={ICON.md} />
-                                {upload.pending ? 'Uploading…' : 'Upload mockup'}
+                                {action.running === 'upload' ? 'Uploading…' : 'Upload mockup'}
                             </HtmlFileButton>
                             <ProjectMenu
                                 project={project}
                                 size="lg"
-                                disabled={change.pending}
+                                disabled={action.pending}
                                 onEdit={() => setEditing(true)}
                                 onDelete={remove}
                             />
                         </>
                     }
                 />
-                <FormError message={upload.error ?? change.error} />
+                <FormError message={action.error} />
                 {project.mockups.length ? (
                     <MockupList
                         mockups={project.mockups}
+                        disabled={action.pending}
                         onRenamed={replaceMockup}
                         onSetArchived={archiveMockup}
                         onDelete={removeMockup}

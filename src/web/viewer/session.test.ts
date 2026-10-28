@@ -10,9 +10,13 @@ function fakeServer() {
     const state = {
         online: true,
         rejectNext: 0,
+        /** Changes answered 503, as by a proxy while Loupe restarts. */
+        unavailableNext: 0,
         versionChanged: false,
         /** Sent on the event stream, which then stays open. */
         events: [] as ShareEvent[],
+        /** Holds the answers listing the threads until it resolves. */
+        listHeld: undefined as Promise<void> | undefined,
     };
 
     vi.stubGlobal(
@@ -26,6 +30,10 @@ function fakeServer() {
                     { error: 'version_changed', message: 'A new version is available.' },
                     { status: 409 },
                 );
+            }
+            if (state.unavailableNext > 0 && method !== 'GET') {
+                state.unavailableNext--;
+                return new Response('Bad gateway', { status: 503 });
             }
             if (state.rejectNext > 0) {
                 state.rejectNext--;
@@ -47,7 +55,11 @@ function fakeServer() {
                     }),
                 );
             }
-            if (method === 'GET') return Response.json([...threads.values()]);
+            if (method === 'GET') {
+                const listed = [...threads.values()];
+                await state.listHeld;
+                return Response.json(listed);
+            }
             const [, threadId] = /threads\/([^/]+)\/comments$/.exec(url) ?? [];
             if (threadId) {
                 const existing = threads.get(threadId);
@@ -58,7 +70,7 @@ function fakeServer() {
             const created = thread(body.id, {
                 kind: body.kind,
                 anchor: body.anchor ?? null,
-                comments: [comment(body.id, body.body)],
+                comments: [comment(body.id, body.comment.body, { id: body.comment.id })],
             });
             threads.set(created.id, created);
             return Response.json(created, { status: 201 });
@@ -120,6 +132,78 @@ describe('review session changes', () => {
             'GET /api/s/tok/threads',
         ]);
         expect(session.threads.value.map((t) => t.comments[0]?.body)).toEqual(['Two']);
+    });
+
+    it('keeps the ids it generated, so a new thread can be changed before it is saved', async () => {
+        fakeServer();
+        const session = createReviewSession('tok', SHARED, 'key');
+        const created = session.createThread({ kind: 'general' }, 'Hi');
+        const [optimistic] = session.threads.value;
+
+        expect(await created).toBe(true);
+        expect(session.threads.value).toMatchObject([
+            { id: optimistic?.id, comments: [{ id: optimistic?.comments[0]?.id }] },
+        ]);
+    });
+
+    it('retries changes while the server is unavailable', async () => {
+        const server = fakeServer();
+        const session = createReviewSession('tok', SHARED, 'key');
+        server.state.unavailableNext = 1;
+
+        const created = session.createThread({ kind: 'general' }, 'Hi');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(session.saveState.value).toBe('offline');
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(await created).toBe(true);
+        expect(session.error.value).toBeUndefined();
+        expect(session.saveState.value).toBe('saved');
+    });
+
+    it('reloads the threads on reconnection only once the pending changes are saved', async () => {
+        const server = fakeServer();
+        const session = createReviewSession('tok', SHARED, 'key');
+        server.state.unavailableNext = 1;
+        const created = session.createThread({ kind: 'general' }, 'Hi');
+
+        session.connect();
+        await vi.advanceTimersByTimeAsync(0);
+        // The server does not have the thread yet; reloading now would hide it.
+        expect(session.threads.value).toHaveLength(1);
+        expect(session.loaded.value).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(await created).toBe(true);
+        session.disconnect();
+        // No reload while the creation was retried: only after it.
+        expect(server.requests).toEqual([
+            'GET /api/s/tok/events',
+            'POST /api/s/tok/threads',
+            'POST /api/s/tok/threads',
+            'GET /api/s/tok/threads',
+        ]);
+        expect(session.threads.value).toHaveLength(1);
+        expect(session.loaded.value).toBe(true);
+    });
+
+    it('does not show threads loaded while a change was made, but loads them again', async () => {
+        const server = fakeServer();
+        const session = createReviewSession('tok', SHARED, 'key');
+        let release = () => {};
+        server.state.listHeld = new Promise((resolve) => {
+            release = resolve;
+        });
+        session.connect();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // The list was read before this thread existed.
+        const created = session.createThread({ kind: 'general' }, 'Hi');
+        expect(await created).toBe(true);
+        release();
+        await vi.advanceTimersByTimeAsync(0);
+        session.disconnect();
+        expect(session.threads.value.map((t) => t.comments[0]?.body)).toEqual(['Hi']);
+        expect(server.requests.filter((r) => r === 'GET /api/s/tok/threads')).toHaveLength(2);
     });
 });
 

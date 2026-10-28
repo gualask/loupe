@@ -40,11 +40,13 @@ const COLUMNS: ItemColumn<Mockup>[] = [
 
 function MockupRow({
     mockup,
+    disabled,
     onRename,
     onSetArchived,
     onDelete,
 }: {
     mockup: Mockup;
+    disabled: boolean;
     onRename: () => void;
     onSetArchived: (archived: boolean) => void;
     onDelete: () => void;
@@ -74,6 +76,7 @@ function MockupRow({
             menu={
                 <MockupMenu
                     mockup={mockup}
+                    disabled={disabled}
                     onRename={onRename}
                     onSetArchived={onSetArchived}
                     onDelete={onDelete}
@@ -84,6 +87,8 @@ function MockupRow({
 }
 
 type RowActions = {
+    /** While one of their changes is running. */
+    disabled: boolean;
     onRenamed: (mockup: Mockup) => void;
     onSetArchived: (mockup: Mockup, archived: boolean) => void;
     onDelete: (mockup: Mockup) => void;
@@ -92,6 +97,7 @@ type RowActions = {
 /** A table of mockups, each renamed, archived, restored or deleted from its row. */
 function MockupTable({
     mockups,
+    disabled,
     onRenamed,
     onSetArchived,
     onDelete,
@@ -104,6 +110,7 @@ function MockupTable({
                     <MockupRow
                         key={mockup.id}
                         mockup={mockup}
+                        disabled={disabled}
                         onRename={() => setRenaming(mockup)}
                         onSetArchived={(archived) => onSetArchived(mockup, archived)}
                         onDelete={() => onDelete(mockup)}

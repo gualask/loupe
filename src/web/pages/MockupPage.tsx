@@ -27,9 +27,8 @@ export function MockupPage() {
     const { route } = useLocation();
     const resource = useResource(`/mockups/${params.id}`, api.get<Mockup>);
     const [renaming, setRenaming] = useState(false);
-    const upload = useAction();
-    // Archiving and deleting, one at a time.
-    const change = useAction();
+    // Uploads, archiving and deleting, one at a time.
+    const action = useAction();
 
     if (resource.status !== 'ready') {
         return (
@@ -44,16 +43,16 @@ export function MockupPage() {
     const projectHref = `/projects/${mockup.project.id}`;
 
     const uploadFile = (file: File) =>
-        upload.run(async () => {
+        action.run(async () => {
             const updated = await uploadVersion(mockup, file);
             if (updated) replaceMockup(updated);
-        });
+        }, 'upload');
 
     const archive = (value: boolean) =>
-        change.run(async () => replaceMockup(await setArchived(mockup, value)));
+        action.run(async () => replaceMockup(await setArchived(mockup, value)));
 
     const remove = () =>
-        change.run(async () => {
+        action.run(async () => {
             if (await deleteMockup(mockup)) route(projectHref);
         });
 
@@ -73,12 +72,12 @@ export function MockupPage() {
                             {mockup.archivedAt ? null : (
                                 <HtmlFileButton
                                     variant="ghost"
-                                    disabled={upload.pending}
+                                    disabled={action.pending}
                                     title="Same link and reviewers; the new version starts without comments."
                                     onFile={uploadFile}
                                 >
                                     <IconUpload size={ICON.md} />
-                                    {upload.pending ? (
+                                    {action.running === 'upload' ? (
                                         'Uploading…'
                                     ) : (
                                         // Short on phones, so the actions fit on one row.
@@ -96,7 +95,7 @@ export function MockupPage() {
                             <MockupMenu
                                 mockup={mockup}
                                 size="lg"
-                                disabled={change.pending}
+                                disabled={action.pending}
                                 onRename={() => setRenaming(true)}
                                 onSetArchived={archive}
                                 onDelete={remove}
@@ -115,7 +114,7 @@ export function MockupPage() {
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                disabled={change.pending}
+                                disabled={action.pending}
                                 onClick={() => archive(false)}
                             >
                                 <IconArchiveOff size={ICON.md} />
@@ -124,7 +123,7 @@ export function MockupPage() {
                         </div>
                     </Notice>
                 ) : null}
-                <FormError message={upload.error ?? change.error} />
+                <FormError message={action.error} />
                 {mockup.version.externalRefs.length ? (
                     <Notice tone="warning">
                         <p class="flex items-center gap-1.5 font-medium">

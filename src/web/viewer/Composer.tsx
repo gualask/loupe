@@ -1,13 +1,13 @@
 import { IconSend2 } from '@tabler/icons-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { storage } from '../lib/storage.ts';
 import { IconButton } from '../ui/IconButton.tsx';
 import { Textarea } from '../ui/Input.tsx';
 import { ICON } from '../ui/styles.ts';
+import { joinText, readDraft, saveDraft, sendDraft } from './drafts.ts';
 
 /**
  * Comment box: Enter sends, Shift+Enter adds a line, Esc cancels. With `draftKey`, unsent text
- * survives a reload. `onSubmit` resolves to whether the server saved the text: the draft is kept
+ * survives a reload. `onSubmit` resolves to whether the server saved the text: the text is kept
  * until it has, and put back in the box if it was rejected.
  */
 export function Composer({
@@ -25,7 +25,7 @@ export function Composer({
     onSubmit: (body: string) => Promise<boolean>;
     onCancel?: () => void;
 }) {
-    const [text, setText] = useState(() => (draftKey && storage.get(draftKey)) || initial);
+    const [text, setText] = useState(() => (draftKey && readDraft(draftKey)) || initial);
     const ref = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
@@ -34,22 +34,17 @@ export function Composer({
 
     function update(value: string) {
         setText(value);
-        if (!draftKey) return;
-        if (value.trim()) storage.set(draftKey, value);
-        else storage.remove(draftKey);
+        if (draftKey) saveDraft(draftKey, value);
     }
 
     function submit() {
         const body = text.trim();
         if (!body) return;
         setText('');
+        const settle = draftKey ? sendDraft(draftKey, body) : undefined;
         void onSubmit(body).then((ok) => {
-            if (!ok) {
-                setText((current) => current || body);
-                return;
-            }
-            // Unless something new was typed in the meantime.
-            if (draftKey && storage.get(draftKey)?.trim() === body) storage.remove(draftKey);
+            settle?.(ok);
+            if (!ok) setText((current) => joinText(current, body));
         });
     }
 

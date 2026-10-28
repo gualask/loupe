@@ -9,6 +9,7 @@ import {
     htmlFile,
     inviteEditor,
     later,
+    newThread,
     setUpAdmin,
     tokenFromUrl,
 } from '../test-utils.ts';
@@ -78,8 +79,7 @@ describe('projects', () => {
 
         await later();
         const { client } = await viewer('Alice');
-        const thread = (body: string) =>
-            client.post(`${base}/threads`, { id: crypto.randomUUID(), kind: 'general', body });
+        const thread = (body: string) => client.post(`${base}/threads`, newThread(body));
         const first = await thread('Looks good');
         await editor.patch(`${base}/threads/${first.body.id}`, { status: 'resolved' });
         const second = await thread('Larger buttons');
@@ -352,14 +352,9 @@ describe('mockup feedback', () => {
 
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        await alice.client.post(`${base}/threads`, newThread('Hi', { id }));
         // Editors' threads count too.
-        await editor.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'pin',
-            anchor: PIN_ANCHOR,
-            body: 'There',
-        });
+        await editor.post(`${base}/threads`, newThread('There', { anchor: PIN_ANCHOR }));
         await editor.patch(`${base}/threads/${id}`, { status: 'resolved' });
 
         const activity = {

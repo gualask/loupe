@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
-import { createSharedMockup, later } from '../test-utils.ts';
+import { createSharedMockup, later, newThread } from '../test-utils.ts';
 
 describe('threads', () => {
     it('creates pin and general threads with their first comment', async () => {
         const { t, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
+        const commentId = crypto.randomUUID();
 
         const created = await alice.client.post(`${base}/threads`, {
             id,
             kind: 'pin',
             anchor: PIN_ANCHOR,
-            body: ' Make this bigger ',
+            comment: { id: commentId, body: ' Make this bigger ' },
         });
         expect(created.status).toBe(201);
         expect(created.body).toEqual({
@@ -26,7 +27,7 @@ describe('threads', () => {
             createdAt: expect.any(String),
             comments: [
                 {
-                    id: expect.any(String),
+                    id: commentId,
                     threadId: id,
                     author: alice.viewer,
                     body: 'Make this bigger',
@@ -37,11 +38,7 @@ describe('threads', () => {
             ],
         });
 
-        const general = await alice.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'Nice overall',
-        });
+        const general = await alice.client.post(`${base}/threads`, newThread('Nice overall'));
         expect(general.body).toMatchObject({ kind: 'general', number: null, anchor: null });
 
         // Anyone with the link reads the threads, even before choosing a name.
@@ -53,22 +50,20 @@ describe('threads', () => {
         const { base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
-        const thread = { id: crypto.randomUUID(), kind: 'general', body: 'Hi' };
+        const thread = newThread('Hi');
 
         const first = await alice.client.post(`${base}/threads`, thread);
         const retry = await alice.client.post(`${base}/threads`, thread);
         expect(retry).toMatchObject({ status: 200, body: first.body });
         expect((await bob.client.post(`${base}/threads`, thread)).status).toBe(409);
+        const reusedComment = { ...thread, id: crypto.randomUUID() };
+        expect((await alice.client.post(`${base}/threads`, reusedComment)).status).toBe(409);
         expect((await alice.client.get(`${base}/threads`)).body).toHaveLength(1);
     });
 
     it('requires a viewer identity and a valid anchor', async () => {
         const { t, base, viewer } = await createSharedMockup();
-        const anonymous = await t.client().post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'Hi',
-        });
+        const anonymous = await t.client().post(`${base}/threads`, newThread('Hi'));
         expect(anonymous).toMatchObject({ status: 401, body: { error: 'viewer_required' } });
 
         const alice = await viewer('Alice');
@@ -76,7 +71,7 @@ describe('threads', () => {
             id: crypto.randomUUID(),
             kind: 'pin',
             anchor: { ...PIN_ANCHOR, offset: { x: 2, y: 0 } },
-            body: 'Hi',
+            comment: { id: crypto.randomUUID(), body: 'Hi' },
         });
         expect(invalid).toMatchObject({ status: 400, body: { error: 'invalid_request' } });
     });
@@ -85,12 +80,7 @@ describe('threads', () => {
         const { base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const pin = () =>
-            alice.client.post(`${base}/threads`, {
-                id: crypto.randomUUID(),
-                kind: 'pin',
-                anchor: PIN_ANCHOR,
-                body: 'Here',
-            });
+            alice.client.post(`${base}/threads`, newThread('Here', { anchor: PIN_ANCHOR }));
 
         const first = await pin();
         const second = await pin();
@@ -106,7 +96,7 @@ describe('threads', () => {
         const { editor, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
         const id = crypto.randomUUID();
-        await alice.client.post(`${base}/threads`, { id, kind: 'general', body: 'Hi' });
+        await alice.client.post(`${base}/threads`, newThread('Hi', { id }));
 
         const byViewer = await alice.client.patch(`${base}/threads/${id}`, { status: 'resolved' });
         expect(byViewer.status).toBe(403);
@@ -124,11 +114,10 @@ describe('comments', () => {
         const alice = await ctx.viewer('Alice');
         const bob = await ctx.viewer('Bob');
         const threadId = crypto.randomUUID();
-        const thread = await alice.client.post(`${ctx.base}/threads`, {
-            id: threadId,
-            kind: 'general',
-            body: 'Hi',
-        });
+        const thread = await alice.client.post(
+            `${ctx.base}/threads`,
+            newThread('Hi', { id: threadId }),
+        );
         const replyId = crypto.randomUUID();
         await bob.client.post(`${ctx.base}/threads/${threadId}/comments`, {
             id: replyId,
@@ -194,6 +183,16 @@ describe('comments', () => {
         ).toBe(404);
     });
 
+    it('keeps a comment deleted while an edit of it was being received blank', async () => {
+        const { t, editor, base, bob, replyId } = await threadWithReply();
+        await Promise.all([
+            bob.client.patch(`${base}/comments/${replyId}`, { body: 'Agreed!' }),
+            editor.delete(`${base}/comments/${replyId}`),
+        ]);
+        const [thread] = (await t.client().get(`${base}/threads`)).body;
+        expect(thread.comments[1]).toMatchObject({ id: replyId, body: '', deleted: true });
+    });
+
     it('keeps archived mockups readable but closed to everyone, editors included', async () => {
         const { editor, mockup, base, alice, threadId } = await threadWithReply();
         await editor.patch(`/api/mockups/${mockup.id}`, { archived: true });
@@ -220,11 +219,7 @@ describe('reviewers', () => {
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
         const carol = await viewer('Carol');
-        const thread = await alice.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'First',
-        });
+        const thread = await alice.client.post(`${base}/threads`, newThread('First'));
         await later();
         const reply = await bob.client.post(`${base}/threads/${thread.body.id}/comments`, {
             id: crypto.randomUUID(),
@@ -274,17 +269,8 @@ describe('versions', () => {
         const { editor, mockup, base, viewer, uploadVersion } = await createSharedMockup();
         const alice = await viewer('Alice');
         const bob = await viewer('Bob');
-        await alice.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'pin',
-            anchor: PIN_ANCHOR,
-            body: 'Bigger',
-        });
-        await bob.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'Looks good',
-        });
+        await alice.client.post(`${base}/threads`, newThread('Bigger', { anchor: PIN_ANCHOR }));
+        await bob.client.post(`${base}/threads`, newThread('Looks good'));
 
         await uploadVersion();
         expect((await alice.client.get(base)).body).toMatchObject({
@@ -292,12 +278,10 @@ describe('versions', () => {
             me: alice.viewer,
         });
         expect((await alice.client.get(`${base}/threads`)).body).toEqual([]);
-        const created = await alice.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'pin',
-            anchor: PIN_ANCHOR,
-            body: 'Better',
-        });
+        const created = await alice.client.post(
+            `${base}/threads`,
+            newThread('Better', { anchor: PIN_ANCHOR }),
+        );
         // Pins are numbered per version.
         expect(created.body).toMatchObject({ number: 1, author: alice.viewer });
         // Reviewers of earlier versions stay listed, without feedback on this one yet.
@@ -324,19 +308,11 @@ describe('versions', () => {
         const { t, base, viewer, uploadVersion } = await createSharedMockup();
         const alice = await viewer('Alice');
         alice.client.header('x-loupe-version', '1');
-        const first = await alice.client.post(`${base}/threads`, {
-            id: crypto.randomUUID(),
-            kind: 'general',
-            body: 'On the first file',
-        });
+        const first = await alice.client.post(`${base}/threads`, newThread('On the first file'));
 
         await uploadVersion();
         expect(
-            await alice.client.post(`${base}/threads`, {
-                id: crypto.randomUUID(),
-                kind: 'general',
-                body: 'Still on the first file',
-            }),
+            await alice.client.post(`${base}/threads`, newThread('Still on the first file')),
         ).toMatchObject({
             status: 409,
             body: {
@@ -366,7 +342,7 @@ describe('rate limits', () => {
     it('limits how fast a viewer can change things, but not editors', async () => {
         const { editor, base, viewer } = await createSharedMockup();
         const alice = await viewer('Alice');
-        const comment = () => ({ id: crypto.randomUUID(), kind: 'general', body: 'Spam' });
+        const comment = () => newThread('Spam');
 
         for (let i = 0; i < 30; i++) {
             expect((await alice.client.post(`${base}/threads`, comment())).status).toBe(201);

@@ -3,7 +3,7 @@ import { inviteRequestSchema, updateUserRequestSchema } from '../../shared/api/a
 import { createAccountLink, toAdminUser } from '../auth/accounts.ts';
 import { requireAdmin, signedInUser } from '../auth/session.ts';
 import { deleteUserSessions } from '../db/sessions.ts';
-import { findUserById, listUsers, updateUser } from '../db/users.ts';
+import { countActiveAdmins, findUserById, listUsers, updateUser } from '../db/users.ts';
 import { apiError, notFound, parseJson } from '../http.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
@@ -42,6 +42,11 @@ export function adminRoutes({ db, config }: AppDeps) {
                               ? (user.disabledAt ?? new Date())
                               : null,
                 });
+                // Checked again on the result: two admins changing each other at the same time
+                // were both admins when their requests started, and could otherwise leave none.
+                if (!countActiveAdmins(db)) {
+                    throw apiError(409, 'last_admin', 'At least one active admin must remain.');
+                }
                 if (changes.disabled) deleteUserSessions(db, user.id);
                 return row;
             });

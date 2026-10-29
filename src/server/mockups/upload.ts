@@ -6,6 +6,8 @@ import { decodeHtml, findExternalRefs } from './html.ts';
 
 // Multipart framing and the name field on top of the file itself.
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+// Longer names are cut: the name is only shown, and is sent with every listing of the mockup.
+const MAX_FILENAME_LENGTH = 255;
 
 const tooLarge = () => apiError(413, 'file_too_large', 'The file exceeds the upload limit.');
 
@@ -31,7 +33,7 @@ export function createUploadReader(maxBytes: number) {
             if (!html) throw apiError(400, 'not_html', 'The file is not a UTF-8 HTML document.');
             const fileInfo = {
                 sizeBytes: bytes.byteLength,
-                originalFilename: file.name,
+                originalFilename: file.name.slice(0, MAX_FILENAME_LENGTH),
                 externalRefs: findExternalRefs(html),
             };
             return { fields, bytes, fileInfo };

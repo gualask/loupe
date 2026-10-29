@@ -3,6 +3,7 @@ import { issueSetupLinkIfNeeded } from '../auth/accounts.ts';
 import {
     createTestApp,
     inviteEditor,
+    later,
     PASSWORD,
     setUpAdmin,
     setupLink,
@@ -186,6 +187,45 @@ describe('login and logout', () => {
         });
     });
 
+    it('refuses sign-ins beyond what the server can check at once', async () => {
+        const t = createTestApp();
+        // Different usernames, as a flood escaping the per-username limit would use.
+        const attempts = Array.from({ length: 30 }, (_, i) =>
+            t.client().post('/api/auth/login', { username: `user${i}`, password: 'nope' }),
+        );
+        const responses = await Promise.all(attempts);
+        const statuses = responses.map((res) => res.status);
+        // Two checked at once, twenty waiting.
+        expect(Object.groupBy(statuses, String)).toEqual({
+            401: Array(22).fill(401),
+            503: Array(8).fill(503),
+        });
+        expect(responses.find((res) => res.status === 503)?.body).toEqual({
+            error: 'server_busy',
+            message: 'The server is busy. Retry in a moment.',
+        });
+    });
+
+    it('uses a cookie bound to the host over https', async () => {
+        const t = createTestApp({ LOUPE_PUBLIC_URL: 'https://loupe.test' });
+        await setUpAdmin(t);
+        const login = await t.client().post('/api/auth/login', {
+            username: 'admin',
+            password: PASSWORD,
+        });
+        const [cookie = ''] = login.headers.getSetCookie();
+        expect(cookie).toMatch(
+            /^__Host-loupe_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Lax$/,
+        );
+
+        const value = cookie.split(';')[0]?.split('=')[1];
+        const me = (name: string) =>
+            t.app.request('/api/auth/me', { headers: { cookie: `${name}=${value}` } });
+        expect((await me('__Host-loupe_session')).status).toBe(200);
+        // A cookie without the prefix could have been set by another subdomain.
+        expect((await me('loupe_session')).status).toBe(401);
+    });
+
     it('rejects cross-site form posts', async () => {
         const t = createTestApp();
         const res = await t.app.request('/api/auth/logout', {
@@ -285,6 +325,59 @@ describe('user management', () => {
         const me = await admin.get('/api/auth/me');
         const res = await admin.patch(`/api/admin/users/${me.body.id}`, { role: 'editor' });
         expect(res).toMatchObject({ status: 409, body: { error: 'cannot_modify_self' } });
+    });
+
+    it('keeps an active admin when two admins disable each other at once', async () => {
+        const t = createTestApp();
+        const admin = await setUpAdmin(t);
+        const adminId = (await admin.get('/api/auth/me')).body.id;
+        const invite = await admin.post('/api/admin/invites', { role: 'admin' });
+        const second = await t.client().post(`/api/auth/tokens/${tokenFromUrl(invite.body.url)}`, {
+            username: 'ada',
+            displayName: 'Ada',
+            password: PASSWORD,
+        });
+        const cookie = second.headers.getSetCookie()[0]?.split(';')[0] ?? '';
+
+        // Ada's request is under way, signed in as an admin, while the first admin disables her:
+        // its body arrives afterwards.
+        const json = JSON.stringify({ disabled: true });
+        let send = () => {};
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                send = () => {
+                    controller.enqueue(new TextEncoder().encode(json));
+                    controller.close();
+                };
+            },
+        });
+        // Node needs `duplex` for a streamed body, which the DOM types do not know.
+        const request: RequestInit & { duplex: 'half' } = {
+            method: 'PATCH',
+            headers: {
+                origin: 'http://loupe.test',
+                'content-type': 'application/json',
+                'content-length': String(json.length),
+                cookie,
+            },
+            body,
+            duplex: 'half',
+        };
+        const pending = t.app.request(`/api/admin/users/${adminId}`, request);
+        await later();
+        const disabled = await admin.patch(`/api/admin/users/${second.body.id}`, {
+            disabled: true,
+        });
+        expect(disabled.body).toMatchObject({ username: 'ada', disabled: true });
+
+        send();
+        const res = await pending;
+        expect(res.status).toBe(409);
+        expect(await res.json()).toEqual({
+            error: 'last_admin',
+            message: 'At least one active admin must remain.',
+        });
+        expect((await admin.get('/api/auth/me')).status).toBe(200);
     });
 
     it('lists users for admins', async () => {

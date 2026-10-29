@@ -19,19 +19,36 @@ function expiryFor(createdAt: number, now: number, { config }: AppDeps) {
     return Math.min(now + config.sessionTtlMs, createdAt + MAX_SESSION_MS);
 }
 
-function writeCookie(c: Context, value: string, maxAgeMs: number, { config }: AppDeps) {
+/**
+ * Over https the cookie is `__Host-loupe_session`: browsers then accept it only from this host,
+ * so a sibling subdomain cannot plant a session of its own choosing. Plain http (local use)
+ * cannot have the prefix.
+ */
+function scope({ config }: AppDeps) {
+    const prefix = config.secureCookies ? ('host' as const) : undefined;
+    return { path: '/', secure: config.secureCookies, prefix };
+}
+
+function readCookie(c: Context, deps: AppDeps) {
+    return getCookie(c, COOKIE, scope(deps).prefix);
+}
+
+function writeCookie(c: Context, value: string, maxAgeMs: number, deps: AppDeps) {
     setCookie(c, COOKIE, value, {
+        ...scope(deps),
         httpOnly: true,
         sameSite: 'Lax',
-        secure: config.secureCookies,
-        path: '/',
         maxAge: Math.floor(maxAgeMs / 1000),
     });
 }
 
+function clearCookie(c: Context, deps: AppDeps) {
+    deleteCookie(c, COOKIE, scope(deps));
+}
+
 /** Signs a browser in, ending the session it had (e.g. signing in again, or with another account). */
 export function startSession(c: Context, deps: AppDeps, userId: string) {
-    const previous = getCookie(c, COOKIE);
+    const previous = readCookie(c, deps);
     if (previous) deleteSession(deps.db, sha256(previous));
     const id = randomToken();
     const now = Date.now();
@@ -40,24 +57,24 @@ export function startSession(c: Context, deps: AppDeps, userId: string) {
     writeCookie(c, id, expiresAt - now, deps);
 }
 
-export function endSession(c: Context, { db }: AppDeps) {
-    const id = getCookie(c, COOKIE);
-    if (id) deleteSession(db, sha256(id));
-    deleteCookie(c, COOKIE, { path: '/' });
+export function endSession(c: Context, deps: AppDeps) {
+    const id = readCookie(c, deps);
+    if (id) deleteSession(deps.db, sha256(id));
+    clearCookie(c, deps);
 }
 
 /** Resolves the session cookie into `c.var.user` (null when absent, expired or disabled). */
 export function sessionMiddleware(deps: AppDeps) {
     return createMiddleware<AppEnv>(async (c, next) => {
         c.set('user', null);
-        const id = getCookie(c, COOKIE);
+        const id = readCookie(c, deps);
         if (id) {
             const idHash = sha256(id);
             const found = findSessionWithUser(deps.db, idHash);
             const now = Date.now();
             if (!found || found.session.expiresAt.getTime() <= now || found.user.disabledAt) {
                 if (found) deleteSession(deps.db, idHash);
-                deleteCookie(c, COOKIE, { path: '/' });
+                clearCookie(c, deps);
             } else {
                 c.set('user', found.user);
                 const expiresAt = expiryFor(found.session.createdAt.getTime(), now, deps);

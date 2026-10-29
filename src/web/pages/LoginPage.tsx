@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { useFormSubmit } from '../lib/form.ts';
-import { currentUser, login } from '../lib/session.ts';
+import { currentUser, login, nextPath } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { CenteredCard } from '../ui/CenteredCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { TextField } from '../ui/TextField.tsx';
-
-/** Only same-app paths, so a crafted link cannot redirect elsewhere after login. */
-function safeNext(next: string | undefined) {
-    return next?.startsWith('/') && !next.startsWith('//') ? next : '/';
-}
 
 export function LoginPage() {
     const { route, query } = useLocation();
@@ -20,7 +15,7 @@ export function LoginPage() {
     const signedIn = !!currentUser.value;
 
     useEffect(() => {
-        if (signedIn) route(safeNext(query.next), true);
+        if (signedIn) route(nextPath(query.next, location.origin), true);
     }, [signedIn, route, query.next]);
 
     return (

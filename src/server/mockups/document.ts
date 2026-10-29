@@ -1,6 +1,8 @@
 // Turns an uploaded mockup into the document served inside the sandboxed iframe.
 // See docs/SPEC.md §4.1 and §4.2; these headers are a security boundary.
 
+import type { Config } from '../config.ts';
+
 const SELF_CONTAINED_POLICY = [
     "default-src 'none'",
     "script-src 'unsafe-inline' data: blob:",
@@ -21,12 +23,15 @@ const EXTERNAL_ALLOWED_POLICY = [
     "connect-src 'none'",
 ];
 
-export function mockupHeaders(external: 'block' | 'allow') {
-    const policy = external === 'allow' ? EXTERNAL_ALLOWED_POLICY : SELF_CONTAINED_POLICY;
+export function mockupHeaders({ mockupExternal, publicUrl }: Config) {
+    const policy = mockupExternal === 'allow' ? EXTERNAL_ALLOWED_POLICY : SELF_CONTAINED_POLICY;
+    // Only the app frames mockups. 'self' is the document's URL, but browsers have resolved it
+    // differently in sandboxed documents, so the app's origin is named too.
+    const framing = `frame-ancestors 'self' ${publicUrl}`;
     return {
         'Content-Type': 'text/html; charset=utf-8',
         // `sandbox` without allow-same-origin gives the document an opaque origin.
-        'Content-Security-Policy': ['sandbox allow-scripts', ...policy].join('; '),
+        'Content-Security-Policy': ['sandbox allow-scripts', ...policy, framing].join('; '),
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
         'Cache-Control': 'private, no-cache',

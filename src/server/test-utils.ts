@@ -28,30 +28,34 @@ export function newThread(
     return anchor ? { id, kind: 'pin', anchor, comment } : { id, kind: 'general', comment };
 }
 
-/** An app on a fresh in-memory database, plus a client that keeps cookies like a browser. */
-export function createTestApp() {
+/**
+ * An app on a fresh in-memory database, plus a client that keeps cookies like a browser; `env`
+ * overrides the test configuration.
+ */
+export function createTestApp(env: Record<string, string> = {}) {
     const dataDir = mkdtempSync(path.join(tmpdir(), 'loupe-test-'));
     tempDirs.push(dataDir);
     const config = loadConfig({
         LOUPE_PUBLIC_URL: 'http://loupe.test',
         LOUPE_DATA_DIR: dataDir,
         LOUPE_MAX_UPLOAD_MB: '1',
+        ...env,
     });
     const bridgeFile = path.join(dataDir, 'bridge.js');
     writeFileSync(bridgeFile, TEST_BRIDGE);
     const db = openDb(':memory:');
     const app = createApp({ db, config, bridgeFile });
-    return { app, db, config, client: () => createClient(app) };
+    return { app, db, config, client: () => createClient(app, config.publicUrl) };
 }
 
 type App = ReturnType<typeof createApp>;
 
-function createClient(app: App) {
+function createClient(app: App, origin: string) {
     const cookies = new Map<string, string>();
     const extraHeaders: Record<string, string> = {};
 
     async function request(method: string, path: string, body?: unknown) {
-        const headers: Record<string, string> = { origin: 'http://loupe.test', ...extraHeaders };
+        const headers: Record<string, string> = { origin, ...extraHeaders };
         const isForm = body instanceof FormData;
         if (body !== undefined && !isForm) headers['content-type'] = 'application/json';
         if (cookies.size) {

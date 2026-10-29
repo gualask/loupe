@@ -57,7 +57,7 @@ docker exec loupe loupe reset-link <username>
 |---|---|---|
 | `LOUPE_PORT` | `3000` | HTTP port |
 | `LOUPE_DATA_DIR` | `/data` | SQLite database and uploaded mockups |
-| `LOUPE_PUBLIC_URL` | `http://localhost:<port>` | Public base URL, used to build links. With `https`, cookies are marked `Secure` |
+| `LOUPE_PUBLIC_URL` | `http://localhost:<port>` | Public base URL, used to build links and the only site allowed to frame mockups. With `https`, the session cookie is `Secure` and bound to the host |
 | `LOUPE_MAX_UPLOAD_MB` | `20` | Maximum mockup size |
 | `LOUPE_MOCKUP_EXTERNAL` | `block` | `allow` lets mockups load external `https:` resources (CDNs, web fonts) |
 | `LOUPE_SESSION_TTL_DAYS` | `30` | Days without use after which an editor or admin is signed out; sessions end 90 days after sign-in regardless |
@@ -66,12 +66,14 @@ docker exec loupe loupe reset-link <username>
 
 Put Loupe behind your usual HTTPS reverse proxy and set `LOUPE_PUBLIC_URL` to the public address.
 Loupe compresses and sets cache headers itself, so the proxy needs no configuration for either.
-With nginx:
+Loupe does not send `Strict-Transport-Security`, since only the proxy knows that it serves https:
+add it there, so browsers never reach Loupe over plain http. With nginx:
 
 ```nginx
 location / {
     proxy_pass http://127.0.0.1:3000;
     proxy_set_header Host $host;
+    add_header Strict-Transport-Security "max-age=31536000" always;
 }
 ```
 

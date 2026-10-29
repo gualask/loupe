@@ -5,6 +5,19 @@ import { ApiError, api, errorMessage, handleSignedOut } from './api.ts';
 /** The login page, which brings the user back to `next` once signed in. */
 export const loginPath = (next: string) => `/login?next=${encodeURIComponent(next)}`;
 
+/**
+ * Where the login page goes once signed in: `next` when it stays on the app's `origin`, so a
+ * crafted link cannot send the user elsewhere (browsers read `/\\host` as `//host`).
+ */
+export function nextPath(next: string | undefined, origin: string) {
+    try {
+        const url = new URL(next ?? '/', origin);
+        return url.origin === origin ? url.pathname + url.search + url.hash : '/';
+    } catch {
+        return '/';
+    }
+}
+
 /** `undefined` while loading, `null` when signed out. */
 export const currentUser = signal<User | null | undefined>(undefined);
 /** Why the session could not be checked, e.g. offline or a server error: worth retrying. */

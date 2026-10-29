@@ -60,7 +60,7 @@ export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
         const bridge = await loadBridge();
         // The stored file is addressed by its hash; the bridge changes only with Loupe itself.
         const etag = `"${version.sha256}-${bridge.hash}"`;
-        const headers = { ...mockupHeaders(deps.config.mockupExternal), ETag: etag };
+        const headers = { ...mockupHeaders(deps.config), ETag: etag };
         if (matchesEtag(c.req.header('If-None-Match'), etag)) return c.body(null, 304, headers);
         const html = await readMockupFile(deps.config.dataDir, version.sha256);
         return c.body(injectBridge(html, bridge.script), 200, headers);

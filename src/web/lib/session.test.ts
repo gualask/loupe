@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../shared/api/auth.ts';
-import { currentUser, loadSession, sessionError, watchSession } from './session.ts';
+import { currentUser, loadSession, nextPath, sessionError, watchSession } from './session.ts';
 
 const user = (id: string): User => ({
     id,
@@ -84,5 +84,26 @@ describe('watchSession', () => {
         await focus();
         expect(currentUser.value).toEqual(user('u1'));
         expect(reload).not.toHaveBeenCalled();
+    });
+});
+
+describe('nextPath', () => {
+    const origin = 'https://loupe.test';
+
+    it('goes back to pages of the app', () => {
+        expect(nextPath('/projects/1?owner=all#top', origin)).toBe('/projects/1?owner=all#top');
+        expect(nextPath(undefined, origin)).toBe('/');
+    });
+
+    it('never leaves the app', () => {
+        for (const next of [
+            '//evil.test',
+            '/\\evil.test',
+            'https://evil.test/',
+            'javascript:alert(1)',
+            'http://[',
+        ]) {
+            expect(nextPath(next, origin)).toBe('/');
+        }
     });
 });

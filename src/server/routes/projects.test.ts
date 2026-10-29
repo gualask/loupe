@@ -178,6 +178,17 @@ describe('mockups', () => {
         expect(res).toMatchObject({ status: 413, body: { error: 'file_too_large' } });
     });
 
+    it('keeps the first 255 characters of a file name', async () => {
+        const { editor, project } = await editorWithMockup();
+        const res = await editor.post(
+            `/api/projects/${project.id}/mockups`,
+            htmlFile(MOCKUP, `${'a'.repeat(300)}.html`),
+        );
+        expect(res.status).toBe(201);
+        expect(res.body.version.originalFilename).toBe('a'.repeat(255));
+        expect(res.body.name).toBe('a'.repeat(120));
+    });
+
     it('deletes the stored file with the last mockup using it', async () => {
         const { t, editor, mockup } = await editorWithMockup();
         expect((await editor.delete(`/api/mockups/${mockup.id}`)).status).toBe(204);
@@ -195,7 +206,7 @@ describe('share links', () => {
         expect(res.headers.get('content-security-policy')).toBe(
             "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' data: blob:; " +
                 "style-src 'unsafe-inline' data:; img-src data: blob:; font-src data:; " +
-                "media-src data: blob:; connect-src 'none'",
+                "media-src data: blob:; connect-src 'none'; frame-ancestors 'self' http://loupe.test",
         );
         expect(res.headers.get('x-content-type-options')).toBe('nosniff');
         expect(res.body).toContain(

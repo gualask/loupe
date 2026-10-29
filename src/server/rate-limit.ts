@@ -39,3 +39,34 @@ export function createWindowLimiter({ max, windowMs }: { max: number; windowMs: 
         },
     };
 }
+
+/**
+ * Runs at most `max` tasks at a time, in order, and lets at most `queue` more wait; beyond that a
+ * task is refused at once, so a flood of requests cannot pile up work.
+ */
+export function createConcurrencyLimiter({ max, queue }: { max: number; queue: number }) {
+    let running = 0;
+    const waiting: (() => void)[] = [];
+
+    async function run<T>(task: () => Promise<T>) {
+        // Taken before the first await, so parallel calls all see the same count.
+        if (running < max) running += 1;
+        else await new Promise<void>((resolve) => waiting.push(resolve));
+        try {
+            return await task();
+        } finally {
+            // The slot passes straight to the next waiting task, so no newcomer can take it.
+            const next = waiting.shift();
+            if (next) next();
+            else running -= 1;
+        }
+    }
+
+    return {
+        /** Runs `task` when a slot is free, or returns undefined when too many already wait. */
+        tryRun<T>(task: () => Promise<T>) {
+            if (running >= max && waiting.length >= queue) return undefined;
+            return run(task);
+        },
+    };
+}

@@ -71,16 +71,19 @@ No email server is required. Every account flow is a **single-use link** that ex
 - **Password reset**: an admin generates a reset link for a user (`/reset/<token>`, valid 24 h).
   Using it signs the user out of every session.
 - **Account management**: admins change roles and disable accounts (which ends their sessions).
-  Admins cannot change their own account, so at least one admin always remains.
+  Admins cannot change their own account, and a change that would leave no active admin, such
+  as two admins disabling each other at the same moment, is refused (`409 last_admin`), so at
+  least one admin always remains.
 - **Locked-out admin**: `docker exec loupe loupe reset-link <username>` prints a reset link.
 - **Passwords**: Argon2id from `node:crypto`, with OWASP's minimum parameters (19 MiB, 2
   passes, 1 lane), stored as a standard PHC string that carries its parameters, so they can be
   raised later without breaking existing hashes. Minimum 10 characters.
-- **Sessions**: opaque id in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` when
-  `LOUPE_PUBLIC_URL` is https), stored hashed in SQLite. A session ends after 30 days without
-  use (`LOUPE_SESSION_TTL_DAYS`), and in any case 90 days after sign-in, so a stolen cookie
-  cannot be kept alive by using it. The expiry is extended only when it moves by more than an
-  hour, so requests rarely write to the database.
+- **Sessions**: opaque id in an `HttpOnly`, `SameSite=Lax` cookie, stored hashed in SQLite. When
+  `LOUPE_PUBLIC_URL` is https the cookie is `Secure` and named `__Host-loupe_session`, so
+  browsers take it only from Loupe's own host and a sibling subdomain cannot plant one. A
+  session ends after 30 days without use (`LOUPE_SESSION_TTL_DAYS`), and in any case 90 days
+  after sign-in, so a stolen cookie cannot be kept alive by using it. The expiry is extended
+  only when it moves by more than an hour, so requests rarely write to the database.
   Signing in, or redeeming an account link, ends the browser's previous session; the account
   link page warns when someone is already signed in. When a session ends (expiry, logout in
   another tab, reset, disabled account), open pages return to the login page at their next
@@ -92,6 +95,10 @@ No email server is required. Every account flow is a **single-use link** that ex
   links carry 256-bit secrets and need no limit. The limit is per username, not per address:
   behind a reverse proxy every client shares one address. As a consequence, anyone can lock a
   known username out of signing in for 15 minutes; existing sessions keep working.
+  Attempts with ever different usernames escape that limit, and every password check costs an
+  Argon2id hash: at most 2 hashes run at once and 20 more wait, beyond which sign-ins and account
+  links answer `503 server_busy`. Hashes share Node's thread pool with file reads, so a flood of
+  sign-ins cannot stall the serving of mockups.
 - **Request size**: API bodies are limited to 64 KB (`413 payload_too_large`); mockup uploads
   have their own limit.
 - **Clean-up**: an account link is deleted when used; expired sessions and links are deleted at
@@ -119,6 +126,8 @@ Uploaded HTML is untrusted. It is never served as a regular page of the app:
   fake form, and navigate its own frame elsewhere, which no browser policy can block. Mockups
   are therefore trusted to their editors, who are invited accounts responsible for what they
   upload (§1).
+- The document may be framed only by the app (`frame-ancestors 'self'` plus the origin of
+  `LOUPE_PUBLIC_URL`, since browsers have resolved `'self'` differently in sandboxed documents).
 - Every other response carries an app policy: only the app's own scripts and files load, and
   no other site can frame the app (`frame-ancestors 'none'`, against clickjacking). All
   responses carry `X-Content-Type-Options: nosniff`.
@@ -277,7 +286,7 @@ general comment box then opens with that text and a note asking to send, edit or
   activity of its current version.
 - **Upload**: from the project page, pick an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
-  self-contained.
+  self-contained. File names are kept up to 255 characters.
 - **New version**: from the mockup page, upload the next file with the same checks. It becomes
   the current version on the same share link; viewers keep their identity, and threads and
   activity counts start again from zero. Threads of earlier versions stay stored but are not

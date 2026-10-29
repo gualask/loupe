@@ -25,7 +25,29 @@ const VIEWPORTS = [
     { label: 'Mobile', value: 390, icon: <IconDeviceMobile size={ICON.md} /> },
 ];
 
-const MAX_AVATARS = 5;
+/**
+ * How many others show by face, from the narrowest screens up; the rest show as a count. More
+ * would push the tools off center, and on phones crowd out the mockup's name. `avatar` shows the
+ * faces a tier adds, `more` its count.
+ */
+const AVATAR_TIERS = [
+    { shown: 3, avatar: 'flex', more: 'sm:hidden' },
+    { shown: 5, avatar: 'flex max-sm:hidden', more: 'max-sm:hidden xl:hidden' },
+    { shown: 10, avatar: 'flex max-xl:hidden', more: 'max-xl:hidden' },
+];
+const MAX_AVATARS = Math.max(...AVATAR_TIERS.map((tier) => tier.shown));
+
+/** The others beyond the first `shown`. */
+function MoreCount({ count, class: className }: { count: number; class: string }) {
+    if (count <= 0) return null;
+    return (
+        <span
+            class={`grid size-6.5 place-items-center rounded-full bg-stone-200 text-xs ring-2 ring-white ${className}`}
+        >
+            +{count}
+        </span>
+    );
+}
 
 /**
  * Top bar of the review space: mockup name and save status, the review actions (`tools`, on a row
@@ -99,14 +121,21 @@ export function ReviewHeader({
             <div class="flex shrink-0 items-center justify-end gap-2">
                 {others.length ? (
                     <div class="flex -space-x-1.5" title="Also here now">
-                        {others.slice(0, MAX_AVATARS).map((author) => (
-                            <Avatar key={authorKey(author)} author={author} size="lg" />
-                        ))}
-                        {others.length > MAX_AVATARS ? (
-                            <span class="grid size-6.5 place-items-center rounded-full bg-stone-200 text-xs ring-2 ring-white">
-                                +{others.length - MAX_AVATARS}
+                        {others.slice(0, MAX_AVATARS).map((author, i) => (
+                            <span
+                                key={authorKey(author)}
+                                class={AVATAR_TIERS.find((tier) => i < tier.shown)?.avatar}
+                            >
+                                <Avatar author={author} size="lg" />
                             </span>
-                        ) : null}
+                        ))}
+                        {AVATAR_TIERS.map((tier) => (
+                            <MoreCount
+                                key={tier.shown}
+                                count={others.length - tier.shown}
+                                class={tier.more}
+                            />
+                        ))}
                     </div>
                 ) : null}
                 <div class="hidden lg:block">

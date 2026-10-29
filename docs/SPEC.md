@@ -200,9 +200,9 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 ## 5. Viewer experience
 
 - **Header**: mockup name and save status; the review tools Pin and General comment; the
-  avatars of the others present, what shows (viewport switcher, Show/hide pins, side-panel
-  toggle) and, last as in the rest of the app, the profile menu. Editors also get a link back to
-  the mockup page.
+  avatars of the others present (up to 10 from 1280 px, 5 from 640 px, 3 below, then a
+  count), what shows (viewport switcher, Show/hide pins, side-panel toggle) and, last as in the
+  rest of the app, the profile menu. Editors also get a link back to the mockup page.
 - **Profile menu**: the avatar of whoever is reviewing (a generic icon for a viewer who has not
   joined yet) opens who they are here, "Change your name" for viewers while the mockup accepts
   comments (§4.3) and the shortcuts help, except on touch screens. With none of these, the avatar

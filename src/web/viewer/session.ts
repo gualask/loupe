@@ -181,6 +181,22 @@ export function createReviewSession(
         connect,
         disconnect: () => closeStream?.(),
 
+        /**
+         * Reloads the page when the server now sees someone else here. The session cookie is
+         * shared by all tabs: after signing in or out in another one, changes made here would go
+         * under an identity this page does not show.
+         */
+        async checkIdentity() {
+            const current = await api
+                .get<SharedMockup>(base, identity.keyHeader())
+                .catch(() => undefined);
+            if (!current) return;
+            const shown = me.value;
+            const changed =
+                shown && current.me ? !sameAuthor(shown, current.me) : shown !== current.me;
+            if (changed) location.reload();
+        },
+
         createThread(input: ThreadTarget, body: string) {
             const id = crypto.randomUUID();
             const comment = newComment(id, body);
@@ -281,6 +297,11 @@ export function useReviewSession(
     useEffect(() => {
         session.connect();
         return session.disconnect;
+    }, [session]);
+    useEffect(() => {
+        const check = () => void session.checkIdentity();
+        addEventListener('focus', check);
+        return () => removeEventListener('focus', check);
     }, [session]);
     const unavailable = session.unavailable.value;
     useEffect(() => {

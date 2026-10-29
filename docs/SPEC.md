@@ -88,8 +88,10 @@ No email server is required. Every account flow is a **single-use link** that ex
   link page warns when someone is already signed in. When a session ends (expiry, logout in
   another tab, reset, disabled account), open pages return to the login page at their next
   request or when their window regains focus, which checks the session again; a page whose
-  browser has meanwhile signed in as someone else reloads as that user. A session that cannot be
-  checked, e.g. offline, offers to retry instead of signing out.
+  browser has meanwhile signed in as someone else reloads as that user. A review space checks
+  in the same way who it writes as, since a session started or ended in another tab changes it
+  (§4.3), and reloads under the new identity. A session that cannot be checked, e.g. offline,
+  offers to retry instead of signing out.
 - **CSRF**: Hono `csrf()` middleware (Origin check) on all state-changing routes.
 - **Brute force**: in-memory limit of 10 failed logins per username per 15 minutes. Account
   links carry 256-bit secrets and need no limit. The limit is per username, not per address:
@@ -205,7 +207,8 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
   rest of the app, the profile menu. Editors also get a link back to the mockup page.
 - **Profile menu**: the avatar of whoever is reviewing (a generic icon for a viewer who has not
   joined yet) opens who they are here, "Change your name" for viewers while the mockup accepts
-  comments (§4.3) and the shortcuts help, except on touch screens. With none of these, the avatar
+  comments (§4.3), the shortcuts help, except on touch screens, and "Sign out" for editors, who
+  then stay on the link as a guest, or as the viewer they were. With none of these, the avatar
   opens nothing.
 - **Side panel**: the threads, filtered by Open / Mine / Resolved / All, with orphaned pins
   marked, and for editors the threads that await their reply (§2). Editors can open it
@@ -223,7 +226,8 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
   element at any width (§4.4).
 - **Moderation**: only editors resolve and reopen threads; authors edit their own comments;
   authors and editors delete them. Archived mockups accept no review changes from anyone (§6).
-- **Shortcuts**: `P` pin, `C` comment, `H` hide pins, `Esc` cancel, `?` help.
+- **Shortcuts**: `P` pin, `C` comment, `H` hide pins (which also closes an open pin's thread),
+  `Esc` cancel, `?` help.
 
 ### 5.1 Saving
 

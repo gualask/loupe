@@ -1,4 +1,4 @@
-import { IconKeyboard, IconPencil, IconUserCircle, IconX } from '@tabler/icons-preact';
+import { IconKeyboard, IconLogout, IconPencil, IconUserCircle, IconX } from '@tabler/icons-preact';
 import type { Author } from '../../shared/api/reviews.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { Badge } from '../ui/Badge.tsx';
@@ -10,9 +10,10 @@ import { SHORTCUTS } from './shortcuts.ts';
 const hasShortcuts = () => !matchMedia('(pointer: coarse)').matches;
 
 /**
- * The avatar of whoever is reviewing, opening who they are here, changing a viewer's name and the
- * shortcuts help; with nothing to offer, the avatar alone, or nothing for a viewer who has not
- * joined. A viewer who still has a generated name gets a one-time hint below it.
+ * The avatar of whoever is reviewing, opening who they are here, changing a viewer's name, the
+ * shortcuts help and an editor's sign-out; with nothing to offer, the avatar alone, or nothing
+ * for a viewer who has not joined. A viewer who still has a generated name gets a one-time hint
+ * below it.
  */
 export function ProfileMenu({
     me,
@@ -20,6 +21,7 @@ export function ProfileMenu({
     hint,
     onName,
     onHelp,
+    onSignOut,
     onDismissHint,
 }: {
     /** Null for a viewer who has not joined yet. */
@@ -28,6 +30,8 @@ export function ProfileMenu({
     hint: boolean;
     onName: () => void;
     onHelp: () => void;
+    /** Editors only, who are signed in. */
+    onSignOut: (() => void) | undefined;
     onDismissHint: () => void;
 }) {
     const items: MenuItem[] = [];
@@ -45,6 +49,14 @@ export function ProfileMenu({
             shortcut: SHORTCUTS['?'].label,
             separate: true,
             onSelect: onHelp,
+        });
+    }
+    if (onSignOut) {
+        items.push({
+            label: 'Sign out',
+            icon: <IconLogout size={ICON.md} />,
+            separate: true,
+            onSelect: onSignOut,
         });
     }
 

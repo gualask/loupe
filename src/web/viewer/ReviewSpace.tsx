@@ -4,6 +4,7 @@ import type { SharedMockup } from '../../shared/api/projects.ts';
 import { sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import type { BridgeMessage, PinPosition, ShortcutKey } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
+import { logout } from '../lib/session.ts';
 import { useBridge } from './bridge.ts';
 import { HelpDialog, NameDialog } from './dialogs.tsx';
 import { useDraftRecovery } from './drafts.ts';
@@ -102,6 +103,12 @@ export function ReviewSpace({
         if (panelCoversMockup()) setPanelOpen(false);
     }
 
+    /** Signs out and stays on the link, which reloads as a guest, or as the viewer they were. */
+    async function signOut() {
+        await logout();
+        location.reload();
+    }
+
     /** Runs an action that needs an identity, joining under a generated name if necessary. */
     function withIdentity(action: () => void) {
         void session.identity.join().then((joined) => joined && action());
@@ -136,6 +143,12 @@ export function ReviewSpace({
         }
     }
 
+    /** Hiding pins also closes the open pin's thread, which would have nothing to point at. */
+    function togglePins() {
+        if (!pinsHidden && openThread?.kind === 'pin') setOpenId(null);
+        setPinsHidden(!pinsHidden);
+    }
+
     function shortcut(key: ShortcutKey) {
         // Any dialog, its own or a confirmation, holds the keys until it closes.
         if (document.querySelector('dialog[open]')) return;
@@ -145,7 +158,7 @@ export function ReviewSpace({
             else setOpenId(null);
         } else if (key === 'p') startPin();
         else if (key === 'c') startComment();
-        else if (key === 'h') setPinsHidden((hidden) => !hidden);
+        else if (key === 'h') togglePins();
         else setDialog('help');
     }
 
@@ -214,7 +227,7 @@ export function ReviewSpace({
             </Popover>
         );
     } else if (openThread) {
-        const pinId = openThread.kind === 'pin' && !pinsHidden ? openThread.id : null;
+        const pinId = openThread.kind === 'pin' ? openThread.id : null;
         popover = (
             <Popover key={openThread.id} locate={() => popoverPoint(pinId)}>
                 <ThreadView
@@ -262,6 +275,7 @@ export function ReviewSpace({
                         hint={session.identity.nameHint.value}
                         onName={() => setDialog('name')}
                         onHelp={() => setDialog('help')}
+                        onSignOut={isEditor ? () => void signOut() : undefined}
                         onDismissHint={session.identity.dismissNameHint}
                     />
                 }
@@ -274,7 +288,7 @@ export function ReviewSpace({
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}
                 onViewport={setViewportWidth}
-                onTogglePins={() => setPinsHidden((hidden) => !hidden)}
+                onTogglePins={togglePins}
                 onTogglePanel={() => setPanelOpen((open) => !open)}
             />
             {outdated ? (

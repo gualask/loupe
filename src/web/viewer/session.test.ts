@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SharedMockup } from '../../shared/api/projects.ts';
 import type { ShareEvent, Thread } from '../../shared/api/reviews.ts';
 import { ANN, comment, SHARED, thread } from '../test-utils.ts';
 import { createReviewSession } from './session.ts';
@@ -246,5 +247,34 @@ describe('events', () => {
         ]);
         expect(session.presence.value).toEqual([renamed]);
         expect(session.me.value).toEqual(renamed);
+    });
+});
+
+describe('checkIdentity', () => {
+    const EDITOR = { kind: 'editor' as const, id: 'u1', displayName: 'Andrea' };
+
+    /** Checks the identity while the server sees `me`; resolves to whether the page reloaded. */
+    async function check(shown: SharedMockup['me'], me: SharedMockup['me']) {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => Response.json({ ...SHARED, me })),
+        );
+        const reload = vi.fn();
+        vi.stubGlobal('location', { reload });
+        await createReviewSession('tok', { ...SHARED, me: shown }, null).checkIdentity();
+        return reload.mock.calls.length > 0;
+    }
+
+    it('reloads once another tab signed in or out', async () => {
+        expect(await check(null, EDITOR)).toBe(true);
+        expect(await check(ANN, EDITOR)).toBe(true);
+        expect(await check(EDITOR, ANN)).toBe(true);
+        expect(await check(EDITOR, null)).toBe(true);
+    });
+
+    it('stays when the server sees the identity shown', async () => {
+        expect(await check(null, null)).toBe(false);
+        expect(await check(ANN, { ...ANN, displayName: 'Ann B.' })).toBe(false);
+        expect(await check(EDITOR, EDITOR)).toBe(false);
     });
 });

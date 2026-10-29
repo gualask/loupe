@@ -131,9 +131,12 @@ Uploaded HTML is untrusted. It is never served as a regular page of the app:
 - Every other response carries an app policy: only the app's own scripts and files load, and
   no other site can frame the app (`frame-ancestors 'none'`, against clickjacking). All
   responses carry `X-Content-Type-Options: nosniff`.
-- The document is sent with `Cache-Control: private, no-cache` and an `ETag` made of the file's
-  SHA-256 and the bridge's hash: browsers revalidate on every load and get `304` when their copy
-  is current. Access is checked first, so a regenerated link stops serving it.
+- The document is sent with `Cache-Control: private, no-cache` and a weak `ETag` made of the
+  file's SHA-256 and the bridge's hash: browsers revalidate on every load and get `304` when
+  their copy is current. Access is checked first, so a regenerated link stops serving it.
+- The server prepares each document once, bridge inlined and gzip-compressed, and keeps the most
+  recently served ones in memory (64 MB in all), so repeated loads neither read the file again
+  nor compress it.
 
 ### 4.2 Bridge script
 
@@ -238,7 +241,8 @@ restored on reload; a box reopened while its text is being sent starts empty.
 ### 5.2 Real time
 
 One **Server-Sent Events** channel per mockup version broadcasts the full state of each changed
-thread, deleted threads, presence (who is connected, with name and color), viewers' new names,
+thread, deleted threads, presence (who is connected, with name and color; readers who have not
+joined are not shown, and their arrival is told to nobody but themselves), viewers' new names,
 which clients apply wherever the viewer appears, and the mockup being archived or unarchived,
 which closes or reopens open review spaces to changes at once.
 Loupe runs as a single process, so an in-memory pub/sub hub is sufficient. The client reads the
@@ -246,10 +250,11 @@ stream with `fetch`, so it can send the viewer key, reconnects with backoff, and
 threads on every (re)connection instead of replaying missed events, once its pending actions
 are saved so the refetch does not hide them. The stream sends a heartbeat every 25 seconds
 and `X-Accel-Buffering: no`, so proxies neither drop it as idle nor hold events back.
-At every heartbeat the server checks the link again: once it is regenerated or its mockup
-deleted, open streams end, so a revoked link stops receiving events within 25 seconds. A 4xx
-answer on reconnection is final: the client stops retrying and loads the link again, which then
-shows it as unavailable (or offers to retry if the server cannot be reached).
+Regenerating the link or deleting the mockup or its project ends its open streams at once. As
+a safety net, each version also checks its link at every heartbeat, with one lookup for all its
+streams, and ends those whose link no longer serves it. A 4xx answer on reconnection is final:
+the client stops retrying and loads the link again, which then shows it as unavailable (or
+offers to retry if the server cannot be reached).
 
 ### 5.3 New versions
 
@@ -257,8 +262,8 @@ The review space sends the number of the version it shows in the `X-Loupe-Versio
 value that is not a version number answers `400 invalid_request`. Changes and the event stream
 are accepted only for the current version; for an older one the server answers
 `409 version_changed`. Reading the threads of the version shown still works, so the client can
-reload them after a rejected change. Open streams of an older version end at the next heartbeat,
-and the reconnection is refused the same way.
+reload them after a rejected change. Open streams of the previous version end as soon as the
+new one is uploaded, and the reconnection is refused the same way.
 
 On `version_changed` the review space stops accepting changes and shows "A new version of this
 mockup is available · Reload" instead of an error, also where replies are written.
@@ -349,8 +354,9 @@ All settings are environment variables prefixed with `LOUPE_`, validated at star
   `src/shared` and are imported by server, web app and bridge.
 - **HTTP caching**: built assets (hashed names) are `immutable` for a year; `index.html` is
   `no-cache`, so an update takes effect at the next load; API responses are not cached.
-- **Compression**: gzip for the web app and mockup documents. Not for API responses, which
-  carry secrets next to user input (BREACH), nor for the event stream.
+- **Compression**: gzip for the web app and mockup documents, which are compressed once and
+  cached (§4.1). Not for API responses, which carry secrets next to user input (BREACH), nor
+  for the event stream.
 - **Deployment**: one container, one port, one volume (`/data`).
 
 ### 8.1 HTTP surface (sketch)
@@ -393,6 +399,8 @@ GET  /s/:token/content                          sandboxed mockup document (bridg
 - Export the comments of a version to Markdown / CSV (for GitLab/Jira issues).
 - Webhooks (Slack, Teams, Mattermost) on new comments.
 - SMTP delivery of invite and reset links.
+- Pins being placed, seen live: while someone picks an element and writes, the others see a
+  ghost pin in their color with "writing…", gone if they cancel. The text shows only once sent.
 
 **Later**
 - OIDC single sign-on.

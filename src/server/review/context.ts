@@ -13,7 +13,7 @@ import { viewerAuthor } from './present.ts';
 export type SharedMockupRow = NonNullable<ReturnType<typeof findMockupByShareToken>>;
 
 /** The mockup behind the request's share token, while that link exists. */
-export function findSharedMockup(db: Db, c: Context<AppEnv>) {
+function findSharedMockup(db: Db, c: Context<AppEnv>) {
     return findMockupByShareToken(db, c.req.param('token') ?? '');
 }
 

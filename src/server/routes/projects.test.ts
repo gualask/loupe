@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../../shared/api/projects.ts';
 import { awaitsReply, type Thread } from '../../shared/api/reviews.ts';
@@ -214,6 +215,27 @@ describe('share links', () => {
         );
     });
 
+    it('prepares the document once and sends it compressed when accepted', async () => {
+        const { t, mockup } = await editorWithMockup();
+        const content = `/s/${tokenFromUrl(mockup.shareUrl)}/content`;
+        const plain = await t.app.request(content);
+        expect(plain.headers.get('content-encoding')).toBeNull();
+        expect(plain.headers.get('vary')).toBe('Accept-Encoding');
+        const page = await plain.text();
+
+        // Served from memory from now on, even without the stored file.
+        rmSync(path.join(t.config.dataDir, 'mockups'), { recursive: true });
+        const gzip = await t.app.request(content, { headers: { 'accept-encoding': 'gzip, br' } });
+        expect(gzip.headers.get('content-encoding')).toBe('gzip');
+        expect(gunzipSync(await gzip.arrayBuffer()).toString()).toBe(page);
+
+        for (const encoding of ['gzip;q=0', 'identity']) {
+            const res = await t.app.request(content, { headers: { 'accept-encoding': encoding } });
+            expect(res.headers.get('content-encoding')).toBeNull();
+            expect(await res.text()).toBe(page);
+        }
+    });
+
     it('serves a rebuilt bridge without a restart', async () => {
         const { t, mockup } = await editorWithMockup();
         const content = `/s/${tokenFromUrl(mockup.shareUrl)}/content`;
@@ -237,7 +259,7 @@ describe('share links', () => {
         expect(first.headers.get('cache-control')).toBe('private, no-cache');
         expect(first.headers.get('content-encoding')).toBe('gzip');
 
-        // Compression makes the tag weak; both forms match.
+        // The tag is weak, as it names the plain and the compressed document; both forms match.
         for (const tag of [etag, etag.slice(2)]) {
             const again = await t.app.request(content, { headers: { 'if-none-match': tag } });
             expect(again.status).toBe(304);

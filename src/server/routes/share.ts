@@ -1,8 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import { Hono } from 'hono';
+import { accepts } from 'hono/accepts';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import { sha256 } from '../auth/crypto.ts';
 import { injectBridge, mockupHeaders } from '../mockups/document.ts';
+import { createDocumentCache } from '../mockups/document-cache.ts';
 import { readMockupFile } from '../mockups/files.ts';
 import { shareActor, sharedMockup } from '../review/context.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
@@ -25,9 +27,13 @@ export function shareApiRoutes({ db }: AppDeps) {
     });
 }
 
-/** Whether an If-None-Match header names the ETag; compression makes the browser's copy weak. */
+// Room for several large mockups, or many small ones, in their plain and compressed forms.
+const DOCUMENT_CACHE_BYTES = 64 * 1024 * 1024;
+
+/** Whether an If-None-Match header names the ETag, in its weak or strong form. */
 function matchesEtag(ifNoneMatch: string | undefined, etag: string) {
-    return !!ifNoneMatch?.split(',').some((tag) => tag.trim().replace(/^W\//, '') === etag);
+    const tag = (value: string) => value.trim().replace(/^W\//, '');
+    return !!ifNoneMatch?.split(',').some((value) => tag(value) === tag(etag));
 }
 
 /**
@@ -53,16 +59,29 @@ function bridgeLoader(file: string | undefined) {
 /** The sandboxed mockup document, mounted under /s. */
 export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
     const loadBridge = bridgeLoader(deps.bridgeFile);
+    const documents = createDocumentCache(DOCUMENT_CACHE_BYTES);
     return new Hono<AppEnv>().get('/:token/content', async (c) => {
         // Access is checked on every request: the browser revalidates its copy (no-cache), so a
         // regenerated link stops serving it.
         const { version } = sharedMockup(deps.db, c);
         const bridge = await loadBridge();
         // The stored file is addressed by its hash; the bridge changes only with Loupe itself.
-        const etag = `"${version.sha256}-${bridge.hash}"`;
-        const headers = { ...mockupHeaders(deps.config), ETag: etag };
+        // Weak, as the same tag names the plain and the compressed document.
+        const key = `${version.sha256}-${bridge.hash}`;
+        const etag = `W/"${key}"`;
+        const headers = { ...mockupHeaders(deps.config), ETag: etag, Vary: 'Accept-Encoding' };
         if (matchesEtag(c.req.header('If-None-Match'), etag)) return c.body(null, 304, headers);
-        const html = await readMockupFile(deps.config.dataDir, version.sha256);
-        return c.body(injectBridge(html, bridge.script), 200, headers);
+        const document = await documents.get(key, async () =>
+            injectBridge(await readMockupFile(deps.config.dataDir, version.sha256), bridge.script),
+        );
+        const encoding = accepts(c, {
+            header: 'Accept-Encoding',
+            supports: ['gzip'],
+            default: 'identity',
+        });
+        if (encoding === 'gzip') {
+            return c.body(document.gzip, 200, { ...headers, 'Content-Encoding': 'gzip' });
+        }
+        return c.body(document.body, 200, headers);
     });
 }

@@ -35,6 +35,19 @@ export function findMockupByShareToken(db: Db, shareToken: string) {
         .get();
 }
 
+/**
+ * The share token of the mockup whose current version this is; undefined for an earlier version
+ * or a deleted mockup.
+ */
+export function findShareTokenOfCurrentVersion(db: Db, versionId: string) {
+    return db
+        .select({ shareToken: mockups.shareToken })
+        .from(mockupVersions)
+        .innerJoin(mockups, eq(mockups.id, mockupVersions.mockupId))
+        .where(and(eq(mockupVersions.id, versionId), eq(mockups.currentVersionId, versionId)))
+        .get()?.shareToken;
+}
+
 /** Creates a mockup together with its first version. */
 export function insertMockup(
     db: Db,

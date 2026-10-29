@@ -104,7 +104,9 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
         })
         .delete('/projects/:id', async (c) => {
             const row = managedProject(c, c.req.param('id'));
+            const mockups = listMockups(db, row.project.id);
             deleteProject(db, row.project.id);
+            for (const { version } of mockups) hub.close(version.id);
             await cleanUpFiles();
             return c.body(null, 204);
         })
@@ -130,7 +132,7 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
         })
         .post('/mockups/:id/versions', upload.limit, async (c) => {
             // Same link and viewers; the new version starts without threads.
-            const { mockup } = managedMockup(c, c.req.param('id'));
+            const { mockup, version } = managedMockup(c, c.req.param('id'));
             const archived = () =>
                 apiError(409, 'archived', 'Unarchive this mockup to upload a new version.');
             // Before receiving the file, then again when storing it (insertVersion).
@@ -150,6 +152,8 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             if (result === 'same_file') {
                 throw apiError(409, 'same_file', 'This file is the same as the current version.');
             }
+            // Review spaces of the previous version reconnect and learn it changed.
+            hub.close(version.id);
             return c.json(presentMockup(managedMockup(c, mockup.id)), 201);
         })
         .get('/mockups/:id', (c) => c.json(presentMockup(managedMockup(c, c.req.param('id')))))
@@ -170,8 +174,10 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             return c.json(presentMockup(managedMockup(c, mockup.id)));
         })
         .post('/mockups/:id/share/regenerate', (c) => {
-            const { mockup } = managedMockup(c, c.req.param('id'));
+            const { mockup, version } = managedMockup(c, c.req.param('id'));
             updateMockup(db, mockup.id, { shareToken: randomToken() });
+            // The old link stops at once, also for review spaces left open.
+            hub.close(version.id);
             return c.json(presentMockup(managedMockup(c, mockup.id)));
         })
         .get('/mockups/:id/reviewers', (c) => {
@@ -185,8 +191,9 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             );
         })
         .delete('/mockups/:id', async (c) => {
-            const { mockup } = managedMockup(c, c.req.param('id'));
+            const { mockup, version } = managedMockup(c, c.req.param('id'));
             deleteMockup(db, mockup.id);
+            hub.close(version.id);
             await cleanUpFiles();
             return c.body(null, 204);
         });

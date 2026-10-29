@@ -5,6 +5,7 @@ import { compress } from 'hono/compress';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { sessionMiddleware } from './auth/session.ts';
+import { findShareTokenOfCurrentVersion } from './db/mockups.ts';
 import { apiError, notFound } from './http.ts';
 import { createHub } from './review/hub.ts';
 import { createShareAccess } from './review/share-access.ts';
@@ -53,7 +54,7 @@ export function createApp(
 ) {
     const { db, config, webRoot = './dist/web' } = deps;
     const app = new Hono<AppEnv>();
-    const hub = createHub();
+    const hub = createHub((versionId) => findShareTokenOfCurrentVersion(db, versionId));
     const access = createShareAccess(db);
 
     app.onError((err, c) => {
@@ -65,8 +66,9 @@ export function createApp(
         );
     });
 
-    // The web app and mockup documents are compressed. API responses are small and carry secrets
-    // (share and account links) next to user input, which compression could leak (BREACH).
+    // The web app is compressed; mockup documents come already compressed from their cache, which
+    // the middleware leaves as they are. API responses are small and carry secrets (share and
+    // account links) next to user input, which compression could leak (BREACH).
     const compression = compress();
     app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : compression(c, next)));
 

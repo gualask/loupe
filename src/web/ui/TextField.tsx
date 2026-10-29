@@ -1,9 +1,9 @@
-import type { InputHTMLAttributes } from 'preact';
+import type { LooseInputHTMLAttributes } from 'preact';
 import { Field } from './Field.tsx';
 import { Input } from './Input.tsx';
 
 type Props = Pick<
-    InputHTMLAttributes<HTMLInputElement>,
+    LooseInputHTMLAttributes<HTMLInputElement>,
     | 'value'
     | 'onInput'
     | 'onFocus'

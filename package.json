@@ -15,7 +15,7 @@
     },
     "packageManager": "pnpm@11.22.0",
     "engines": {
-        "node": ">=24.7"
+        "node": ">=26.13"
     },
     "type": "module",
     "scripts": {
@@ -37,16 +37,16 @@
         "zod": "^4.6.7"
     },
     "devDependencies": {
-        "@biomejs/biome": "^2.6.2",
+        "@biomejs/biome": "^2.6.3",
         "@preact/preset-vite": "^2.10.6",
-        "@preact/signals": "^2.11.3",
-        "@tabler/icons-preact": "^3.49.0",
+        "@preact/signals": "^2.11.4",
+        "@tabler/icons-preact": "^3.50.0",
         "@tailwindcss/vite": "^4.3.3",
-        "@types/node": "^24.19.2",
+        "@types/node": "^26.6.6",
         "drizzle-kit": "1.0.0-rc.5",
         "happy-dom": "^21.0.4",
-        "knip": "^6.42.1",
-        "preact": "^11.0.1",
+        "knip": "^6.43.0",
+        "preact": "^11.1.0",
         "preact-iso": "^2.12.2",
         "tailwindcss": "^4.3.3",
         "typescript": "^7.0.2",

@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-FROM node:26-slim AS base
+# The exact Node.js release, the same as .nvmrc.
+ARG NODE_VERSION=26.13.0
+
+FROM node:${NODE_VERSION}-slim AS base
 RUN npm install -g pnpm@11.22.0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -13,7 +16,7 @@ RUN pnpm build
 FROM base AS prod-deps
 RUN pnpm install --frozen-lockfile --prod
 
-FROM node:26-slim
+FROM node:${NODE_VERSION}-slim
 ENV NODE_ENV=production \
     LOUPE_PORT=3000 \
     LOUPE_DATA_DIR=/data

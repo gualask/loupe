@@ -2,7 +2,8 @@
 
 ## Requirements
 
-- Node.js 24.7 or newer (native Argon2id)
+- Node.js 26.13 or newer (native Argon2id); `.nvmrc` names the exact release, so `nvm use`
+  picks it
 - pnpm 11
 
 ## Setup

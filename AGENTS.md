@@ -21,7 +21,7 @@ documents, and serves the Preact web app built by Vite. The product and technica
 
 ## Build, Test, and Development Commands
 
-- `pnpm install`: install dependencies (Node.js ≥ 24.7, pnpm 11).
+- `pnpm install`: install dependencies (Node.js ≥ 26.13, the release in `.nvmrc`; pnpm 11).
 - `pnpm dev`: run the bridge watcher, the server (`node --watch`, port 3000) and Vite (port 5173,
   proxying `/api`, `/healthz` and mockup documents to the server). Open `http://localhost:5173`.
 - `pnpm build`: type-check, then build the web app (`dist/web`) and the bridge (`dist/bridge`).

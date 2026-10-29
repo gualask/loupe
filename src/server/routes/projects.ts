@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import {
     createProjectRequestSchema,
+    NAME_MAX_LENGTH,
     type ProjectDetail,
     updateMockupRequestSchema,
     updateProjectRequestSchema,
@@ -31,7 +32,7 @@ import { apiError, notFound, parseJson } from '../http.ts';
 import { canManage } from '../mockups/access.ts';
 import { deleteUnreferencedFiles, storeMockupFile } from '../mockups/files.ts';
 import { toMockup, toProject } from '../mockups/present.ts';
-import { createUploadReader } from '../mockups/upload.ts';
+import { createUploadReader, truncate } from '../mockups/upload.ts';
 import type { Hub } from '../review/hub.ts';
 import { toReviewerSummaries } from '../review/present.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
@@ -121,7 +122,7 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
                     db,
                     {
                         projectId: row.project.id,
-                        name: name.slice(0, 120),
+                        name: truncate(name, NAME_MAX_LENGTH),
                         shareToken: randomToken(),
                         createdBy: signedInUser(c).id,
                     },

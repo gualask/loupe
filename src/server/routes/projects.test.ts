@@ -190,6 +190,17 @@ describe('mockups', () => {
         expect(res.body.name).toBe('a'.repeat(120));
     });
 
+    it('cuts names without splitting a character in two', async () => {
+        const { editor, project } = await editorWithMockup();
+        const res = await editor.post(
+            `/api/projects/${project.id}/mockups`,
+            htmlFile(MOCKUP, `${'a'.repeat(119)}😀${'b'.repeat(133)}😀.html`),
+        );
+        expect(res.status).toBe(201);
+        expect(res.body.name).toBe('a'.repeat(119));
+        expect(res.body.version.originalFilename).toBe(`${'a'.repeat(119)}😀${'b'.repeat(133)}`);
+    });
+
     it('deletes the stored file with the last mockup using it', async () => {
         const { t, editor, mockup } = await editorWithMockup();
         expect((await editor.delete(`/api/mockups/${mockup.id}`)).status).toBe(204);

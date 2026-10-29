@@ -9,6 +9,13 @@ const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 // Longer names are cut: the name is only shown, and is sent with every listing of the mockup.
 const MAX_FILENAME_LENGTH = 255;
 
+/** The first `max` UTF-16 units of `text`, without leaving half of a character such as an emoji. */
+export function truncate(text: string, max: number) {
+    const cut = text.slice(0, max);
+    const last = cut.charCodeAt(cut.length - 1);
+    return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
 const tooLarge = () => apiError(413, 'file_too_large', 'The file exceeds the upload limit.');
 
 /** Reading of mockup uploads: a multipart form with an HTML `file` of at most `maxBytes`. */
@@ -33,7 +40,7 @@ export function createUploadReader(maxBytes: number) {
             if (!html) throw apiError(400, 'not_html', 'The file is not a UTF-8 HTML document.');
             const fileInfo = {
                 sizeBytes: bytes.byteLength,
-                originalFilename: file.name.slice(0, MAX_FILENAME_LENGTH),
+                originalFilename: truncate(file.name, MAX_FILENAME_LENGTH),
                 externalRefs: findExternalRefs(html),
             };
             return { fields, bytes, fileInfo };

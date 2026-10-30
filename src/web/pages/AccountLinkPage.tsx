@@ -11,6 +11,7 @@ import { CenteredCard } from '../ui/CenteredCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
 import { CenteredLoadStatus } from '../ui/LoadStatus.tsx';
 import { Notice } from '../ui/Notice.tsx';
+import { PasswordField } from '../ui/PasswordField.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
 const TITLES: Record<AccountTokenInfo['kind'], string> = {
@@ -96,13 +97,12 @@ export function AccountLinkPage() {
                         />
                     </>
                 )}
-                <TextField
+                <PasswordField
                     label="Password"
-                    type="password"
                     autocomplete="new-password"
                     required
                     minLength={10}
-                    hint="At least 10 characters."
+                    hint="At least 10 characters. A few random words work well."
                     value={form.password}
                     onInput={set('password')}
                 />

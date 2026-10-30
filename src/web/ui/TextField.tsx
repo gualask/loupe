@@ -15,7 +15,6 @@ type Props = Pick<
 > & {
     label: string;
     hint?: string;
-    type?: 'text' | 'password';
 };
 
 export function TextField({ label, hint, ...input }: Props) {

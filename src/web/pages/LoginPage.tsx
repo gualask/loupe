@@ -5,6 +5,7 @@ import { currentUser, login, nextPath } from '../lib/session.ts';
 import { Button } from '../ui/Button.tsx';
 import { CenteredCard } from '../ui/CenteredCard.tsx';
 import { FormError } from '../ui/FormError.tsx';
+import { PasswordField } from '../ui/PasswordField.tsx';
 import { TextField } from '../ui/TextField.tsx';
 
 export function LoginPage() {
@@ -28,9 +29,8 @@ export function LoginPage() {
                     value={username}
                     onInput={(e) => setUsername(e.currentTarget.value)}
                 />
-                <TextField
+                <PasswordField
                     label="Password"
-                    type="password"
                     autocomplete="current-password"
                     required
                     value={password}

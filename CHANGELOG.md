@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
 ### Added
 
 - `LOUPE_MOCKUP_FORMS`, `LOUPE_MOCKUP_EVAL`, `LOUPE_MOCKUP_MODALS`, `LOUPE_MOCKUP_DOWNLOADS` and `LOUPE_MOCKUP_CLIPBOARD` let mockups handle forms, run code built at run time, open dialogs, download files and copy to the clipboard; each is blocked by default
@@ -48,5 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Loupe logo in the app, browser tab icon and home-screen icon
 - Browser tabs named after the page shown
 
-[Unreleased]: https://github.com/gualask/loupe/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gualask/loupe/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/gualask/loupe/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gualask/loupe/releases/tag/v0.1.0

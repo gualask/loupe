@@ -1,4 +1,4 @@
-import { IconAlertTriangle, IconArchiveOff, IconMessages, IconUpload } from '@tabler/icons-preact';
+import { IconArchiveOff, IconMessages, IconUpload } from '@tabler/icons-preact';
 import { useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 import type { Mockup } from '../../shared/api/projects.ts';
@@ -7,12 +7,15 @@ import { EarlierVersionsDialog } from '../components/EarlierVersionsDialog.tsx';
 import { HtmlFileButton } from '../components/HtmlFileButton.tsx';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { MockupMenu } from '../components/MockupMenu.tsx';
+import { MockupNotices } from '../components/MockupNotices.tsx';
 import { RenameMockupDialog } from '../components/RenameMockupDialog.tsx';
 import { ReviewersPanel } from '../components/ReviewersPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api } from '../lib/api.ts';
+import { useBridge } from '../lib/bridge.ts';
 import { useAction } from '../lib/form.ts';
 import { formatDate, uploadedFrom } from '../lib/format.ts';
+import { isReport, useMockupReports } from '../lib/mockup-reports.ts';
 import { deleteMockup, setArchived, uploadVersion } from '../lib/mockups.ts';
 import { useResource } from '../lib/resource.ts';
 import { mockupContentSrc, reviewSpaceHref } from '../lib/share.ts';
@@ -133,37 +136,12 @@ export function MockupPage() {
                     </Notice>
                 ) : null}
                 <FormError message={action.error} />
-                {mockup.version.externalRefs.length ? (
-                    <Notice tone="warning">
-                        <p class="flex items-center gap-1.5 font-medium">
-                            <IconAlertTriangle size={ICON.md} />
-                            Not self-contained
-                        </p>
-                        <p class="mt-1 text-xs">
-                            These resources are blocked unless the server allows external resources:
-                        </p>
-                        <ul class="mt-2 flex flex-col gap-0.5 font-mono text-xs">
-                            {mockup.version.externalRefs.map((ref) => (
-                                <li key={ref} class="truncate" title={ref}>
-                                    {ref}
-                                </li>
-                            ))}
-                        </ul>
-                    </Notice>
-                ) : null}
                 {/* Side by side on wide screens, within the window: only the preview and the
                     reviewers scroll, each on its own, so sharing stays in reach. Columns may shrink
                     below their content, so long names truncate instead of widening the page. */}
                 <div class="grid grid-cols-[minmax(0,1fr)] gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
-                    <div class={`overflow-hidden ${CARD_CLASS}`}>
-                        {/* Keyed by version, so a new upload replaces the preview. */}
-                        <MockupFrame
-                            key={mockup.version.number}
-                            src={mockupContentSrc(mockup)}
-                            title={`Preview of ${mockup.name}`}
-                            class="h-[70vh] w-full lg:h-full"
-                        />
-                    </div>
+                    {/* Keyed by version, so a new upload replaces the preview and its notices. */}
+                    <MockupPreview key={mockup.version.number} mockup={mockup} />
                     <div class="flex flex-col gap-6 lg:min-h-0">
                         <div class={CARD_CLASS}>
                             <SharePanel mockup={mockup} onChange={replaceMockup} />
@@ -188,5 +166,35 @@ export function MockupPage() {
                 <EarlierVersionsDialog mockup={mockup} onClose={() => setVersionsOpen(false)} />
             ) : null}
         </AppShell>
+    );
+}
+
+/**
+ * The current version as reviewers see it, below the notices about it. It takes no pins: its
+ * bridge only reports what the mockup uses and links to.
+ */
+function MockupPreview({ mockup }: { mockup: Mockup }) {
+    const reports = useMockupReports();
+    const bridge = useBridge((message) => {
+        if (isReport(message)) reports.handle(message);
+    });
+    return (
+        <div class="flex flex-col gap-3 lg:min-h-0">
+            <MockupNotices
+                reports={reports}
+                permissions={mockup.permissions}
+                showSettings
+                externalRefs={mockup.version.externalRefs}
+            />
+            <div class={`overflow-hidden lg:min-h-0 lg:flex-1 ${CARD_CLASS}`}>
+                <MockupFrame
+                    bridge={bridge}
+                    src={mockupContentSrc(mockup)}
+                    permissions={mockup.permissions}
+                    title={`Preview of ${mockup.name}`}
+                    class="h-[70vh] w-full lg:h-full"
+                />
+            </div>
+        </div>
     );
 }

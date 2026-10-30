@@ -4,7 +4,8 @@ import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../../shared/api/projects.ts';
 import { awaitsReply, type Thread } from '../../shared/api/reviews.ts';
-import { PIN_ANCHOR } from '../../shared/test-fixtures.ts';
+import { MOCKUP_PERMISSIONS, mockupPermissionVariable } from '../../shared/mockup-permissions.ts';
+import { ALLOWED, BLOCKED, PIN_ANCHOR } from '../../shared/test-fixtures.ts';
 import {
     createSharedMockup,
     createTestApp,
@@ -128,6 +129,7 @@ describe('mockups', () => {
                 awaitingThreads: 0,
                 lastActivityAt: null,
             },
+            permissions: BLOCKED,
             createdAt: expect.any(String),
         });
         expect(readdirSync(path.join(t.config.dataDir, 'mockups'))).toHaveLength(1);
@@ -218,12 +220,34 @@ describe('share links', () => {
         expect(res.headers.get('content-security-policy')).toBe(
             "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' data: blob:; " +
                 "style-src 'unsafe-inline' data:; img-src data: blob:; font-src data:; " +
-                "media-src data: blob:; connect-src 'none'; frame-ancestors 'self' http://loupe.test",
+                "media-src data: blob:; connect-src 'none'; form-action 'none'; " +
+                "frame-ancestors 'self' http://loupe.test",
         );
+        expect(res.headers.get('permissions-policy')).toBe('clipboard-write=()');
         expect(res.headers.get('x-content-type-options')).toBe('nosniff');
         expect(res.body).toContain(
             '<head><script>window.loupeBridge = "<\\/script>";</script><title>Checkout</title>',
         );
+    });
+
+    it('opens the sandbox as far as the server allows, and says so to the app', async () => {
+        const env = Object.fromEntries(
+            MOCKUP_PERMISSIONS.map((name) => [mockupPermissionVariable(name), 'allow']),
+        );
+        const { t, mockup } = await createSharedMockup(checkoutFile(), env);
+        const token = tokenFromUrl(mockup.shareUrl);
+        const res = await t.client().get(`/s/${token}/content`);
+
+        expect(res.headers.get('content-security-policy')).toBe(
+            "sandbox allow-scripts allow-forms allow-modals allow-downloads; default-src 'none'; " +
+                "script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob: https:; " +
+                "style-src 'unsafe-inline' data: https:; img-src data: blob: https:; " +
+                'font-src data: https:; media-src data: blob: https:; connect-src https: wss:; ' +
+                "frame-src https:; form-action 'none'; frame-ancestors 'self' http://loupe.test",
+        );
+        expect(res.headers.get('permissions-policy')).toBeNull();
+        expect(mockup.permissions).toEqual(ALLOWED);
+        expect((await t.client().get(`/api/s/${token}`)).body.permissions).toEqual(ALLOWED);
     });
 
     it('prepares the document once and sends it compressed when accepted', async () => {
@@ -293,6 +317,7 @@ describe('share links', () => {
             archived: false,
             version: 1,
             contentUrl: `/s/${token}/content`,
+            permissions: BLOCKED,
             earlierVersions: [],
             me: null,
             canModerate: false,

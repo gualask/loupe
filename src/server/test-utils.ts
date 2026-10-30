@@ -142,12 +142,13 @@ export async function inviteEditor(t: TestApp, admin: Client, username = 'eddie'
 
 /**
  * An editor's mockup uploaded from `file`, with its share link, plus helpers to join it as new
- * viewers and to upload its next version.
+ * viewers and to upload its next version; `env` overrides the test configuration.
  */
 export async function createSharedMockup(
     file = htmlFile('<!doctype html><main>Hi</main>', 'home.html'),
+    env: Record<string, string> = {},
 ) {
-    const t = createTestApp();
+    const t = createTestApp(env);
     const admin = await setUpAdmin(t);
     const { editor, editorId } = await inviteEditor(t, admin);
     const project = await editor.post('/api/projects', { name: 'Shop' });

@@ -63,8 +63,36 @@ docker exec loupe loupe reset-link <username>
 | `LOUPE_DATA_DIR` | `/data` | SQLite database and uploaded mockups |
 | `LOUPE_PUBLIC_URL` | `http://localhost:<port>` | Public base URL, used to build links and the only site allowed to frame mockups. With `https`, the session cookie is `Secure` and bound to the host |
 | `LOUPE_MAX_UPLOAD_MB` | `20` | Maximum mockup size |
-| `LOUPE_MOCKUP_EXTERNAL` | `block` | `allow` lets mockups load external `https:` resources (CDNs, web fonts) |
+| `LOUPE_MOCKUP_EXTERNAL` | `block` | `allow` lets mockups load files and data from `https:` sites (CDNs, web fonts, APIs) and embed their pages |
+| `LOUPE_MOCKUP_FORMS` | `block` | `allow` lets mockups handle form submissions in their own script |
+| `LOUPE_MOCKUP_EVAL` | `block` | `allow` lets mockups run code built at run time (`eval`, `new Function`, WebAssembly) |
+| `LOUPE_MOCKUP_MODALS` | `block` | `allow` lets mockups open browser dialogs (`alert`, `confirm`, `prompt`, `print`) |
+| `LOUPE_MOCKUP_DOWNLOADS` | `block` | `allow` lets mockups download files |
+| `LOUPE_MOCKUP_CLIPBOARD` | `block` | `allow` lets mockups copy to the clipboard |
 | `LOUPE_SESSION_TTL_DAYS` | `30` | Days without use after which an editor or admin is signed out; sessions end 90 days after sign-in regardless |
+
+## Mockup permissions
+
+Uploaded mockups run in a sandbox that keeps them away from Loupe, its data and its sessions,
+whatever their code does. By default they may also do nothing beyond running their own scripts:
+anything more is a `LOUPE_MOCKUP_*` setting, so you allow only what your mockups need. When a
+mockup uses something blocked, the review space says so, and shows editors the setting that
+allows it. No setting lets a mockup reach Loupe itself; what they open up affects the people
+who view mockups:
+
+| Setting | What mockups can then do to viewers |
+|---|---|
+| `LOUPE_MOCKUP_EXTERNAL` | Other sites see the address and browser of everyone who opens the mockup, and when (for Google Fonts in the EU, a data transfer your privacy notice must cover). What viewers type into the mockup can be sent elsewhere. Files can change after the upload, so a version no longer guarantees what viewers see. |
+| `LOUPE_MOCKUP_FORMS` | Nothing beyond running the mockup's own handlers: submissions still go nowhere. |
+| `LOUPE_MOCKUP_EVAL` | No new reach, since mockups already run their scripts; it does expose the browser's WebAssembly compiler, and with `LOUPE_MOCKUP_EXTERNAL` makes mining in viewers' browsers efficient. |
+| `LOUPE_MOCKUP_MODALS` | Show native dialogs headed by your Loupe address, such as a `prompt()` asking for a password, which viewers may take for Loupe; or open one dialog after another. |
+| `LOUPE_MOCKUP_DOWNLOADS` | Save files to viewers' computers from your Loupe address. Reported malware harms the reputation of that address in browsers. |
+| `LOUPE_MOCKUP_CLIPBOARD` | Put other text in the clipboard than what viewers meant to copy, e.g. a different command. |
+
+Some things never work inside the sandbox: storage that survives a reload (what a mockup stores
+lasts until it reloads), IndexedDB, saving to local files, reading the clipboard, camera,
+microphone, location, notifications and service workers. Links to other sites, `mailto:` and
+`tel:` open from a notice above the mockup instead of inside it.
 
 ## Reverse proxy
 
@@ -119,5 +147,6 @@ it, this is what your privacy notice needs to cover.
 - **Retention**: viewer data lasts as long as its mockup; deleting a mockup or project deletes its
   viewers and threads. Used and expired account links and expired sessions are deleted
   automatically.
-- **External resources**: with `LOUPE_MOCKUP_EXTERNAL=allow`, mockups may load files from other
-  servers (CDNs, web fonts), which then see the address of whoever opens the mockup.
+- **External resources**: with `LOUPE_MOCKUP_EXTERNAL=allow`, mockups may load files and data
+  from other servers (CDNs, web fonts, APIs), which then see the address of whoever opens the
+  mockup.

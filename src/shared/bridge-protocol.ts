@@ -2,6 +2,7 @@
 // (docs/SPEC.md §4.2). The bridge imports types only, so its bundle stays free of Zod.
 import { z } from 'zod';
 import { type PinAnchor, pinAnchorSchema } from './anchor.ts';
+import { MOCKUP_PERMISSIONS } from './mockup-permissions.ts';
 
 /** Keys the review space handles as shortcuts, also when pressed inside the mockup. */
 export const SHORTCUT_KEYS = ['p', 'c', 'h', '?', 'Escape'] as const;
@@ -18,6 +19,9 @@ const pinPositionSchema = z.object({
     orphaned: z.boolean(),
 });
 
+/** Schemes of the links the app offers to open for the mockup. */
+const LINK_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:'];
+
 /**
  * Messages from the bridge to the app. Mockup code shares the bridge's window and can post
  * the same messages, so the app validates them and treats them as untrusted input.
@@ -32,6 +36,19 @@ export const bridgeMessageSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('loupe:positions'), positions: z.array(pinPositionSchema) }),
     /** A shortcut key pressed while the mockup had focus. */
     z.object({ type: z.literal('loupe:key'), key: z.enum(SHORTCUT_KEYS) }),
+    /**
+     * The mockup used something that needs a permission, such as a form or `alert()`; the app
+     * knows whether the server grants it. Sent once per permission and document.
+     */
+    z.object({ type: z.literal('loupe:attempt'), permission: z.enum(MOCKUP_PERMISSIONS) }),
+    /** A link or `window.open()` would leave the mockup; the bridge stopped it. */
+    z.object({
+        type: z.literal('loupe:link'),
+        url: z
+            .url()
+            .max(2048)
+            .refine((url) => LINK_PROTOCOLS.includes(new URL(url).protocol)),
+    }),
 ]);
 
 export type BridgeMessage = z.infer<typeof bridgeMessageSchema>;
@@ -55,4 +72,6 @@ export type BridgePin = {
 export type AppMessage =
     | { type: 'loupe:inspect'; enabled: boolean }
     | { type: 'loupe:pins'; pins: BridgePin[] }
-    | { type: 'loupe:scroll-to'; id: string };
+    | { type: 'loupe:scroll-to'; id: string }
+    /** Asks a bridge to say it is running, again: `loupe:ready` and the attempts so far. */
+    | { type: 'loupe:ping' };

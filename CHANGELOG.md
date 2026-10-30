@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `LOUPE_MOCKUP_FORMS`, `LOUPE_MOCKUP_EVAL`, `LOUPE_MOCKUP_MODALS`, `LOUPE_MOCKUP_DOWNLOADS` and `LOUPE_MOCKUP_CLIPBOARD` let mockups handle forms, run code built at run time, open dialogs, download files and copy to the clipboard; each is blocked by default
+- Notices in the review space and the editor's preview when a mockup uses something the server blocks, naming for editors the setting that allows it
+- Links in mockups to other sites, `mailto:` and `tel:` show their address with an Open in new tab button
+
+### Changed
+
+- `LOUPE_MOCKUP_EXTERNAL=allow` also lets mockups fetch data from `https:` sites and embed their pages
+- The warning about files from other sites says whether the server blocks them or loads them
+
+### Fixed
+
+- Mockups using `localStorage`, `sessionStorage` or cookies no longer stop with an error; what they store lasts until they reload
+- A mockup that leaves its page no longer leaves an error page in the preview: it can be reloaded in place
+- Connection hints such as `<link rel="preconnect">` no longer count as files from other sites
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import type { SharedMockup } from '../shared/api/projects.ts';
 import type { Author, Comment, Thread } from '../shared/api/reviews.ts';
-import { PIN_ANCHOR } from '../shared/test-fixtures.ts';
+import { BLOCKED, PIN_ANCHOR } from '../shared/test-fixtures.ts';
 
 /** Stands in for the browser's localStorage, holding `stored`; returns its items. */
 export function fakeStorage(stored: Record<string, string> = {}) {
@@ -39,6 +39,7 @@ export const SHARED: SharedMockup = {
     archived: false,
     version: 1,
     contentUrl: '/s/tok/content',
+    permissions: BLOCKED,
     earlierVersions: [],
     me: ANN,
     canModerate: false,

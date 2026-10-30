@@ -72,8 +72,9 @@ join pieces of text with "·": give them a hierarchy or their own element, such 
 ## Security Invariants
 
 Uploaded mockups are untrusted HTML. Never serve them from a route without the sandbox CSP
-described in `docs/SPEC.md` §4.1, never embed them without `sandbox="allow-scripts"`, and never
-add `allow-same-origin`. Comment UI lives in the parent app, never inside the mockup document.
+described in `docs/SPEC.md` §4.1, embed them only with the sandbox built by `mockupSandbox`
+(`allow-scripts` plus the permissions the server grants), and never add `allow-same-origin`,
+`allow-top-navigation` or `allow-popups`. Comment UI lives in the parent app, never inside the mockup document.
 Store secrets (session ids, viewer keys, account tokens) only as SHA-256 hashes.
 
 ## Compatibility & Contracts

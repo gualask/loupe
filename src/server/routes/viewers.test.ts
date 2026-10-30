@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BLOCKED } from '../../shared/test-fixtures.ts';
 import { createSharedMockup, newThread, openStream } from '../test-utils.ts';
 
 describe('viewers', () => {
@@ -23,6 +24,7 @@ describe('viewers', () => {
             archived: false,
             version: 1,
             contentUrl: expect.stringMatching(/^\/s\/[\w-]{43}\/content$/),
+            permissions: BLOCKED,
             earlierVersions: [],
             me: alice.viewer,
             canModerate: false,

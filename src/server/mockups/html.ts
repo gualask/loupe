@@ -16,6 +16,8 @@ const ATTRIBUTE =
     /(?:^|\s)(src|srcset|poster|data|href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
 // Elements whose href loads a resource; on <a> and <area> it only navigates.
 const LOADING_HREF = new Set(['link', 'image', 'use', 'feimage', 'script']);
+// <link> hints that only open a connection to a site, loading nothing from it.
+const CONNECTION_HINT = /(?:^|\s)rel\s*=\s*["']?\s*(?:preconnect|dns-prefetch)\b/i;
 const CSS_URLS = [
     /url\(\s*["']?((?:https?:)?\/\/[^"')\s]+)/gi,
     /@import\s+["']((?:https?:)?\/\/[^"']+)/gi,
@@ -34,6 +36,7 @@ function loadedUrls(tag: string, name: string, value: string) {
 export function findExternalRefs(html: string) {
     const refs = new Set<string>();
     for (const [, tag = '', attributes = ''] of html.matchAll(TAG)) {
+        if (tag.toLowerCase() === 'link' && CONNECTION_HINT.test(attributes)) continue;
         for (const [, name = '', ...values] of attributes.matchAll(ATTRIBUTE)) {
             const value = values.find((v) => v !== undefined) ?? '';
             for (const url of loadedUrls(tag.toLowerCase(), name.toLowerCase(), value.trim())) {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { MockupPermissions } from '../mockup-permissions.ts';
 import type { Author } from './reviews.ts';
 import { updateSchema } from './update.ts';
 
@@ -77,6 +78,8 @@ export type Mockup = {
     archivedAt: string | null;
     version: MockupVersion;
     activity: MockupActivity;
+    /** What the server lets its document do, which its preview is embedded with. */
+    permissions: MockupPermissions;
     createdAt: string;
 };
 
@@ -91,6 +94,8 @@ export type SharedMockup = {
     /** Number of the current version, the one the link shows. */
     version: number;
     contentUrl: string;
+    /** What the server lets the document do, which the review space embeds it with. */
+    permissions: MockupPermissions;
     /** Earlier versions still stored, the latest first: they can be shown beside the current. */
     earlierVersions: SharedVersion[];
     /** An editor who manages the mockup, the viewer owning the viewer key, or null. */

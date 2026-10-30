@@ -12,7 +12,7 @@ import { shareActor, sharedMockup } from '../review/context.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 /** Share-link metadata, mounted under /api/s. */
-export function shareApiRoutes({ db }: AppDeps) {
+export function shareApiRoutes({ db, config }: AppDeps) {
     return new Hono<AppEnv>().get('/:token', (c) => {
         const row = sharedMockup(db, c);
         const actor = shareActor(db, c, row);
@@ -23,6 +23,7 @@ export function shareApiRoutes({ db }: AppDeps) {
             archived: row.mockup.archivedAt !== null,
             version: row.version.number,
             contentUrl: `${base}/content`,
+            permissions: config.mockupPermissions,
             earlierVersions: listEarlierVersions(db, row).map((version) => ({
                 number: version.number,
                 createdAt: version.createdAt.toISOString(),

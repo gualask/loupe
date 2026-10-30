@@ -68,9 +68,16 @@ function MockupRow({
                     <Badge>{`v${mockup.version.number}`}</Badge>
                     <AwaitingBadge count={mockup.activity.awaitingThreads} />
                     {external ? (
-                        <Badge tone="warning" title="This file loads external resources">
+                        <Badge
+                            tone="warning"
+                            title={
+                                mockup.permissions.external
+                                    ? 'Loads files from other sites'
+                                    : 'Uses files from other sites, which this server blocks'
+                            }
+                        >
                             <IconAlertTriangle size={ICON.sm} />
-                            {plural(external, 'external resource')}
+                            {plural(external, 'external file')}
                         </Badge>
                     ) : null}
                 </>

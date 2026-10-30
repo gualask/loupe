@@ -27,8 +27,10 @@ describe('findExternalRefs', () => {
         ]);
     });
 
-    it('ignores links, form actions and local resources', () => {
+    it('ignores links, form actions, connection hints and local resources', () => {
         const html = `<a href="https://example.com">Docs</a>
+            <link rel="preconnect" href="https://fonts.example.com">
+            <link href="https://cdn.example.com" rel='dns-prefetch'>
             <form action="https://example.com/pay"></form>
             <area href="https://example.com/map">
             <div data-src="https://example.com/lazy.png"></div>

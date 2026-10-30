@@ -61,6 +61,7 @@ export function toMockup(
             ...activity,
             lastActivityAt: activity.lastActivityAt?.toISOString() ?? null,
         },
+        permissions: config.mockupPermissions,
         createdAt: mockup.createdAt.toISOString(),
     };
 }

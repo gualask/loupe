@@ -4,9 +4,11 @@ import type { SharedMockup } from '../../shared/api/projects.ts';
 import { sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import type { BridgeMessage, PinPosition, ShortcutKey } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
+import { MockupNotices } from '../components/MockupNotices.tsx';
+import { useBridge } from '../lib/bridge.ts';
+import { isReport, useMockupReports } from '../lib/mockup-reports.ts';
 import { logout } from '../lib/session.ts';
 import { Badge } from '../ui/Badge.tsx';
-import { useBridge } from './bridge.ts';
 import { ComparePane } from './ComparePane.tsx';
 import { HelpDialog, NameDialog } from './dialogs.tsx';
 import { useDraftRecovery } from './drafts.ts';
@@ -48,8 +50,6 @@ export function ReviewSpace({
     const session = useReviewSession(token, initial, viewerKey, onUnavailable);
 
     const { path, query, route } = useLocation();
-    const frame = useRef<HTMLIFrameElement>(null);
-    const compareFrame = useRef<HTMLIFrameElement>(null);
     const commentButton = useRef<HTMLButtonElement>(null);
 
     const shared = session.shared.value;
@@ -72,6 +72,7 @@ export function ReviewSpace({
     const [panelOpen, setPanelOpen] = useState(() => !panelCoversMockup());
     const [dialog, setDialog] = useState<DialogName | null>(null);
     const [positions, setPositions] = useState(new Map<string, PinPosition>());
+    const reports = useMockupReports();
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
     // Gone once an editor deletes it, which closes the comparison.
@@ -186,13 +187,18 @@ export function ReviewSpace({
             setPositions(new Map(message.positions.map((p) => [p.id, p])));
         } else if (message.type === 'loupe:key') {
             shortcut(message.key);
+        } else if (isReport(message)) {
+            reports.handle(message);
         }
     }
 
-    const { connection, send, onFrameLoad } = useBridge(frame, onBridgeMessage);
-    // The earlier version takes no pins: only shortcuts typed inside it are heard.
-    const compareBridge = useBridge(compareFrame, (message) => {
+    const bridge = useBridge(onBridgeMessage);
+    const { connection, send } = bridge;
+    // The earlier version takes no pins: only shortcuts typed inside it are heard, and what it
+    // reports about the mockup.
+    const compareBridge = useBridge((message) => {
         if (message.type === 'loupe:key') shortcut(message.key);
+        else if (isReport(message)) reports.handle(message);
     });
 
     // Pins are rebuilt on every render; comparing them as JSON sends them to the mockup only
@@ -210,7 +216,7 @@ export function ReviewSpace({
     /** Where a popover goes: next to its pin, or below the comment button. */
     function popoverPoint(pinId: string | null): PopoverPoint {
         const position = pinId ? positions.get(pinId) : undefined;
-        const frameRect = frame.current?.getBoundingClientRect();
+        const frameRect = bridge.frame.current?.getBoundingClientRect();
         if (position && frameRect) {
             return {
                 x: frameRect.left + position.x,
@@ -314,6 +320,13 @@ export function ReviewSpace({
             {outdated ? (
                 <NewVersionNotice class="shrink-0 bg-amber-100 px-4 py-2 text-center text-amber-900 text-sm" />
             ) : null}
+            <div class="shrink-0 px-4 py-3 empty:hidden">
+                <MockupNotices
+                    reports={reports}
+                    permissions={shared.permissions}
+                    showSettings={isEditor}
+                />
+            </div>
             <div class="relative flex min-h-0 flex-1">
                 {/* The current version keeps its place in the tree as a comparison opens and
                     closes, so its frame does not reload. */}
@@ -325,8 +338,8 @@ export function ReviewSpace({
                             shown={comparedVersion}
                             stacked={stacked}
                             viewportWidth={viewportWidth}
-                            frameRef={compareFrame}
-                            onLoad={compareBridge.onFrameLoad}
+                            permissions={shared.permissions}
+                            bridge={compareBridge}
                             onShow={setCompared}
                             onToggleLayout={() => setStacked(!stacked)}
                             onClose={() => setCompared(null)}
@@ -343,9 +356,9 @@ export function ReviewSpace({
                         ) : null}
                         <Preview width={viewportWidth}>
                             <MockupFrame
-                                frameRef={frame}
-                                onLoad={onFrameLoad}
+                                bridge={bridge}
                                 src={shared.contentUrl}
+                                permissions={shared.permissions}
                                 title={shared.name}
                                 class="h-full w-full"
                             />

@@ -1,7 +1,8 @@
 import { IconLayoutColumns, IconLayoutRows, IconX } from '@tabler/icons-preact';
-import type { RefObject } from 'preact';
 import type { SharedVersion } from '../../shared/api/projects.ts';
+import type { MockupPermissions } from '../../shared/mockup-permissions.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
+import type { Bridge } from '../lib/bridge.ts';
 import { formatDate } from '../lib/format.ts';
 import { IconButton } from '../ui/IconButton.tsx';
 import { Select } from '../ui/Select.tsx';
@@ -10,7 +11,7 @@ import { PaneBar, Preview } from './Preview.tsx';
 
 /**
  * An earlier version shown read-only beside the current one, before it: on the left, or above
- * when `stacked`. It takes no pins; its bridge only forwards shortcuts.
+ * when `stacked`. It takes no pins; its bridge only forwards shortcuts and reports.
  */
 export function ComparePane({
     name,
@@ -18,8 +19,8 @@ export function ComparePane({
     shown,
     stacked,
     viewportWidth,
-    frameRef,
-    onLoad,
+    permissions,
+    bridge,
     onShow,
     onToggleLayout,
     onClose,
@@ -29,8 +30,8 @@ export function ComparePane({
     shown: SharedVersion;
     stacked: boolean;
     viewportWidth: number | null;
-    frameRef: RefObject<HTMLIFrameElement | null>;
-    onLoad: () => void;
+    permissions: MockupPermissions;
+    bridge: Bridge;
     onShow: (number: number) => void;
     onToggleLayout: () => void;
     onClose: () => void;
@@ -73,9 +74,9 @@ export function ComparePane({
                 {/* Keyed by version, so choosing another loads it afresh. */}
                 <MockupFrame
                     key={shown.number}
-                    frameRef={frameRef}
-                    onLoad={onLoad}
+                    bridge={bridge}
                     src={shown.contentUrl}
+                    permissions={permissions}
                     title={`Version ${shown.number} of ${name}`}
                     class="h-full w-full"
                 />

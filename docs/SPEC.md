@@ -115,21 +115,35 @@ No email server is required. Every account flow is a **single-use link** that ex
 
 Uploaded HTML is untrusted. It is never served as a regular page of the app:
 
-- It is served with `Content-Security-Policy: sandbox allow-scripts` plus a resource policy, and
-  embedded in `<iframe sandbox="allow-scripts">`. The document runs in an **opaque origin**: it
-  cannot read app cookies, storage, or call the app API, even though everything is on one host.
-- Default resource policy (self-contained mode):
+- It is served with a `Content-Security-Policy` whose `sandbox` directive lists `allow-scripts`
+  and the flags of the permissions granted (below), plus a resource policy, and embedded in an
+  `<iframe>` with the same sandbox flags: mockup payloads carry the server's `permissions`, from
+  which the app builds the iframe. The document runs in an **opaque origin**: it cannot read app
+  cookies, storage, or call the app API, even though everything is on one host. No setting ever
+  adds `allow-same-origin`, `allow-top-navigation` or `allow-popups`.
+- Default resource policy, with every permission blocked:
   `default-src 'none'; script-src 'unsafe-inline' data: blob:; style-src 'unsafe-inline' data:;
-  img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'`.
-  This enforces "self-contained": the mockup loads nothing from the network and cannot send
-  requests.
-- `LOUPE_MOCKUP_EXTERNAL=allow` relaxes the policy to allow `https:` resources (CDNs, web fonts).
+  img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none';
+  form-action 'none'`, with `Permissions-Policy: clipboard-write=()`. The mockup loads nothing
+  from the network, sends no requests and evaluates no strings as code.
+- **Permissions**: each is blocked unless its variable is `allow`; the risks of each are listed
+  in [self-hosting.md](self-hosting.md#mockup-permissions).
+
+  | Permission | Variable | Effect |
+  |---|---|---|
+  | `external` | `LOUPE_MOCKUP_EXTERNAL` | `https:` scripts, styles, images, fonts and media; `connect-src https: wss:`; `frame-src https:` |
+  | `forms` | `LOUPE_MOCKUP_FORMS` | `allow-forms`: submit events fire for the mockup's script; `form-action 'none'` still keeps submissions from leaving |
+  | `eval` | `LOUPE_MOCKUP_EVAL` | `'unsafe-eval' 'wasm-unsafe-eval'`: `eval`, `new Function`, WebAssembly |
+  | `modals` | `LOUPE_MOCKUP_MODALS` | `allow-modals`: `alert`, `confirm`, `prompt`, `print` |
+  | `downloads` | `LOUPE_MOCKUP_DOWNLOADS` | `allow-downloads` |
+  | `clipboard` | `LOUPE_MOCKUP_CLIPBOARD` | iframe `allow="clipboard-write"`, without the `Permissions-Policy` header |
+
 - This also protects editors and admins, who view mockups inside their authenticated session.
 - **Trust model**: the sandbox protects the app, its data and its sessions from mockup code. It
   does not protect viewers from deceptive content: a mockup can still draw anything, such as a
-  fake form, and navigate its own frame elsewhere, which no browser policy can block. Mockups
-  are therefore trusted to their editors, who are invited accounts responsible for what they
-  upload (§1).
+  fake form, or point to another site, which the app offers to open (§4.2). Mockups are
+  therefore trusted to their editors, who are invited accounts responsible for what they upload
+  (§1).
 - The document may be framed only by the app (`frame-ancestors 'self'` plus the origin of
   `LOUPE_PUBLIC_URL`, since browsers have resolved `'self'` differently in sandboxed documents).
 - Every other response carries an app policy: only the app's own scripts and files load, and
@@ -158,6 +172,24 @@ The bridge is responsible for:
 - **Pin markers**: render pins inside the document (in a closed shadow root) so they scroll with
   the content; report marker positions so the parent can place popovers.
 - **Re-anchoring**: resolve stored anchors after load, resize, and DOM mutations.
+- **Sandbox guards**, installed before any mockup code runs:
+  - `localStorage`, `sessionStorage` and `document.cookie`, which an opaque origin denies, are
+    replaced with storage in memory that lasts until the document reloads. IndexedDB stays
+    unavailable.
+  - Links that would leave the document (another page, another scheme, another target),
+    `window.open()` and links clicked by script are stopped and reported (`loupe:link`), so the
+    frame never turns into an error page. A link to another fragment or query of the document
+    still works. Links the mockup's own handlers prevented, such as a router's, are left alone.
+  - Submissions no script prevented are cancelled, and `form.submit()` does nothing: with
+    `form-action 'none'` they would only end on an error page.
+  - Each permission the mockup uses is reported once per document (`loupe:attempt`): forms
+    (submit buttons, Enter in a field, `submit()`, `requestSubmit()`), dialogs, downloads,
+    clipboard writes, and, from CSP violation reports, `eval` and external files. The app keeps
+    those this server blocks (§5).
+- **Liveness**: on every load of the frame the app sends `loupe:ping`; the bridge answers with
+  `loupe:ready` and reports its permissions again. A frame silent for 2 seconds is lost, e.g.
+  after a script took it to another site, which the app's policy refuses to frame: the app
+  covers it with a Reload button.
 
 The parent app owns all data and all comment UI. The mockup never sees the comment editor, so
 mockup code cannot tamper with it.
@@ -240,6 +272,12 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
   authors and editors delete them. Archived mockups accept no review changes from anyone (§6).
 - **Shortcuts**: `P` pin, `C` comment, `H` hide pins (which also closes an open pin's thread),
   `Esc` cancel, `?` help.
+- **Mockup notices**, below the header and dismissible: the address of the latest link that
+  would have left the mockup, with Open in new tab (`noopener noreferrer`; http, https, mailto
+  and tel only); and the permissions the mockup uses that this server blocks, with, for editors,
+  the variables that allow them (§4.1). The editor's preview on the mockup page shows the same
+  notices, starting with the files from other sites found at upload (§6), which take the place
+  of the runtime notice about them. A new version starts its preview without notices.
 
 ### 5.1 Saving
 
@@ -308,7 +346,9 @@ general comment box then opens with that text and a note asking to send, edit or
   activity of its current version.
 - **Upload**: from the project page, pick an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
-  self-contained. File names are kept up to 255 characters.
+  self-contained, which says whether this server blocks those files or loads them. Connection
+  hints (`<link rel="preconnect">`, `dns-prefetch`) load nothing and are not listed. File names
+  are kept up to 255 characters.
 - **New version**: from the mockup page, upload the next file with the same checks. It becomes the
   current version on the same share link; viewers keep their identity, and threads and activity
   counts start again from zero. Threads of earlier versions stay stored but are not shown in the
@@ -332,7 +372,7 @@ general comment box then opens with that text and a note asking to send, edit or
   unarchived; the mockup page shows the archiving date with an Unarchive button, so a mistaken
   click is undone in place. The date of the first archiving is kept until then.
 - **Mockup page**: the name with the number of the current version, whose upload time and file
-  name show on hover.
+  name show on hover, and a preview of the current version under its notices (§5).
 - **Actions**: the mockup page shows its frequent actions (upload a new version, open the review
   space); renaming, archiving, earlier versions and deleting sit in an actions menu. A project
   page and a mockup page offer the same menu as their card or row in the list. Delete comes last,

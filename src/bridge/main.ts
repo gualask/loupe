@@ -8,6 +8,7 @@ import type {
     ShortcutKey,
 } from '../shared/bridge-protocol.ts';
 import { computeAnchor, resolveAnchor } from './anchor.ts';
+import { installGuards } from './guards.ts';
 import { createMarkers } from './markers.ts';
 import { createOverlay } from './overlay.ts';
 
@@ -127,6 +128,9 @@ function start() {
             resolveAll();
             markers.render(pins);
             schedule();
+        } else if (message?.type === 'loupe:ping') {
+            post({ type: 'loupe:ready' });
+            guards.replay();
         } else if (message?.type === 'loupe:scroll-to') {
             const el = resolved.get(message.id);
             const pin = pins.find((p) => p.id === message.id);
@@ -156,5 +160,7 @@ function start() {
     post({ type: 'loupe:ready' });
 }
 
+// Before any mockup code: what it reads first may be storage the sandbox denies.
+const guards = installGuards(post);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
 else start();

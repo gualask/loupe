@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-30
+
 ### Added
 
 - Projects, listed by latest upload or comment with their open and resolved comments and those awaiting a reply, and HTML mockup upload with size, encoding and self-containment checks
@@ -29,4 +31,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Loupe logo in the app, browser tab icon and home-screen icon
 - Browser tabs named after the page shown
 
-[Unreleased]: https://github.com/gualask/loupe/commits/main
+[Unreleased]: https://github.com/gualask/loupe/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/gualask/loupe/releases/tag/v0.1.0

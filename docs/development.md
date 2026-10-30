@@ -31,6 +31,10 @@ server. Local data is stored in `./data`.
 | `pnpm db:generate` | Generate a migration after changing the database schema |
 | `docker build -t loupe .` | Build the production image |
 
+The Dockerfile needs BuildKit, the default builder of Docker Desktop and of the Docker Engine
+packages; a Docker CLI without the buildx plugin (for example Homebrew's) falls back to the legacy
+builder, which cannot build it.
+
 ## Releases
 
 Pushing a version tag runs `.github/workflows/release.yml`: the same checks as above, then a

@@ -2,9 +2,16 @@ node_modules
 dist
 data
 .git
+.github
+.claude
+.playwright-mcp
 .vscode
 .vitest
+docs
+*.md
 *.log
 .env
 .env.*
 src/**/*.test.ts
+src/**/*.test.tsx
+src/server/test-utils.ts

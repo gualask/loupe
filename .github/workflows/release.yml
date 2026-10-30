@@ -34,6 +34,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
+      # Emulation runs only the final stage's one command: the build stages run natively.
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -65,5 +66,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Attach an SBOM and full build provenance, shown by Docker Hub and Docker Scout.
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max

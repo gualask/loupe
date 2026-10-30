@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The Docker image ships with an SBOM and build provenance attestations
+
+### Removed
+
+- npm from the Docker image, which does not use it
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

@@ -3,7 +3,10 @@
 # The exact Node.js release, the same as .nvmrc.
 ARG NODE_VERSION=26.13.0
 
-FROM node:${NODE_VERSION}-slim AS base
+# Every dependency is plain JavaScript, so the build stages run on the build machine's platform
+# and their output is the same for every target: a multi-platform build never runs them under
+# emulation.
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-slim AS base
 RUN npm install -g pnpm@11.22.0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -11,12 +14,17 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 FROM base AS build
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm build
+# The release workflow type-checks before building the image.
+RUN pnpm build:assets
 
 FROM base AS prod-deps
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod \
+    && mkdir /data
 
 FROM node:${NODE_VERSION}-slim
+# npm is not needed at run time; removing it keeps its bundled packages out of vulnerability scans.
+# This is the only command of the final stage that runs on the target platform.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 ENV NODE_ENV=production \
     LOUPE_PORT=3000 \
     LOUPE_DATA_DIR=/data
@@ -27,9 +35,11 @@ COPY package.json ./
 COPY drizzle ./drizzle
 COPY src/server ./src/server
 COPY src/shared ./src/shared
-RUN mkdir /data && chown node:node /data \
-    && printf '#!/bin/sh\nexec node /app/src/server/cli.ts "$@"\n' > /usr/local/bin/loupe \
-    && chmod +x /usr/local/bin/loupe
+COPY --from=prod-deps --chown=node:node /data /data
+COPY --chmod=755 <<'EOF' /usr/local/bin/loupe
+#!/bin/sh
+exec node /app/src/server/cli.ts "$@"
+EOF
 USER node
 VOLUME /data
 EXPOSE 3000

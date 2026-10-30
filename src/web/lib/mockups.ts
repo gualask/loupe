@@ -37,6 +37,20 @@ export async function uploadVersion(mockup: Mockup, file: File) {
     return api.upload<Mockup>(`/mockups/${mockup.id}/versions`, file);
 }
 
+/** Deletes an earlier version, with its comments; resolves to whether it was deleted. */
+export async function deleteVersion(mockup: Mockup, number: number) {
+    const confirmed = await confirmDialog({
+        title: `Delete version ${number}?`,
+        message:
+            'Its comments will be lost too, and reviewers will no longer be able to compare with it. This cannot be undone.',
+        confirmLabel: 'Delete version',
+        danger: true,
+    });
+    if (!confirmed) return false;
+    await api.delete(`/mockups/${mockup.id}/versions/${number}`);
+    return true;
+}
+
 export async function regenerateShareLink(mockup: Mockup) {
     const confirmed = await confirmDialog({
         title: 'Create a new link?',

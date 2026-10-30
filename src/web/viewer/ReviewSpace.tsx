@@ -5,7 +5,9 @@ import { sameAuthor, type Thread } from '../../shared/api/reviews.ts';
 import type { BridgeMessage, PinPosition, ShortcutKey } from '../../shared/bridge-protocol.ts';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { logout } from '../lib/session.ts';
+import { Badge } from '../ui/Badge.tsx';
 import { useBridge } from './bridge.ts';
+import { ComparePane } from './ComparePane.tsx';
 import { HelpDialog, NameDialog } from './dialogs.tsx';
 import { useDraftRecovery } from './drafts.ts';
 import { ErrorToast } from './ErrorToast.tsx';
@@ -13,6 +15,7 @@ import { filterThreads, type ThreadFilter } from './filters.ts';
 import { NewComment, type NewThread } from './NewComment.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
 import { Popover, type PopoverPoint } from './Popover.tsx';
+import { PaneBar, Preview } from './Preview.tsx';
 import { ProfileMenu } from './ProfileMenu.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
@@ -46,6 +49,7 @@ export function ReviewSpace({
 
     const { path, query, route } = useLocation();
     const frame = useRef<HTMLIFrameElement>(null);
+    const compareFrame = useRef<HTMLIFrameElement>(null);
     const commentButton = useRef<HTMLButtonElement>(null);
 
     const shared = session.shared.value;
@@ -62,11 +66,17 @@ export function ReviewSpace({
     const [filter, setFilter] = useState<ThreadFilter>('open');
     // Null fills the window.
     const [viewportWidth, setViewportWidth] = useState<number | null>(null);
+    // The earlier version shown beside the current one, by number; null without comparison.
+    const [compared, setCompared] = useState<number | null>(null);
+    const [stacked, setStacked] = useState(false);
     const [panelOpen, setPanelOpen] = useState(() => !panelCoversMockup());
     const [dialog, setDialog] = useState<DialogName | null>(null);
     const [positions, setPositions] = useState(new Map<string, PinPosition>());
 
     const labels = useMemo(() => pinLabels(threads), [threads]);
+    // Gone once an editor deletes it, which closes the comparison.
+    const comparedVersion = shared.earlierVersions.find((v) => v.number === compared);
+    const latestEarlier = shared.earlierVersions[0];
 
     // Once the space closes to changes, archived or replaced, placing a pin stops.
     const outdated = session.outdated.value;
@@ -180,6 +190,10 @@ export function ReviewSpace({
     }
 
     const { connection, send, onFrameLoad } = useBridge(frame, onBridgeMessage);
+    // The earlier version takes no pins: only shortcuts typed inside it are heard.
+    const compareBridge = useBridge(compareFrame, (message) => {
+        if (message.type === 'loupe:key') shortcut(message.key);
+    });
 
     // Pins are rebuilt on every render; comparing them as JSON sends them to the mockup only
     // when they actually change, or when a new bridge started.
@@ -267,6 +281,7 @@ export function ReviewSpace({
                     />
                 }
                 viewportWidth={viewportWidth}
+                comparing={!!comparedVersion}
                 pinsHidden={pinsHidden}
                 me={
                     <ProfileMenu
@@ -288,6 +303,11 @@ export function ReviewSpace({
                 openCount={threads.filter((t) => t.status === 'open').length}
                 panelOpen={panelOpen}
                 onViewport={setViewportWidth}
+                onToggleCompare={
+                    latestEarlier
+                        ? () => setCompared(comparedVersion ? null : latestEarlier.number)
+                        : undefined
+                }
                 onTogglePins={togglePins}
                 onTogglePanel={() => setPanelOpen((open) => !open)}
             />
@@ -295,18 +315,41 @@ export function ReviewSpace({
                 <NewVersionNotice class="shrink-0 bg-amber-100 px-4 py-2 text-center text-amber-900 text-sm" />
             ) : null}
             <div class="relative flex min-h-0 flex-1">
-                <main class="flex min-w-0 flex-1 justify-center overflow-auto">
-                    <div
-                        class="h-full bg-white shadow-sm"
-                        style={{ width: viewportWidth ? `${viewportWidth}px` : '100%' }}
-                    >
-                        <MockupFrame
-                            frameRef={frame}
-                            onLoad={onFrameLoad}
-                            src={shared.contentUrl}
-                            title={shared.name}
-                            class="h-full w-full"
+                {/* The current version keeps its place in the tree as a comparison opens and
+                    closes, so its frame does not reload. */}
+                <main class={`flex min-w-0 flex-1 ${stacked ? 'flex-col' : ''}`}>
+                    {comparedVersion ? (
+                        <ComparePane
+                            name={shared.name}
+                            versions={shared.earlierVersions}
+                            shown={comparedVersion}
+                            stacked={stacked}
+                            viewportWidth={viewportWidth}
+                            frameRef={compareFrame}
+                            onLoad={compareBridge.onFrameLoad}
+                            onShow={setCompared}
+                            onToggleLayout={() => setStacked(!stacked)}
+                            onClose={() => setCompared(null)}
                         />
+                    ) : null}
+                    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+                        {comparedVersion ? (
+                            <PaneBar>
+                                <span class="font-medium text-sm text-stone-900">
+                                    Version {shared.version}
+                                </span>
+                                <Badge tone="good">Current</Badge>
+                            </PaneBar>
+                        ) : null}
+                        <Preview width={viewportWidth}>
+                            <MockupFrame
+                                frameRef={frame}
+                                onLoad={onFrameLoad}
+                                src={shared.contentUrl}
+                                title={shared.name}
+                                class="h-full w-full"
+                            />
+                        </Preview>
                     </div>
                 </main>
                 {panelOpen ? (

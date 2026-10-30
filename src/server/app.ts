@@ -106,7 +106,7 @@ export function createApp(
         throw notFound();
     });
 
-    app.use('/s/:token/content', sessionMiddleware(deps));
+    app.use('/s/:token/*', sessionMiddleware(deps));
     app.route('/s', shareContentRoutes(deps));
 
     // Built assets have a content hash in their name, so they never change: cache them for good.

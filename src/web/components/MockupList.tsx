@@ -6,6 +6,7 @@ import { Badge } from '../ui/Badge.tsx';
 import { type ItemColumn, ItemList, ItemRow } from '../ui/ItemList.tsx';
 import { ICON, TEXT } from '../ui/styles.ts';
 import { AwaitingBadge } from './AwaitingBadge.tsx';
+import { EarlierVersionsDialog } from './EarlierVersionsDialog.tsx';
 import { MockupMenu } from './MockupMenu.tsx';
 import { RenameMockupDialog } from './RenameMockupDialog.tsx';
 import { ThreadCounts } from './ThreadCounts.tsx';
@@ -44,12 +45,14 @@ function MockupRow({
     disabled,
     onRename,
     onSetArchived,
+    onEarlierVersions,
     onDelete,
 }: {
     mockup: Mockup;
     disabled: boolean;
     onRename: () => void;
     onSetArchived: (archived: boolean) => void;
+    onEarlierVersions: () => void;
     onDelete: () => void;
 }) {
     const external = mockup.version.externalRefs.length;
@@ -79,6 +82,7 @@ function MockupRow({
                     disabled={disabled}
                     onRename={onRename}
                     onSetArchived={onSetArchived}
+                    onEarlierVersions={onEarlierVersions}
                     onDelete={onDelete}
                 />
             }
@@ -94,7 +98,10 @@ type RowActions = {
     onDelete: (mockup: Mockup) => void;
 };
 
-/** A table of mockups, each renamed, archived, restored or deleted from its row. */
+/**
+ * A table of mockups, each renamed, archived, restored, cleared of earlier versions or deleted
+ * from its row.
+ */
 function MockupTable({
     mockups,
     disabled,
@@ -103,6 +110,7 @@ function MockupTable({
     onDelete,
 }: RowActions & { mockups: Mockup[] }) {
     const [renaming, setRenaming] = useState<Mockup>();
+    const [managingVersions, setManagingVersions] = useState<Mockup>();
     return (
         <>
             <ItemList label="Mockup" columns={COLUMNS}>
@@ -113,6 +121,7 @@ function MockupTable({
                         disabled={disabled}
                         onRename={() => setRenaming(mockup)}
                         onSetArchived={(archived) => onSetArchived(mockup, archived)}
+                        onEarlierVersions={() => setManagingVersions(mockup)}
                         onDelete={() => onDelete(mockup)}
                     />
                 ))}
@@ -125,6 +134,12 @@ function MockupTable({
                         setRenaming(undefined);
                     }}
                     onClose={() => setRenaming(undefined)}
+                />
+            ) : null}
+            {managingVersions ? (
+                <EarlierVersionsDialog
+                    mockup={managingVersions}
+                    onClose={() => setManagingVersions(undefined)}
                 />
             ) : null}
         </>

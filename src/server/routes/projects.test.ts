@@ -293,6 +293,7 @@ describe('share links', () => {
             archived: false,
             version: 1,
             contentUrl: `/s/${token}/content`,
+            earlierVersions: [],
             me: null,
             canModerate: false,
         });
@@ -374,6 +375,67 @@ describe('mockup versions', () => {
             },
         });
         expect((await editor.get(`/api/mockups/${mockup.id}`)).body.version.number).toBe(1);
+    });
+
+    it('serves earlier versions on the link, for comparison', async () => {
+        const { t, editor, mockup, token, uploadVersion } = await editorWithMockup();
+        await uploadVersion('<!doctype html><button>Pay now</button>');
+
+        expect((await t.client().get(`/api/s/${token}`)).body.earlierVersions).toEqual([
+            {
+                number: 1,
+                createdAt: expect.any(String),
+                contentUrl: `/s/${token}/versions/1/content`,
+            },
+        ]);
+        const first = await t.client().get(`/s/${token}/versions/1/content`);
+        expect(first.status).toBe(200);
+        expect(first.headers.get('content-security-policy')).toMatch(/^sandbox allow-scripts;/);
+        expect(first.body).toContain('<button onclick="pay()">Pay</button>');
+        expect((await t.client().get(`/s/${token}/versions/2/content`)).body).toContain('Pay now');
+        for (const number of ['3', '0', '01', 'latest']) {
+            expect((await t.client().get(`/s/${token}/versions/${number}/content`)).status).toBe(
+                404,
+            );
+        }
+
+        expect((await editor.get(`/api/mockups/${mockup.id}/versions`)).body).toEqual([
+            { ...mockup.version, createdAt: expect.any(String) },
+        ]);
+
+        // Like the current version, earlier ones stop with the link.
+        await editor.post(`/api/mockups/${mockup.id}/share/regenerate`);
+        expect((await t.client().get(`/s/${token}/versions/1/content`)).status).toBe(404);
+    });
+
+    it('deletes earlier versions with their threads, never the current one', async () => {
+        const { t, admin, editor, mockup, base, uploadVersion } = await createSharedMockup();
+        await editor.post(`${base}/threads`, newThread('On the first version'));
+        await uploadVersion();
+        await uploadVersion('<!doctype html><main>Third</main>');
+        const url = (number: number | string) => `/api/mockups/${mockup.id}/versions/${number}`;
+        const { editor: other } = await inviteEditor(t, admin, 'fran');
+        expect((await other.delete(url(1))).status).toBe(404);
+        expect((await t.client().delete(url(1))).status).toBe(401);
+
+        expect((await editor.delete(url(1))).status).toBe(204);
+        expect((await editor.get(`/api/mockups/${mockup.id}/versions`)).body).toEqual([
+            expect.objectContaining({ number: 2 }),
+        ]);
+        // Its file is gone with it; the other two remain.
+        expect(readdirSync(path.join(t.config.dataDir, 'mockups'))).toHaveLength(2);
+        expect((await editor.delete(url(1))).status).toBe(404);
+        expect((await editor.delete(url('first'))).status).toBe(404);
+        expect(await editor.delete(url(3))).toMatchObject({
+            status: 409,
+            body: { error: 'current_version' },
+        });
+
+        // Admins manage every mockup; numbers are never reused.
+        expect((await admin.delete(url(2))).status).toBe(204);
+        expect((await editor.get(`/api/mockups/${mockup.id}/versions`)).body).toEqual([]);
+        const next = await uploadVersion('<!doctype html><main>Fourth</main>');
+        expect(next.version.number).toBe(4);
     });
 
     it('refuses new versions of an archived mockup', async () => {

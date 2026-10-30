@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 import type { Mockup } from '../../shared/api/projects.ts';
 import { AppShell } from '../components/AppShell.tsx';
+import { EarlierVersionsDialog } from '../components/EarlierVersionsDialog.tsx';
 import { HtmlFileButton } from '../components/HtmlFileButton.tsx';
 import { MockupFrame } from '../components/MockupFrame.tsx';
 import { MockupMenu } from '../components/MockupMenu.tsx';
@@ -11,7 +12,7 @@ import { ReviewersPanel } from '../components/ReviewersPanel.tsx';
 import { SharePanel } from '../components/SharePanel.tsx';
 import { api } from '../lib/api.ts';
 import { useAction } from '../lib/form.ts';
-import { formatDate, formatDateTime } from '../lib/format.ts';
+import { formatDate, uploadedFrom } from '../lib/format.ts';
 import { deleteMockup, setArchived, uploadVersion } from '../lib/mockups.ts';
 import { useResource } from '../lib/resource.ts';
 import { mockupContentSrc, reviewSpaceHref } from '../lib/share.ts';
@@ -28,6 +29,7 @@ export function MockupPage() {
     const { route } = useLocation();
     const resource = useResource(`/mockups/${params.id}`, api.get<Mockup>);
     const [renaming, setRenaming] = useState(false);
+    const [versionsOpen, setVersionsOpen] = useState(false);
     // Uploads, archiving and deleting, one at a time.
     const action = useAction();
 
@@ -58,7 +60,7 @@ export function MockupPage() {
         });
 
     // Where and when the current version came from, on hover of its badge.
-    const uploaded = `Uploaded ${formatDateTime(mockup.version.createdAt)} from ${mockup.version.originalFilename}`;
+    const uploaded = uploadedFrom(mockup.version);
 
     return (
         <AppShell
@@ -104,6 +106,7 @@ export function MockupPage() {
                                 disabled={action.pending}
                                 onRename={() => setRenaming(true)}
                                 onSetArchived={archive}
+                                onEarlierVersions={() => setVersionsOpen(true)}
                                 onDelete={remove}
                             />
                         </>
@@ -180,6 +183,9 @@ export function MockupPage() {
                     }}
                     onClose={() => setRenaming(false)}
                 />
+            ) : null}
+            {versionsOpen ? (
+                <EarlierVersionsDialog mockup={mockup} onClose={() => setVersionsOpen(false)} />
             ) : null}
         </AppShell>
     );

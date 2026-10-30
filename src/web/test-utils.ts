@@ -39,6 +39,7 @@ export const SHARED: SharedMockup = {
     archived: false,
     version: 1,
     contentUrl: '/s/tok/content',
+    earlierVersions: [],
     me: ANN,
     canModerate: false,
 };

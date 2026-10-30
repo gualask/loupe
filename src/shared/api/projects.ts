@@ -41,7 +41,7 @@ export type Project = {
     updatedAt: string;
 };
 
-type MockupVersion = {
+export type MockupVersion = {
     number: number;
     originalFilename: string;
     sizeBytes: number;
@@ -91,8 +91,13 @@ export type SharedMockup = {
     /** Number of the current version, the one the link shows. */
     version: number;
     contentUrl: string;
+    /** Earlier versions still stored, the latest first: they can be shown beside the current. */
+    earlierVersions: SharedVersion[];
     /** An editor who manages the mockup, the viewer owning the viewer key, or null. */
     me: Author | null;
     /** Whether `me` may resolve threads and delete any comment. */
     canModerate: boolean;
 };
+
+/** An earlier version of a shared mockup, shown read-only for comparison. */
+export type SharedVersion = { number: number; createdAt: string; contentUrl: string };

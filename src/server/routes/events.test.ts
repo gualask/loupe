@@ -115,6 +115,19 @@ describe('event stream', () => {
         await reader.cancel();
     });
 
+    it('tells open streams when an earlier version is deleted', async () => {
+        const { t, editor, mockup, base, viewer, uploadVersion } = await createSharedMockup();
+        await uploadVersion();
+        const alice = await viewer('Alice');
+        const { reader, next } = await openStream(t, `${base}/events`, alice.key);
+        await next(); // presence
+
+        await editor.delete(`/api/mockups/${mockup.id}/versions/1`);
+        expect(await next()).toEqual({ type: 'version-deleted', number: 1 });
+
+        await reader.cancel();
+    });
+
     it('ends open streams of the previous version at once', async () => {
         const { t, base, viewer, uploadVersion } = await createSharedMockup();
         const alice = await viewer('Alice');

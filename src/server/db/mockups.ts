@@ -1,4 +1,4 @@
-import { and, desc, eq, max } from 'drizzle-orm';
+import { and, desc, eq, max, ne } from 'drizzle-orm';
 import type { Db } from './client.ts';
 import { mockups, mockupVersions, projects } from './schema.ts';
 
@@ -83,6 +83,35 @@ export function findVersion(db: Db, mockupId: string, number: number) {
         .from(mockupVersions)
         .where(and(eq(mockupVersions.mockupId, mockupId), eq(mockupVersions.number, number)))
         .get();
+}
+
+/** The versions of a mockup before its current one, the latest first. */
+export function listEarlierVersions(db: Db, { mockup, version }: MockupWithVersion) {
+    return db
+        .select()
+        .from(mockupVersions)
+        .where(and(eq(mockupVersions.mockupId, mockup.id), ne(mockupVersions.id, version.id)))
+        .orderBy(desc(mockupVersions.number))
+        .all();
+}
+
+/**
+ * Deletes a version with its threads, unless it is the mockup's current one. Numbers are never
+ * reused: the next upload still follows the latest number.
+ */
+export function deleteEarlierVersion(db: Db, mockupId: string, number: number) {
+    return db.transaction((tx) => {
+        const row = tx
+            .select({ id: mockupVersions.id, currentVersionId: mockups.currentVersionId })
+            .from(mockupVersions)
+            .innerJoin(mockups, eq(mockups.id, mockupVersions.mockupId))
+            .where(and(eq(mockupVersions.mockupId, mockupId), eq(mockupVersions.number, number)))
+            .get();
+        if (!row) return 'not_found';
+        if (row.id === row.currentVersionId) return 'current';
+        tx.delete(mockupVersions).where(eq(mockupVersions.id, row.id)).run();
+        return 'deleted';
+    });
 }
 
 /**

@@ -23,6 +23,7 @@ describe('viewers', () => {
             archived: false,
             version: 1,
             contentUrl: expect.stringMatching(/^\/s\/[\w-]{43}\/content$/),
+            earlierVersions: [],
             me: alice.viewer,
             canModerate: false,
         });

@@ -5,7 +5,7 @@ import type { Db } from '../db/client.ts';
 import { findMockupByShareToken } from '../db/mockups.ts';
 import type { UserRow } from '../db/users.ts';
 import { findViewerByKey, type ViewerRow } from '../db/viewers.ts';
-import { apiError } from '../http.ts';
+import { apiError, parseVersionNumber } from '../http.ts';
 import { canManage } from '../mockups/access.ts';
 import type { AppEnv } from '../types.ts';
 import { viewerAuthor } from './present.ts';
@@ -31,10 +31,11 @@ export function sharedMockup(db: Db, c: Context<AppEnv>) {
 export function shownVersion(c: Context<AppEnv>, row: SharedMockupRow) {
     const header = c.req.header(VERSION_HEADER);
     if (header === undefined) return row.version.number;
-    if (!/^[1-9]\d*$/.test(header)) {
+    const number = parseVersionNumber(header);
+    if (number === undefined) {
         throw apiError(400, 'invalid_request', `Invalid ${VERSION_HEADER} header.`);
     }
-    return Number(header);
+    return number;
 }
 
 /** Who is acting on a share link: an editor who manages the mockup, or a registered viewer. */

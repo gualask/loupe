@@ -140,6 +140,12 @@ export function createReviewSession(
         } else if (event.type === 'presence') presence.value = event.participants;
         else if (event.type === 'viewer') showName(event.viewer);
         else if (event.type === 'archived') setArchived(event.archived);
+        else if (event.type === 'version-deleted') {
+            const earlierVersions = shared.value.earlierVersions.filter(
+                (version) => version.number !== event.number,
+            );
+            shared.value = { ...shared.value, earlierVersions };
+        }
     }
 
     /** Applies the server's copy of a saved thread; resolves to whether the change was saved. */

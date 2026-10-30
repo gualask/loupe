@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import {
     createProjectRequestSchema,
+    type MockupVersion,
     NAME_MAX_LENGTH,
     type ProjectDetail,
     updateMockupRequestSchema,
@@ -10,10 +11,12 @@ import {
 import { randomToken } from '../auth/crypto.ts';
 import { signedInUser } from '../auth/session.ts';
 import {
+    deleteEarlierVersion,
     deleteMockup,
     findMockup,
     insertMockup,
     insertVersion,
+    listEarlierVersions,
     listMockups,
     type MockupWithVersion,
     referencedFileHashes,
@@ -28,10 +31,10 @@ import {
 } from '../db/projects.ts';
 import { countThreadsByViewer, lastCommentsByViewer, threadActivity } from '../db/threads.ts';
 import { listViewers } from '../db/viewers.ts';
-import { apiError, notFound, parseJson } from '../http.ts';
+import { apiError, notFound, parseJson, parseVersionNumber } from '../http.ts';
 import { canManage } from '../mockups/access.ts';
 import { deleteUnreferencedFiles, storeMockupFile } from '../mockups/files.ts';
-import { toMockup, toProject } from '../mockups/present.ts';
+import { toMockup, toMockupVersion, toProject } from '../mockups/present.ts';
 import { createUploadReader, truncate } from '../mockups/upload.ts';
 import type { Hub } from '../review/hub.ts';
 import { toReviewerSummaries } from '../review/present.ts';
@@ -156,6 +159,32 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             // Review spaces of the previous version reconnect and learn it changed.
             hub.close(version.id);
             return c.json(presentMockup(managedMockup(c, mockup.id)), 201);
+        })
+        .get('/mockups/:id/versions', (c) => {
+            const body: MockupVersion[] = listEarlierVersions(
+                db,
+                managedMockup(c, c.req.param('id')),
+            ).map(toMockupVersion);
+            return c.json(body);
+        })
+        .delete('/mockups/:id/versions/:number', async (c) => {
+            // Also on archived mockups: removing a file is not a review change.
+            const { mockup, version } = managedMockup(c, c.req.param('id'));
+            const number = parseVersionNumber(c.req.param('number'));
+            if (number === undefined) throw notFound();
+            const result = deleteEarlierVersion(db, mockup.id, number);
+            if (result === 'not_found') throw notFound();
+            if (result === 'current') {
+                throw apiError(
+                    409,
+                    'current_version',
+                    'The current version cannot be deleted. Upload a new version first.',
+                );
+            }
+            // Review spaces comparing with it close the comparison at once.
+            hub.publish(version.id, { type: 'version-deleted', number });
+            await cleanUpFiles();
+            return c.body(null, 204);
         })
         .get('/mockups/:id', (c) => c.json(presentMockup(managedMockup(c, c.req.param('id')))))
         .patch('/mockups/:id', async (c) => {

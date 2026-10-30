@@ -16,7 +16,7 @@ export default defineConfig({
         proxy: {
             '/api': serverUrl,
             '/healthz': serverUrl,
-            '^/s/[^/]+/content': serverUrl,
+            '^/s/[^/]+/(versions/[^/]+/)?content': serverUrl,
         },
     },
 });

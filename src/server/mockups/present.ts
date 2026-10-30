@@ -1,6 +1,6 @@
-import type { Mockup, Project, ThreadTotals } from '../../shared/api/projects.ts';
+import type { Mockup, MockupVersion, Project, ThreadTotals } from '../../shared/api/projects.ts';
 import type { Config } from '../config.ts';
-import type { MockupWithVersion } from '../db/mockups.ts';
+import type { MockupVersionRow, MockupWithVersion } from '../db/mockups.ts';
 import type { ProjectRow } from '../db/projects.ts';
 
 /** A project with its owner's name, as the project queries return it. */
@@ -31,6 +31,16 @@ export function toProject(row: ProjectWithActivity): Project {
     };
 }
 
+export function toMockupVersion(version: MockupVersionRow): MockupVersion {
+    return {
+        number: version.number,
+        originalFilename: version.originalFilename,
+        sizeBytes: version.sizeBytes,
+        externalRefs: version.externalRefs,
+        createdAt: version.createdAt.toISOString(),
+    };
+}
+
 /** Feedback on a mockup's current version, as the database reports it. */
 export type ActivityRow = ThreadTotals & { lastActivityAt: Date | null };
 
@@ -46,13 +56,7 @@ export function toMockup(
         name: mockup.name,
         shareUrl: `${config.publicUrl}/s/${mockup.shareToken}`,
         archivedAt: mockup.archivedAt?.toISOString() ?? null,
-        version: {
-            number: version.number,
-            originalFilename: version.originalFilename,
-            sizeBytes: version.sizeBytes,
-            externalRefs: version.externalRefs,
-            createdAt: version.createdAt.toISOString(),
-        },
+        version: toMockupVersion(version),
         activity: {
             ...activity,
             lastActivityAt: activity.lastActivityAt?.toISOString() ?? null,

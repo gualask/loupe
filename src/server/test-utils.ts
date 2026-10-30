@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, expect } from 'vitest';
 import type { PinAnchor } from '../shared/anchor.ts';
+import type { Mockup } from '../shared/api/projects.ts';
 import { createApp } from './app.ts';
 import { issueSetupLinkIfNeeded } from './auth/accounts.ts';
 import { loadConfig } from './config.ts';
@@ -162,13 +163,14 @@ export async function createSharedMockup(
         return { client, key: res.body.key as string, viewer: res.body.viewer };
     }
 
-    /** Uploads the next version of the mockup, on the same link. */
-    async function uploadVersion() {
+    /** Uploads the next version of the mockup, on the same link; resolves to the mockup. */
+    async function uploadVersion(content = '<!doctype html><main>Hello</main>') {
         const res = await editor.post(
             `/api/mockups/${mockup.body.id}/versions`,
-            htmlFile('<!doctype html><main>Hello</main>', 'home-v2.html'),
+            htmlFile(content, 'home-v2.html'),
         );
         expect(res.status).toBe(201);
+        return res.body as Mockup;
     }
 
     return {

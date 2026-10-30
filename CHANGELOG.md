@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reviewers listed to editors with their open and resolved comments and last activity
 - Real-time updates, saving with automatic retry while offline, and unsent drafts kept on reload
 - Viewport switcher, keyboard shortcuts and a review space usable on phones
+- Comparison of the current version with an earlier one, side by side or one above the other, open to everyone on the link
+- Deletion of earlier versions, with their comments, by editors
 - Admin and editor accounts through single-use setup, invite and password-reset links
 - Admin user management and workspace switching, and `loupe reset-link` for locked-out admins
 - Rate limits on logins, new reviewers and reviewer changes, and a cap on password checks running at once

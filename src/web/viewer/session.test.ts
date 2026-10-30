@@ -248,6 +248,26 @@ describe('events', () => {
         expect(session.presence.value).toEqual([renamed]);
         expect(session.me.value).toEqual(renamed);
     });
+
+    it('stops offering an earlier version once it is deleted', async () => {
+        const server = fakeServer();
+        const version = (number: number) => ({
+            number,
+            createdAt: '2026-10-01T00:00:00.000Z',
+            contentUrl: `/s/tok/versions/${number}/content`,
+        });
+        const session = createReviewSession(
+            'tok',
+            { ...SHARED, version: 3, earlierVersions: [version(2), version(1)] },
+            'key',
+        );
+        server.state.events = [{ type: 'version-deleted', number: 2 }];
+
+        session.connect();
+        await vi.advanceTimersByTimeAsync(0);
+        session.disconnect();
+        expect(session.shared.value.earlierVersions).toEqual([version(1)]);
+    });
 });
 
 describe('checkIdentity', () => {

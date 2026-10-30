@@ -34,6 +34,11 @@ export function formatRelative(iso: string) {
 }
 
 /** "1 mockup", "3 mockups"; `many` for irregular plurals ("replies"). */
+/** Where and when a version came from, e.g. "Uploaded 3 Oct 2026, 14:05 from checkout.html". */
+export function uploadedFrom(version: { createdAt: string; originalFilename: string }) {
+    return `Uploaded ${formatDateTime(version.createdAt)} from ${version.originalFilename}`;
+}
+
 export function plural(count: number, one: string, many = `${one}s`) {
     return `${count} ${count === 1 ? one : many}`;
 }

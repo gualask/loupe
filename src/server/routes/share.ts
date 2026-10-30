@@ -1,8 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { accepts } from 'hono/accepts';
 import type { SharedMockup } from '../../shared/api/projects.ts';
 import { sha256 } from '../auth/crypto.ts';
+import { findVersion, listEarlierVersions, type MockupVersionRow } from '../db/mockups.ts';
+import { apiError, parseVersionNumber } from '../http.ts';
 import { injectBridge, mockupHeaders } from '../mockups/document.ts';
 import { createDocumentCache } from '../mockups/document-cache.ts';
 import { readMockupFile } from '../mockups/files.ts';
@@ -14,12 +16,18 @@ export function shareApiRoutes({ db }: AppDeps) {
     return new Hono<AppEnv>().get('/:token', (c) => {
         const row = sharedMockup(db, c);
         const actor = shareActor(db, c, row);
+        const base = `/s/${row.mockup.shareToken}`;
         const body: SharedMockup = {
             mockupId: row.mockup.id,
             name: row.mockup.name,
             archived: row.mockup.archivedAt !== null,
             version: row.version.number,
-            contentUrl: `/s/${row.mockup.shareToken}/content`,
+            contentUrl: `${base}/content`,
+            earlierVersions: listEarlierVersions(db, row).map((version) => ({
+                number: version.number,
+                createdAt: version.createdAt.toISOString(),
+                contentUrl: `${base}/versions/${version.number}/content`,
+            })),
             me: actor?.author ?? null,
             canModerate: actor?.kind === 'editor',
         };
@@ -60,10 +68,8 @@ function bridgeLoader(file: string | undefined) {
 export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
     const loadBridge = bridgeLoader(deps.bridgeFile);
     const documents = createDocumentCache(DOCUMENT_CACHE_BYTES);
-    return new Hono<AppEnv>().get('/:token/content', async (c) => {
-        // Access is checked on every request: the browser revalidates its copy (no-cache), so a
-        // regenerated link stops serving it.
-        const { version } = sharedMockup(deps.db, c);
+    /** Sends a version's document, prepared once with the bridge inlined. */
+    async function serve(c: Context<AppEnv>, version: MockupVersionRow) {
         const bridge = await loadBridge();
         // The stored file is addressed by its hash; the bridge changes only with Loupe itself.
         // Weak, as the same tag names the plain and the compressed document.
@@ -83,5 +89,18 @@ export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
             return c.body(document.gzip, 200, { ...headers, 'Content-Encoding': 'gzip' });
         }
         return c.body(document.body, 200, headers);
-    });
+    }
+
+    // Access is checked on every request: the browser revalidates its copy (no-cache), so a
+    // regenerated link stops serving it.
+    return new Hono<AppEnv>()
+        .get('/:token/content', (c) => serve(c, sharedMockup(deps.db, c).version))
+        .get('/:token/versions/:number/content', (c) => {
+            const { mockup } = sharedMockup(deps.db, c);
+            const number = parseVersionNumber(c.req.param('number'));
+            const version =
+                number === undefined ? undefined : findVersion(deps.db, mockup.id, number);
+            if (!version) throw apiError(404, 'not_found', 'This version is not available.');
+            return serve(c, version);
+        });
 }

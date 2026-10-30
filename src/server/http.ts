@@ -16,6 +16,11 @@ export function notFound() {
     return apiError(404, 'not_found', 'Not found: it may have been deleted, or the link changed.');
 }
 
+/** A version number (1, 2, 3…) as written in a path or header; undefined for anything else. */
+export function parseVersionNumber(value: string) {
+    return /^[1-9]\d*$/.test(value) ? Number(value) : undefined;
+}
+
 /** Parses a JSON body with a Zod schema, or fails with 400 `invalid_request`. */
 export async function parseJson<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
     const body: unknown = await c.req.json().catch(() => undefined);

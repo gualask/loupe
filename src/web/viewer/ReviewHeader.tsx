@@ -5,6 +5,7 @@ import {
     IconDeviceTablet,
     IconEye,
     IconEyeOff,
+    IconGitCompare,
     IconLayoutSidebarRight,
 } from '@tabler/icons-preact';
 import type { ComponentChildren } from 'preact';
@@ -61,12 +62,14 @@ export function ReviewHeader({
     status,
     tools,
     viewportWidth,
+    comparing,
     pinsHidden,
     me,
     others,
     openCount,
     panelOpen,
     onViewport,
+    onToggleCompare,
     onTogglePins,
     onTogglePanel,
 }: {
@@ -78,6 +81,8 @@ export function ReviewHeader({
     status: ComponentChildren;
     tools: ComponentChildren;
     viewportWidth: number | null;
+    /** Whether an earlier version shows beside the current one. */
+    comparing: boolean;
     pinsHidden: boolean;
     /** The profile menu: who is reviewing, their name and the shortcuts help. */
     me: ComponentChildren;
@@ -86,6 +91,8 @@ export function ReviewHeader({
     openCount: number;
     panelOpen: boolean;
     onViewport: (width: number | null) => void;
+    /** Missing without earlier versions to compare with. */
+    onToggleCompare: (() => void) | undefined;
     onTogglePins: () => void;
     onTogglePanel: () => void;
 }) {
@@ -138,13 +145,24 @@ export function ReviewHeader({
                         ))}
                     </div>
                 ) : null}
-                <div class="hidden lg:block">
+                {/* Wide screens only: there is no room to set widths or compare on phones. */}
+                <div class="hidden items-center gap-2 lg:flex">
                     <Segmented
                         label="Preview width"
                         options={VIEWPORTS}
                         value={viewportWidth}
                         onChange={onViewport}
                     />
+                    {onToggleCompare ? (
+                        <IconButton
+                            label="Compare with an earlier version"
+                            size="md"
+                            pressed={comparing}
+                            onClick={onToggleCompare}
+                        >
+                            <IconGitCompare size={ICON.lg} />
+                        </IconButton>
+                    ) : null}
                 </div>
                 <IconButton
                     label={pinsHidden ? 'Show pins' : 'Hide pins'}

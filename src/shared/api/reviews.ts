@@ -112,4 +112,6 @@ export type ShareEvent =
     /** A viewer changed their name: it shows wherever they appear. */
     | { type: 'viewer'; viewer: Extract<Author, { kind: 'viewer' }> }
     /** The mockup was archived or unarchived: changes stop or resume. */
-    | { type: 'archived'; archived: boolean };
+    | { type: 'archived'; archived: boolean }
+    /** An editor deleted an earlier version: it can no longer be compared with. */
+    | { type: 'version-deleted'; number: number };

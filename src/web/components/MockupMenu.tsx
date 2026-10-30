@@ -1,6 +1,12 @@
-import { IconArchive, IconArchiveOff, IconPencil, IconTrash } from '@tabler/icons-preact';
+import {
+    IconArchive,
+    IconArchiveOff,
+    IconHistory,
+    IconPencil,
+    IconTrash,
+} from '@tabler/icons-preact';
 import type { Mockup } from '../../shared/api/projects.ts';
-import { Menu } from '../ui/Menu.tsx';
+import { Menu, type MenuItem } from '../ui/Menu.tsx';
 import type { IconButtonSize } from '../ui/styles.ts';
 import { ICON } from '../ui/styles.ts';
 
@@ -11,6 +17,7 @@ export function MockupMenu({
     disabled,
     onRename,
     onSetArchived,
+    onEarlierVersions,
     onDelete,
 }: {
     mockup: Mockup;
@@ -18,9 +25,20 @@ export function MockupMenu({
     disabled?: boolean;
     onRename: () => void;
     onSetArchived: (archived: boolean) => void;
+    onEarlierVersions: () => void;
     onDelete: () => void;
 }) {
     const archived = mockup.archivedAt !== null;
+    const earlierVersions: MenuItem[] =
+        mockup.version.number > 1
+            ? [
+                  {
+                      label: 'Earlier versions…',
+                      icon: <IconHistory size={ICON.md} />,
+                      onSelect: onEarlierVersions,
+                  },
+              ]
+            : [];
     return (
         <Menu
             label={`Actions for ${mockup.name}`}
@@ -39,6 +57,7 @@ export function MockupMenu({
                           icon: <IconArchive size={ICON.md} />,
                           onSelect: () => onSetArchived(true),
                       },
+                ...earlierVersions,
                 {
                     label: 'Delete…',
                     icon: <IconTrash size={ICON.md} />,

@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin and editor accounts through single-use setup, invite and password-reset links
 - Admin user management and workspace switching, and `loupe reset-link` for locked-out admins
 - Rate limits on logins, new reviewers and reviewer changes, and a cap on password checks running at once
-- Docker image with a health check, configured through `LOUPE_*` environment variables
+- Docker image on Docker Hub and GitHub Container Registry, with a health check, configured through `LOUPE_*` environment variables
 - Loupe logo in the app, browser tab icon and home-screen icon
 - Browser tabs named after the page shown
 

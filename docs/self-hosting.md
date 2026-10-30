@@ -10,7 +10,7 @@ docker run -d --name loupe \
   -p 3000:3000 \
   -v loupe-data:/data \
   -e LOUPE_PUBLIC_URL=https://loupe.example.com \
-  ghcr.io/gualask/loupe:latest
+  gualask/loupe:latest
 ```
 
 Or with Docker Compose:
@@ -18,7 +18,7 @@ Or with Docker Compose:
 ```yaml
 services:
   loupe:
-    image: ghcr.io/gualask/loupe:latest
+    image: gualask/loupe:latest
     ports:
       - "3000:3000"
     volumes:
@@ -30,6 +30,10 @@ services:
 volumes:
   loupe-data:
 ```
+
+The same image is published to Docker Hub (`gualask/loupe`) and to GitHub Container Registry
+(`ghcr.io/gualask/loupe`). `latest` follows the newest stable release; pin a version such as
+`gualask/loupe:0.1` to choose when to upgrade.
 
 Always set `LOUPE_PUBLIC_URL` to the address people use to reach Loupe: setup, invite, reset and
 share links are built from it, and without it they point to `localhost`.

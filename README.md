@@ -27,7 +27,7 @@ them, together and in real time. Reviewers need no account, and no email server 
 ```sh
 docker run -d --name loupe -p 3000:3000 -v loupe-data:/data \
   -e LOUPE_PUBLIC_URL=http://loupe.example.com:3000 \
-  ghcr.io/gualask/loupe:latest
+  gualask/loupe:latest
 ```
 
 Set `LOUPE_PUBLIC_URL` to the address people use to reach Loupe: setup, invite and share links

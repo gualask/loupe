@@ -23,6 +23,24 @@ them, together and in real time. Reviewers need no account, and no email server 
 - Editor and admin accounts created through invite links
 - One container, one port, one volume
 
+## Safer than sending the file
+
+A self-contained HTML mockup sent as a file runs, once opened, with nothing around it. Loupe
+shows the same file inside a sandbox, where by default it can only run its own scripts:
+
+| What the mockup's code can do | Opened as a file | Opened in Loupe |
+|---|---|---|
+| Load scripts, styles or trackers from other sites | Yes | No |
+| Send requests to any site, including services on your internal network | Yes | No |
+| Submit its forms to another site | Yes | No |
+| Save files to the viewer's computer | Yes | No |
+| Open pop-ups, or replace itself with another site | Yes | No: a link's address is shown above the mockup, with a button to open it |
+
+Whoever runs the server can allow some of these when mockups need them, one setting each. A
+sandbox does not judge content: a mockup can still draw anything, such as a fake form, and two
+browser features that no server can block let it tell another site the network address of
+whoever opens it. The details are in [Mockup permissions](docs/self-hosting.md#mockup-permissions).
+
 ## Quick start
 
 ```sh
@@ -40,8 +58,8 @@ are built from it. Then follow the first-run steps in the [self-hosting guide](d
 - [Development](docs/development.md): local setup and project commands
 - [Specification](docs/SPEC.md): product behavior and architecture
 - [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md): how to report a vulnerability
 
 ## License
 
 [MIT](LICENSE) © 2026 Andrea Gualandi (Gorgonauta)
-- [Security policy](SECURITY.md): how to report a vulnerability

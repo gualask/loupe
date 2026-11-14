@@ -17,6 +17,11 @@ const pinPositionSchema = z.object({
     visible: z.boolean(),
     /** True when neither selector nor text matched and the stored point was used. */
     orphaned: z.boolean(),
+    /**
+     * True when the anchor's element takes no space, e.g. hidden by the mockup at this width;
+     * its position is then meaningless.
+     */
+    elementHidden: z.boolean(),
 });
 
 /** Schemes of the links the app offers to open for the mockup. */

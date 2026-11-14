@@ -16,10 +16,11 @@ import { ErrorToast } from './ErrorToast.tsx';
 import { filterThreads, type ThreadFilter } from './filters.ts';
 import { NewComment, type NewThread } from './NewComment.tsx';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
-import { Popover, type PopoverPoint } from './Popover.tsx';
+import { Popover } from './Popover.tsx';
 import { PaneBar, Preview } from './Preview.tsx';
 import { ProfileMenu } from './ProfileMenu.tsx';
 import { bridgePins, DRAFT_PIN, pinLabels } from './pins.ts';
+import type { PopoverPoint } from './placement.ts';
 import { ReviewHeader } from './ReviewHeader.tsx';
 import { ReviewTools, SaveStatus } from './ReviewTools.tsx';
 import { useReviewSession } from './session.ts';
@@ -51,6 +52,8 @@ export function ReviewSpace({
 
     const { path, query, route } = useLocation();
     const commentButton = useRef<HTMLButtonElement>(null);
+    // Below the header and notices: where popovers stay.
+    const area = useRef<HTMLDivElement>(null);
 
     const shared = session.shared.value;
     const me = session.me.value;
@@ -213,22 +216,35 @@ export function ReviewSpace({
 
     useShortcuts(shortcut);
 
-    /** Where a popover goes: next to its pin, or below the comment button. */
+    /**
+     * Where a popover goes: next to its pin, at the top of the mockup when the mockup hides the
+     * pin's element, or below the comment button.
+     */
     function popoverPoint(pinId: string | null): PopoverPoint {
+        const areaRect = area.current?.getBoundingClientRect();
+        const band = { top: areaRect?.top ?? 0, bottom: areaRect?.bottom ?? innerHeight };
         const position = pinId ? positions.get(pinId) : undefined;
         const frameRect = bridge.frame.current?.getBoundingClientRect();
         if (position && frameRect) {
+            if (position.elementHidden) {
+                // Centered on the part of the mockup in view, which may scroll sideways.
+                const left = Math.max(frameRect.left, 0);
+                const right = Math.min(frameRect.right, innerWidth);
+                return { x: (left + right) / 2, y: band.top, placement: 'below', ...band };
+            }
             return {
                 x: frameRect.left + position.x,
                 y: frameRect.top + position.y,
-                placement: 'side' as const,
+                placement: 'side',
+                ...band,
             };
         }
         const button = commentButton.current?.getBoundingClientRect();
         return {
             x: button ? button.left + button.width / 2 : innerWidth / 2,
             y: button ? button.bottom : 0,
-            placement: 'below' as const,
+            placement: 'below',
+            ...band,
         };
     }
 
@@ -257,6 +273,7 @@ export function ReviewSpace({
                             ? `Pin ${labels.get(openThread.id) ?? ''}`
                             : 'General comment'
                     }
+                    pinHidden={positions.get(openThread.id)?.elementHidden ?? false}
                     session={session}
                     onClose={() => setOpenId(null)}
                 />
@@ -327,7 +344,7 @@ export function ReviewSpace({
                     showSettings={isEditor}
                 />
             </div>
-            <div class="relative flex min-h-0 flex-1">
+            <div ref={area} class="relative flex min-h-0 flex-1">
                 {/* The current version keeps its place in the tree as a comparison opens and
                     closes, so its frame does not reload. */}
                 <main class={`flex min-w-0 flex-1 ${stacked ? 'flex-col' : ''}`}>

@@ -7,7 +7,7 @@ import { formatRelative } from '../lib/format.ts';
 import { Badge } from '../ui/Badge.tsx';
 import { Button } from '../ui/Button.tsx';
 import { IconButton } from '../ui/IconButton.tsx';
-import { ICON } from '../ui/styles.ts';
+import { ICON, TEXT } from '../ui/styles.ts';
 import { Composer } from './Composer.tsx';
 import { replyDraft } from './drafts.ts';
 import { NewVersionNotice } from './NewVersionNotice.tsx';
@@ -97,11 +97,14 @@ function CommentItem({ comment, session }: { comment: Comment; session: ReviewSe
 export function ThreadView({
     thread,
     label,
+    pinHidden,
     session,
     onClose,
 }: {
     thread: Thread;
     label: string;
+    /** The mockup hides the pin's element at this width, so the pin is not drawn. */
+    pinHidden: boolean;
     session: ReviewSession;
     onClose: () => void;
 }) {
@@ -135,6 +138,11 @@ export function ThreadView({
                     <IconX size={ICON.md} />
                 </IconButton>
             </PopoverHeader>
+            {pinHidden ? (
+                <p class={`border-stone-100 border-b px-3 py-2 ${TEXT.meta}`}>
+                    The pinned element is hidden at this width.
+                </p>
+            ) : null}
             <ol class="flex flex-col gap-3 overflow-y-auto px-3 py-3">
                 {thread.comments.map((comment) => (
                     <CommentItem key={comment.id} comment={comment} session={session} />

@@ -260,7 +260,9 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 - **General comment** (`C`): a popover below the Comment button of the header.
 - **Threads**: clicking a pin opens its thread: replies, edit/delete own comments, status.
 - **Viewport switcher**: desktop / tablet / mobile widths (iframe width). Pins follow their
-  element at any width (§4.4). A width wider than the space keeps its size and scrolls sideways.
+  element at any width (§4.4). A pin whose element the mockup hides at that width is not drawn;
+  its thread opens at the top of the mockup and says so. A width wider than the space keeps its
+  size and scrolls sideways.
 - **Comparison**: when the mockup has earlier versions, anyone on the link can show one beside
   the current version, the latest earlier one first, and pick another in its bar. The earlier
   version comes first: on the left, or above once switched to one above the other, which gives
@@ -275,6 +277,7 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 - **Mockup notices**, below the header and dismissible: the address of the latest link that
   would have left the mockup, with Open in new tab (`noopener noreferrer`; http, https, mailto
   and tel only); and the permissions the mockup uses that this server blocks, with, for editors,
+  Popovers stay below the header and notices, also when their pin scrolls out of view.
   the variables that allow them (§4.1). The editor's preview on the mockup page shows the same
   notices, starting with the files from other sites found at upload (§6), which take the place
   of the runtime notice about them. A new version starts its preview without notices.

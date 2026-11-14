@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Docker image ships with an SBOM and build provenance attestations
 
+### Fixed
+
+- A pin's thread no longer opens partly under the header when the pin is scrolled out of view or its element is hidden at the chosen width; for a hidden element it opens at the top of the mockup and says why
+
 ### Removed
 
 - npm from the Docker image, which does not use it

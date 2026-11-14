@@ -54,13 +54,27 @@ function start() {
             if (!el?.isConnected) {
                 const x = pin.anchor.point.x - scrollX;
                 const y = pin.anchor.point.y - scrollY;
-                return { id: pin.id, x, y, visible: inViewport(x, y), orphaned: true };
+                return {
+                    id: pin.id,
+                    x,
+                    y,
+                    visible: inViewport(x, y),
+                    orphaned: true,
+                    elementHidden: false,
+                };
             }
             const rect = el.getBoundingClientRect();
             const x = rect.left + pin.anchor.offset.x * rect.width;
             const y = rect.top + pin.anchor.offset.y * rect.height;
             const shown = rect.width > 0 || rect.height > 0;
-            return { id: pin.id, x, y, visible: shown && inViewport(x, y), orphaned: false };
+            return {
+                id: pin.id,
+                x,
+                y,
+                visible: shown && inViewport(x, y),
+                orphaned: false,
+                elementHidden: !shown,
+            };
         });
         markers.place(positions);
         const serialized = JSON.stringify(positions);

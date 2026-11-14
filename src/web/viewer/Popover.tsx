@@ -1,24 +1,19 @@
 import type { ComponentChildren } from 'preact';
 import { useCallback, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { CARD_CLASS } from '../ui/styles.ts';
-
-const WIDTH = 320;
-// Pin markers are 28px wide and drawn up and to the right of their anchor point.
-const MARKER = 28;
-const MARGIN = 8;
-
-/** Where a popover points, in viewport coordinates. */
-export type PopoverPoint = { x: number; y: number; placement: 'side' | 'below' };
+import { type PopoverPoint, placePopover } from './placement.ts';
 
 const samePoint = (a: PopoverPoint, b: PopoverPoint) =>
-    a.x === b.x && a.y === b.y && a.placement === b.placement;
+    a.x === b.x &&
+    a.y === b.y &&
+    a.placement === b.placement &&
+    a.top === b.top &&
+    a.bottom === b.bottom;
 
 /**
- * Floating card beside a pin (`side`), flipping to the left when it would overflow and going
- * below it when neither side fits, or centered below a point (`below`), e.g. the comment button.
- * `locate` tells where it points; it is asked again after every render, scroll and resize,
- * since the layout can move what it points at, e.g. the mockup re-centered as the side panel
- * closes.
+ * Floating card placed by `placePopover`. `locate` tells where it points; it is asked again
+ * after every render, scroll and resize, since the layout can move what it points at, e.g. the
+ * mockup re-centered as the side panel closes.
  */
 export function Popover({
     locate,
@@ -29,12 +24,12 @@ export function Popover({
 }) {
     const ref = useRef<HTMLDivElement>(null);
     const [height, setHeight] = useState(0);
-    const [{ x, y, placement }, setPoint] = useState(locate);
+    const [point, setPoint] = useState(locate);
     const latest = useRef(locate);
     latest.current = locate;
     const relocate = useCallback(() => {
-        const point = latest.current();
-        setPoint((current) => (samePoint(current, point) ? current : point));
+        const next = latest.current();
+        setPoint((current) => (samePoint(current, next) ? current : next));
     }, []);
 
     // After every render, once the layout it measures is in place.
@@ -56,26 +51,7 @@ export function Popover({
         };
     }, [relocate]);
 
-    const width = Math.min(WIDTH, innerWidth - 2 * MARGIN);
-    let left: number;
-    let top: number;
-    if (placement === 'side') {
-        const right = x + MARKER + MARGIN;
-        const leftOfPin = x - MARGIN - width;
-        if (right + width <= innerWidth - MARGIN || leftOfPin >= MARGIN) {
-            left = right + width <= innerWidth - MARGIN ? right : leftOfPin;
-            top = y - MARKER - MARGIN;
-        } else {
-            // Too narrow for either side (phones): below the pin, which is drawn above its point.
-            left = x - width / 2;
-            top = y + MARGIN;
-        }
-    } else {
-        left = x - width / 2;
-        top = y + MARGIN;
-    }
-    left = Math.min(Math.max(left, MARGIN), innerWidth - width - MARGIN);
-    top = Math.min(Math.max(top, MARGIN), innerHeight - height - MARGIN);
+    const { left, top, width } = placePopover(point, height, innerWidth);
 
     return (
         <div

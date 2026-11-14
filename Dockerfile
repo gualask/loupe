@@ -40,7 +40,8 @@ COPY --chmod=755 <<'EOF' /usr/local/bin/loupe
 #!/bin/sh
 exec node /app/src/server/cli.ts "$@"
 EOF
-USER node
+# The node user, by ID: Kubernetes' runAsNonRoot can only verify a numeric user.
+USER 1000:1000
 VOLUME /data
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s \

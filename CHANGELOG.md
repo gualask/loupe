@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A pin's thread no longer opens partly under the header when the pin is scrolled out of view or its element is hidden at the chosen width; for a hidden element it opens at the top of the mockup and says why
+- The Docker image declares its user by numeric ID, so Kubernetes `runAsNonRoot` accepts it
 
 ### Removed
 

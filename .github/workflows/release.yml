@@ -1,5 +1,5 @@
 # Publishes the Docker image to Docker Hub and GitHub Container Registry when a version tag is
-# pushed. Nothing runs on branch pushes. Docker Hub needs the DOCKERHUB_USERNAME and
+# pushed, then a GitHub Release with the version's changelog. Nothing runs on branch pushes. Docker Hub needs the DOCKERHUB_USERNAME and
 # DOCKERHUB_TOKEN (a Read & Write access token) repository secrets.
 name: Release
 
@@ -48,6 +48,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6
+        env:
+          # Registries read a multi-platform image's description and license from its index.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: |
             docker.io/gualask/loupe
@@ -66,8 +69,35 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           # Attach an SBOM and full build provenance, shown by Docker Hub and Docker Scout.
           sbom: true
           provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      # The notes are the version's section of CHANGELOG.md, without its heading: it ends at the
+      # next version or at the link references closing the file.
+      - run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$version]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && (/^## \[/ || /^\[[^]]*\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+          prerelease=""
+          case "$version" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --title "$version" --notes-file notes.md --verify-tag $prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -44,3 +44,4 @@ are built from it. Then follow the first-run steps in the [self-hosting guide](d
 ## License
 
 [MIT](LICENSE) © 2026 Andrea Gualandi (Gorgonauta)
+- [Security policy](SECURITY.md): how to report a vulnerability

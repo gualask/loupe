@@ -41,7 +41,8 @@ Pushing a version tag runs `.github/workflows/release.yml`: the same checks as a
 multi-platform image (`linux/amd64`, `linux/arm64`) published to Docker Hub as `gualask/loupe`
 and to `ghcr.io/gualask/loupe`. Nothing runs on branch pushes. Docker Hub needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, an access token with Read & Write
-permission.
+permission. Once the images are published, the workflow creates a GitHub Release whose notes are
+the version's section of `CHANGELOG.md`, and fails if that section is missing.
 
 1. Move the `[Unreleased]` entries of `CHANGELOG.md` into the new version and commit.
 2. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.

@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Over https, a mockup's own address opened outside the review space leads back to it instead of showing the mockup as a page of its own
 - Using a password-reset link, or disabling the account, cancels the account's other reset links
 - Disabling an admin, or making them an editor, cancels the invites they created
+- Hono is updated past published vulnerabilities in its CSRF check and its routing
+- The Docker image runs Node.js 26.13.1, a security release
 
 ## [0.2.0] - 2026-10-30
 

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # The exact Node.js release, the same as .nvmrc.
-ARG NODE_VERSION=26.13.0
+ARG NODE_VERSION=26.13.1
 
 # Every dependency is plain JavaScript, so the build stages run on the build machine's platform
 # and their output is the same for every target: a multi-platform build never runs them under

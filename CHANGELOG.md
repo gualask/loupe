@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-14
+
 ### Added
 
 - The Docker image ships with an SBOM and build provenance attestations
@@ -72,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Loupe logo in the app, browser tab icon and home-screen icon
 - Browser tabs named after the page shown
 
-[Unreleased]: https://github.com/gualask/loupe/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/gualask/loupe/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/gualask/loupe/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/gualask/loupe/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gualask/loupe/releases/tag/v0.1.0

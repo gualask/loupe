@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import {
     createProjectRequestSchema,
@@ -50,15 +50,20 @@ export function isMockupUpload(path: string) {
 }
 
 export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
-    /** The project, if it exists and the signed-in user manages it (404 otherwise). */
+    /**
+     * The project, if it exists and the signed-in user manages it (404 otherwise). Anonymous
+     * requests answer 401 before anything is looked up.
+     */
     function managedProject(c: Context<AppEnv>, id: string) {
+        const user = signedInUser(c);
         const row = findProject(db, id);
-        if (!row || !canManage(signedInUser(c), row.project.ownerId)) throw notFound();
+        if (!row || !canManage(user, row.project.ownerId)) throw notFound();
         return row;
     }
 
     /** The mockup with its project, if the signed-in user manages it (404 otherwise). */
     function managedMockup(c: Context<AppEnv>, id: string) {
+        signedInUser(c);
         const row = findMockup(db, id);
         if (!row) throw notFound();
         return { ...row, project: managedProject(c, row.mockup.projectId) };
@@ -79,6 +84,17 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
         deleteUnreferencedFiles(config.dataDir, () => referencedFileHashes(db));
 
     const upload = createUploadReader(config.maxUploadBytes);
+
+    /**
+     * Runs `find`, which refuses whoever may not upload to `:id`, ahead of `upload.limit`: a body
+     * sent in chunks is read into memory to be counted, which only they may cause.
+     */
+    const uploaderOf =
+        (find: (c: Context<AppEnv>, id: string) => unknown): MiddlewareHandler<AppEnv> =>
+        async (c, next) => {
+            find(c, c.req.param('id') ?? '');
+            await next();
+        };
 
     return new Hono<AppEnv>()
         .get('/projects', (c) => {
@@ -114,7 +130,7 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             await cleanUpFiles();
             return c.body(null, 204);
         })
-        .post('/projects/:id/mockups', upload.limit, async (c) => {
+        .post('/projects/:id/mockups', uploaderOf(managedProject), upload.limit, async (c) => {
             const row = managedProject(c, c.req.param('id'));
             const { fields, bytes, fileInfo } = await upload.read(c);
             const fallbackName =
@@ -134,7 +150,7 @@ export function projectRoutes({ db, config, hub }: AppDeps & { hub: Hub }) {
             );
             return c.json(presentMockup(managedMockup(c, id)), 201);
         })
-        .post('/mockups/:id/versions', upload.limit, async (c) => {
+        .post('/mockups/:id/versions', uploaderOf(managedMockup), upload.limit, async (c) => {
             // Same link and viewers; the new version starts without threads.
             const { mockup, version } = managedMockup(c, c.req.param('id'));
             const archived = () =>

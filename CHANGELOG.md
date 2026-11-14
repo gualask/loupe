@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - npm from the Docker image, which does not use it
 
+### Security
+
+- People who are not signed in can no longer make the server hold large uploads in memory
+- Over https, a mockup's own address opened outside the review space leads back to it instead of showing the mockup as a page of its own
+- Using a password-reset link, or disabling the account, cancels the account's other reset links
+- Disabling an admin, or making them an editor, cancels the invites they created
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

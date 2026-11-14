@@ -1,0 +1,1 @@
+ALTER TABLE `account_tokens` ADD `created_by` text REFERENCES users(id) ON DELETE CASCADE;

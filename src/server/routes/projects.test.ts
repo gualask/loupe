@@ -230,6 +230,28 @@ describe('share links', () => {
         );
     });
 
+    it('serves the document to frames only, sending a page opened on its own to the review space', async () => {
+        const { t, mockup, uploadVersion } = await editorWithMockup();
+        await uploadVersion();
+        const token = tokenFromUrl(mockup.shareUrl);
+        const open = (path: string, destination: string) =>
+            t.app.request(path, { headers: { 'sec-fetch-dest': destination } });
+
+        for (const path of [`/s/${token}/content`, `/s/${token}/versions/1/content`]) {
+            expect((await open(path, 'iframe')).status).toBe(200);
+            const page = await open(path, 'document');
+            expect(page.status).toBe(302);
+            expect(page.headers.get('location')).toBe(`/s/${token}`);
+            expect(await page.text()).toBe('');
+            const fetched = await open(path, 'empty');
+            expect(fetched.status).toBe(403);
+            expect(await fetched.json()).toEqual({
+                error: 'forbidden',
+                message: 'A mockup opens only inside its review space.',
+            });
+        }
+    });
+
     it('opens the sandbox as far as the server allows, and says so to the app', async () => {
         const env = Object.fromEntries(
             MOCKUP_PERMISSIONS.map((name) => [mockupPermissionVariable(name), 'allow']),
@@ -375,6 +397,38 @@ describe('mockup versions', () => {
         ]);
         // Both files stay stored: the first version still references its own.
         expect(readdirSync(path.join(t.config.dataDir, 'mockups'))).toHaveLength(2);
+    });
+
+    it('refuses an upload from someone who may not make it without reading the file', async () => {
+        const { t, project, mockup } = await editorWithMockup();
+
+        for (const url of [
+            `/api/projects/${project.id}/mockups`,
+            `/api/mockups/${mockup.id}/versions`,
+        ]) {
+            // A body of unknown length, as sent in chunks: counting it means reading it.
+            let read = 0;
+            const body = new ReadableStream(
+                {
+                    pull(controller) {
+                        read += 1;
+                        controller.enqueue(new Uint8Array(64 * 1024));
+                    },
+                },
+                { highWaterMark: 0 },
+            );
+            const res = await t.app.request(url, {
+                method: 'POST',
+                headers: {
+                    origin: t.config.publicUrl,
+                    'content-type': 'multipart/form-data; boundary=x',
+                },
+                body,
+                duplex: 'half',
+            } as RequestInit);
+            expect(res.status).toBe(401);
+            expect(read).toBe(0);
+        }
     });
 
     it('checks the file and who uploads it', async () => {

@@ -305,6 +305,61 @@ describe('user management', () => {
         expect((await fresh.get('/api/auth/me')).body.username).toBe('eddie');
     });
 
+    it('cancels the other reset links of a user once one is used', async () => {
+        const t = createTestApp();
+        const admin = await setUpAdmin(t);
+        const { editorId } = await inviteEditor(t, admin);
+        const resetLink = async () =>
+            tokenFromUrl((await admin.post(`/api/admin/users/${editorId}/reset-link`)).body.url);
+        const [first, second] = [await resetLink(), await resetLink()];
+
+        const used = await t.client().post(`/api/auth/tokens/${second}`, {
+            password: 'a brand new password',
+        });
+        expect(used.status).toBe(200);
+        expect(await t.client().get(`/api/auth/tokens/${first}`)).toMatchObject({
+            status: 404,
+            body: { error: 'invalid_token' },
+        });
+    });
+
+    it('cancels the reset links of an account when it is disabled', async () => {
+        const t = createTestApp();
+        const admin = await setUpAdmin(t);
+        const { editorId } = await inviteEditor(t, admin);
+        const link = await admin.post(`/api/admin/users/${editorId}/reset-link`);
+
+        await admin.patch(`/api/admin/users/${editorId}`, { disabled: true });
+        await admin.patch(`/api/admin/users/${editorId}`, { disabled: false });
+        const res = await t.client().get(`/api/auth/tokens/${tokenFromUrl(link.body.url)}`);
+        expect(res.status).toBe(404);
+    });
+
+    it.each([{ change: { role: 'editor' } }, { change: { disabled: true } }])(
+        'cancels the invites of an admin once $change',
+        async ({ change }) => {
+            const t = createTestApp();
+            const admin = await setUpAdmin(t);
+            const invite = await admin.post('/api/admin/invites', { role: 'admin' });
+            const other = t.client();
+            const created = await other.post(`/api/auth/tokens/${tokenFromUrl(invite.body.url)}`, {
+                username: 'olga',
+                displayName: 'Olga',
+                password: PASSWORD,
+            });
+            const kept = await admin.post('/api/admin/invites', { role: 'editor' });
+            const hers = await other.post('/api/admin/invites', { role: 'admin' });
+
+            const res = await admin.patch(`/api/admin/users/${created.body.id}`, change);
+            expect(res.status).toBe(200);
+            const status = async (link: { body: { url: string } }) =>
+                (await t.client().get(`/api/auth/tokens/${tokenFromUrl(link.body.url)}`)).status;
+            expect(await status(hers)).toBe(404);
+            // Another admin's invites are theirs.
+            expect(await status(kept)).toBe(200);
+        },
+    );
+
     it('disables an account and ends its sessions', async () => {
         const t = createTestApp();
         const admin = await setUpAdmin(t);

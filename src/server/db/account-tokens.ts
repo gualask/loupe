@@ -12,6 +12,7 @@ export function insertAccountToken(
         kind: AccountTokenRow['kind'];
         role?: Role;
         userId?: string;
+        createdBy?: string;
         expiresAt: Date;
     },
 ) {
@@ -32,6 +33,18 @@ export function findUsableAccountToken(db: Db, tokenHash: string) {
 /** Consumes a token: links are single-use. */
 export function deleteAccountToken(db: Db, id: string) {
     db.delete(accountTokens).where(eq(accountTokens.id, id)).run();
+}
+
+/** Deletes every reset link of a user, the only tokens that name one. */
+export function deleteResetTokensOfUser(db: Db, userId: string) {
+    db.delete(accountTokens).where(eq(accountTokens.userId, userId)).run();
+}
+
+/** Deletes the invites an admin created and nobody used yet. */
+export function deleteInvitesCreatedBy(db: Db, userId: string) {
+    db.delete(accountTokens)
+        .where(and(eq(accountTokens.kind, 'invite'), eq(accountTokens.createdBy, userId)))
+        .run();
 }
 
 /** Deletes every token of one kind, e.g. older setup links when a new one is issued. */

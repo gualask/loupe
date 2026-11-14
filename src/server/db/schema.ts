@@ -41,6 +41,8 @@ export const accountTokens = sqliteTable('account_tokens', {
     role: text('role', { enum: ['admin', 'editor'] }),
     // Target account of a reset token.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    // The admin who created an invite, whose invites end with their admin role.
+    createdBy: text('created_by').references(() => users.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
     expiresAt: timestamp('expires_at').notNull(),
 });

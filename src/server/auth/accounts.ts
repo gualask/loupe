@@ -10,6 +10,7 @@ import {
     type AccountTokenRow,
     deleteAccountToken,
     deleteAccountTokensOfKind,
+    deleteResetTokensOfUser,
     findUsableAccountToken,
     insertAccountToken,
 } from '../db/account-tokens.ts';
@@ -51,7 +52,7 @@ export function toAdminUser(row: UserRow): AdminUser {
 export function createAccountLink(
     db: Db,
     config: Config,
-    token: { kind: AccountTokenRow['kind']; role?: Role; userId?: string },
+    token: { kind: AccountTokenRow['kind']; role?: Role; userId?: string; createdBy?: string },
 ): AccountLink {
     const secret = randomToken();
     const expiresAt = new Date(Date.now() + TOKEN_TTL[token.kind]);
@@ -117,7 +118,10 @@ export async function redeemAccountLink(
     });
 }
 
-/** Sets a new password from a reset link, signs the user out everywhere and consumes the link. */
+/**
+ * Sets a new password from a reset link and signs the user out everywhere. Consumes the link and
+ * the user's other reset links: one that reached someone else must not undo the new password.
+ */
 export async function redeemResetLink(db: Db, secret: string, input: { password: string }) {
     const passwordHash = await hashPassword(input.password);
     return db.transaction(() => {
@@ -127,7 +131,7 @@ export async function redeemResetLink(db: Db, secret: string, input: { password:
         if (user.disabledAt) throw apiError(403, 'account_disabled', 'This account is disabled.');
         const updated = updateUser(db, user.id, { passwordHash });
         deleteUserSessions(db, user.id);
-        deleteAccountToken(db, token.id);
+        deleteResetTokensOfUser(db, user.id);
         return updated ?? user;
     });
 }

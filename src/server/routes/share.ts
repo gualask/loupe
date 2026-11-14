@@ -65,12 +65,28 @@ function bridgeLoader(file: string | undefined) {
     };
 }
 
+/**
+ * Keeps a mockup document inside a frame, which only the app can be (frame-ancestors). Opened as
+ * a page of its own it would have no app policy around it, and its script could take what a
+ * viewer typed to another site by navigating there: such a request is sent to the review space
+ * instead. Browsers say what a request is for (Sec-Fetch-Dest) only to https and localhost;
+ * a request that does not say is served.
+ */
+function refuseOutsideFrame(c: Context<AppEnv>) {
+    const destination = c.req.header('Sec-Fetch-Dest');
+    if (destination === undefined || destination === 'iframe') return undefined;
+    if (destination === 'document') return c.redirect(`/s/${c.req.param('token')}`);
+    throw apiError(403, 'forbidden', 'A mockup opens only inside its review space.');
+}
+
 /** The sandboxed mockup document, mounted under /s. */
 export function shareContentRoutes(deps: AppDeps & { bridgeFile?: string }) {
     const loadBridge = bridgeLoader(deps.bridgeFile);
     const documents = createDocumentCache(DOCUMENT_CACHE_BYTES);
     /** Sends a version's document, prepared once with the bridge inlined. */
     async function serve(c: Context<AppEnv>, version: MockupVersionRow) {
+        const refused = refuseOutsideFrame(c);
+        if (refused) return refused;
         const bridge = await loadBridge();
         // The stored file is addressed by its hash; the bridge changes only with Loupe itself.
         // Weak, as the same tag names the plain and the compressed document.

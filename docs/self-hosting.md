@@ -74,8 +74,9 @@ docker exec loupe loupe reset-link <username>
 ## Mockup permissions
 
 Uploaded mockups run in a sandbox that keeps them away from Loupe, its data and its sessions,
-whatever their code does. By default they may also do nothing beyond running their own scripts:
-anything more is a `LOUPE_MOCKUP_*` setting, so you allow only what your mockups need. When a
+whatever their code does. By default they may also do nothing beyond running their own scripts,
+but for the two things no setting blocks (below): anything more is a `LOUPE_MOCKUP_*` setting,
+so you allow only what your mockups need. When a
 mockup uses something blocked, the review space says so, and shows editors the setting that
 allows it. No setting lets a mockup reach Loupe itself; what they open up affects the people
 who view mockups:
@@ -88,6 +89,13 @@ who view mockups:
 | `LOUPE_MOCKUP_MODALS` | Show native dialogs headed by your Loupe address, such as a `prompt()` asking for a password, which viewers may take for Loupe; or open one dialog after another. |
 | `LOUPE_MOCKUP_DOWNLOADS` | Save files to viewers' computers from your Loupe address. Reported malware harms the reputation of that address in browsers. |
 | `LOUPE_MOCKUP_CLIPBOARD` | Put other text in the clipboard than what viewers meant to copy, e.g. a different command. |
+
+Two things mockups can do whatever the settings, because browsers give servers no way to block
+them: name another site in a connection hint (`<link rel="preconnect">`) or as a WebRTC server.
+That site then sees the address of everyone who opens the mockup, and when. And only over https
+(or on `localhost`) can Loupe tell that a mockup's own address was opened outside the review
+space, where its script could send what viewers type elsewhere; it then leads back to the review
+space. Both are detailed in [the specification](SPEC.md#41-isolation).
 
 Some things never work inside the sandbox: storage that survives a reload (what a mockup stores
 lasts until it reloads), IndexedDB, saving to local files, reading the clipboard, camera,

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { inviteRequestSchema, updateUserRequestSchema } from '../../shared/api/auth.ts';
 import { createAccountLink, toAdminUser } from '../auth/accounts.ts';
 import { requireAdmin, signedInUser } from '../auth/session.ts';
+import { deleteInvitesCreatedBy, deleteResetTokensOfUser } from '../db/account-tokens.ts';
 import { deleteUserSessions } from '../db/sessions.ts';
 import { countActiveAdmins, findUserById, listUsers, updateUser } from '../db/users.ts';
 import { apiError, notFound, parseJson } from '../http.ts';
@@ -13,7 +14,11 @@ export function adminRoutes({ db, config }: AppDeps) {
         .get('/users', (c) => c.json(listUsers(db).map(toAdminUser)))
         .post('/invites', async (c) => {
             const { role } = await parseJson(c, inviteRequestSchema);
-            const link = createAccountLink(db, config, { kind: 'invite', role });
+            const link = createAccountLink(db, config, {
+                kind: 'invite',
+                role,
+                createdBy: signedInUser(c).id,
+            });
             return c.json(link, 201);
         })
         .post('/users/:id/reset-link', (c) => {
@@ -47,7 +52,15 @@ export function adminRoutes({ db, config }: AppDeps) {
                 if (!countActiveAdmins(db)) {
                     throw apiError(409, 'last_admin', 'At least one active admin must remain.');
                 }
-                if (changes.disabled) deleteUserSessions(db, user.id);
+                if (changes.disabled) {
+                    deleteUserSessions(db, user.id);
+                    // They would work again if the account were enabled before they expire.
+                    deleteResetTokensOfUser(db, user.id);
+                }
+                // Whoever stops being an admin keeps no invite to come back with.
+                if (changes.disabled || changes.role === 'editor') {
+                    deleteInvitesCreatedBy(db, user.id);
+                }
                 return row;
             });
             return c.json(toAdminUser(updated ?? user));

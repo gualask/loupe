@@ -49,7 +49,7 @@ User ──owns──▶ Project ──contains──▶ Mockup ──has──�
 |---|---|
 | `users` | `id`, `username` (unique), `display_name`, `password_hash`, `role` (`admin`/`editor`), `created_at`, `disabled_at` |
 | `sessions` | `id_hash`, `user_id`, `created_at`, `expires_at`, `last_seen_at` |
-| `account_tokens` | `id`, `token_hash`, `kind` (`setup`/`invite`/`reset`), `role` (invite), `user_id` (reset), `created_at`, `expires_at` |
+| `account_tokens` | `id`, `token_hash`, `kind` (`setup`/`invite`/`reset`), `role` (invite), `user_id` (reset), `created_by` (invite), `created_at`, `expires_at` |
 | `projects` | `id`, `owner_id`, `name`, `description`, `created_at` |
 | `mockups` | `id`, `project_id`, `name`, `share_token`, `archived_at`, `current_version_id`, `created_by`, `created_at` |
 | `mockup_versions` | `id`, `mockup_id`, `number`, `sha256`, `size_bytes`, `original_filename`, `external_refs` (JSON), `pin_count`, `uploaded_by`, `created_at` |
@@ -71,8 +71,10 @@ No email server is required. Every account flow is a **single-use link** that ex
 - **Invite**: an admin creates an invite for a role and copies the link (`/invite/<token>`,
   valid 48 h). The invitee chooses username, display name and password.
 - **Password reset**: an admin generates a reset link for a user (`/reset/<token>`, valid 24 h).
-  Using it signs the user out of every session.
-- **Account management**: admins change roles and disable accounts (which ends their sessions).
+  Using it signs the user out of every session and cancels their other reset links.
+- **Account management**: admins change roles and disable accounts (which ends their sessions
+  and cancels their reset links). An admin who is disabled or made an editor loses the invites
+  they created that nobody used yet, so none is left to come back with.
   Admins cannot change their own account, and a change that would leave no active admin, such
   as two admins disabling each other at the same moment, is refused (`409 last_admin`), so at
   least one admin always remains.
@@ -104,7 +106,8 @@ No email server is required. Every account flow is a **single-use link** that ex
   links answer `503 server_busy`. Hashes share Node's thread pool with file reads, so a flood of
   sign-ins cannot stall the serving of mockups.
 - **Request size**: API bodies are limited to 64 KB (`413 payload_too_large`); mockup uploads
-  have their own limit.
+  have their own limit (§6), and are refused before any of the file is read unless they come
+  from someone who may upload there.
 - **Clean-up**: an account link is deleted when used; expired sessions and links are deleted at
   startup and then once a day.
 - **Roadmap**: optional SMTP to email invite/reset links (v1.x); OIDC single sign-on (later).
@@ -125,7 +128,7 @@ Uploaded HTML is untrusted. It is never served as a regular page of the app:
   `default-src 'none'; script-src 'unsafe-inline' data: blob:; style-src 'unsafe-inline' data:;
   img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none';
   form-action 'none'`, with `Permissions-Policy: clipboard-write=()`. The mockup loads nothing
-  from the network, sends no requests and evaluates no strings as code.
+  from the network, sends no HTTP requests and evaluates no strings as code.
 - **Permissions**: each is blocked unless its variable is `allow`; the risks of each are listed
   in [self-hosting.md](self-hosting.md#mockup-permissions).
 
@@ -146,6 +149,19 @@ Uploaded HTML is untrusted. It is never served as a regular page of the app:
   (§1).
 - The document may be framed only by the app (`frame-ancestors 'self'` plus the origin of
   `LOUPE_PUBLIC_URL`, since browsers have resolved `'self'` differently in sandboxed documents).
+- The document is served to frames only, which the app alone can be. A request that says it is
+  for a page of its own (`Sec-Fetch-Dest: document`), such as the content address typed in the
+  address bar, is redirected to the review space; one for anything else than a frame answers
+  `403 forbidden`. Outside a frame no app policy surrounds the document, and its script could
+  take what a viewer typed to another site by navigating there. Browsers send that header only
+  to https and localhost: over plain http elsewhere, a request that does not say what it is for
+  is served.
+- **Limits**: whatever the permissions, two ways out remain that no response header closes
+  (verified in Chromium, which does not recognize CSP's `webrtc 'block'`). A connection hint
+  (`<link rel="preconnect">`) makes the browser connect to another site, and WebRTC
+  (`RTCPeerConnection`) sends packets to a server the mockup names. Both tell that site the
+  address of whoever opens the mockup, and when; the host name the mockup chooses can carry a
+  little data with it.
 - Every other response carries an app policy: only the app's own scripts and files load, and
   no other site can frame the app (`frame-ancestors 'none'`, against clickjacking). All
   responses carry `X-Content-Type-Options: nosniff`.
@@ -259,6 +275,7 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
   floating popover next to it → write → `Enter` / Send. `Esc` cancels; an empty pin is discarded.
 - **General comment** (`C`): a popover below the Comment button of the header.
 - **Threads**: clicking a pin opens its thread: replies, edit/delete own comments, status.
+  Popovers stay below the header and notices, also when their pin scrolls out of view.
 - **Viewport switcher**: desktop / tablet / mobile widths (iframe width). Pins follow their
   element at any width (§4.4). A pin whose element the mockup hides at that width is not drawn;
   its thread opens at the top of the mockup and says so. A width wider than the space keeps its
@@ -277,7 +294,6 @@ next pin is 4. Until the server confirms a new pin, the client shows it with the
 - **Mockup notices**, below the header and dismissible: the address of the latest link that
   would have left the mockup, with Open in new tab (`noopener noreferrer`; http, https, mailto
   and tel only); and the permissions the mockup uses that this server blocks, with, for editors,
-  Popovers stay below the header and notices, also when their pin scrolls out of view.
   the variables that allow them (§4.1). The editor's preview on the mockup page shows the same
   notices, starting with the files from other sites found at upload (§6), which take the place
   of the runtime notice about them. A new version starts its preview without notices.
@@ -350,7 +366,8 @@ general comment box then opens with that text and a note asking to send, edit or
 - **Upload**: from the project page, pick an `.html` file. Checks: size limit (`LOUPE_MAX_UPLOAD_MB`, default
   20), valid UTF-8 HTML, and a warning listing external references when the file is not
   self-contained, which says whether this server blocks those files or loads them. Connection
-  hints (`<link rel="preconnect">`, `dns-prefetch`) load nothing and are not listed. File names
+  hints (`<link rel="preconnect">`, `dns-prefetch`) load nothing and are not listed, though they
+  still reach the site they name (§4.1). File names
   are kept up to 255 characters.
 - **New version**: from the mockup page, upload the next file with the same checks. It becomes the
   current version on the same share link; viewers keep their identity, and threads and activity

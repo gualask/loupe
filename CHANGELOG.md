@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- An admin demoted, disabled or signed out while one of their requests was under way can no longer create an invite or change an account with it
+- A sign-in that was checking the old password while a password reset finished no longer opens a session
+- API responses tell every cache, a proxy's included, not to store them
+
 ## [0.2.1] - 2026-11-14
 
 ### Added

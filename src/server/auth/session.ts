@@ -4,6 +4,7 @@ import { createMiddleware } from 'hono/factory';
 import { deleteSession, findSessionWithUser, insertSession, touchSession } from '../db/sessions.ts';
 import { apiError } from '../http.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
+import { isActive } from './accounts.ts';
 import { randomToken, sha256 } from './crypto.ts';
 
 const COOKIE = 'loupe_session';
@@ -63,40 +64,73 @@ export function endSession(c: Context, deps: AppDeps) {
     clearCookie(c, deps);
 }
 
+type SessionWithUser = NonNullable<ReturnType<typeof findSessionWithUser>>;
+
+/** Whether a session still signs its user in: not expired, and the account not disabled. */
+function isLive(found: SessionWithUser | undefined, now: number): found is SessionWithUser {
+    return !!found && found.session.expiresAt.getTime() > now && isActive(found.user);
+}
+
+const signedOut = () => apiError(401, 'unauthenticated', 'You are signed out. Sign in again.');
+const forbidden = () => apiError(403, 'forbidden', 'Only admins can do this.');
+
+/** Moves a live session's expiry forward, writing only when it moves by more than a step. */
+function extendSession(
+    c: Context,
+    deps: AppDeps,
+    { id, idHash, session }: { id: string; idHash: string; session: SessionWithUser['session'] },
+    now: number,
+) {
+    const expiresAt = expiryFor(session.createdAt.getTime(), now, deps);
+    if (expiresAt - session.expiresAt.getTime() <= EXTEND_STEP_MS) return;
+    touchSession(deps.db, idHash, new Date(expiresAt));
+    writeCookie(c, id, expiresAt - now, deps);
+}
+
+/** The user the session cookie signs in, or null; a session no longer live is ended. */
+function resolveSession(c: Context, deps: AppDeps) {
+    const id = readCookie(c, deps);
+    if (!id) return null;
+    const idHash = sha256(id);
+    const found = findSessionWithUser(deps.db, idHash);
+    const now = Date.now();
+    if (!isLive(found, now)) {
+        if (found) deleteSession(deps.db, idHash);
+        clearCookie(c, deps);
+        return null;
+    }
+    extendSession(c, deps, { id, idHash, session: found.session }, now);
+    return found.user;
+}
+
 /** Resolves the session cookie into `c.var.user` (null when absent, expired or disabled). */
 export function sessionMiddleware(deps: AppDeps) {
     return createMiddleware<AppEnv>(async (c, next) => {
-        c.set('user', null);
-        const id = readCookie(c, deps);
-        if (id) {
-            const idHash = sha256(id);
-            const found = findSessionWithUser(deps.db, idHash);
-            const now = Date.now();
-            if (!found || found.session.expiresAt.getTime() <= now || found.user.disabledAt) {
-                if (found) deleteSession(deps.db, idHash);
-                clearCookie(c, deps);
-            } else {
-                c.set('user', found.user);
-                const expiresAt = expiryFor(found.session.createdAt.getTime(), now, deps);
-                if (expiresAt - found.session.expiresAt.getTime() > EXTEND_STEP_MS) {
-                    touchSession(deps.db, idHash, new Date(expiresAt));
-                    writeCookie(c, id, expiresAt - now, deps);
-                }
-            }
-        }
+        c.set('user', resolveSession(c, deps));
         await next();
     });
 }
 
 /** The signed-in user, or a 401 error for anonymous requests. */
 export function signedInUser(c: Context<AppEnv>) {
-    if (!c.var.user) throw apiError(401, 'unauthenticated', 'You are signed out. Sign in again.');
+    if (!c.var.user) throw signedOut();
     return c.var.user;
 }
 
 export const requireAdmin: MiddlewareHandler<AppEnv> = async (c, next) => {
-    if (signedInUser(c).role !== 'admin') {
-        throw apiError(403, 'forbidden', 'Only admins can do this.');
-    }
+    if (signedInUser(c).role !== 'admin') throw forbidden();
     await next();
 };
+
+/**
+ * The signed-in admin as the database has them now. A request checked by `requireAdmin` may then
+ * wait for its body while its user is demoted, disabled or signed out: call this in the
+ * transaction that writes, so that the revocation takes effect first.
+ */
+export function currentAdmin(c: Context<AppEnv>, deps: AppDeps) {
+    const id = readCookie(c, deps);
+    const found = id ? findSessionWithUser(deps.db, sha256(id)) : undefined;
+    if (!isLive(found, Date.now())) throw signedOut();
+    if (found.user.role !== 'admin') throw forbidden();
+    return found.user;
+}

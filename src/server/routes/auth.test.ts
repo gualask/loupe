@@ -10,6 +10,43 @@ import {
     tokenFromUrl,
 } from '../test-utils.ts';
 
+// Runs once a password has been checked, before the login it belongs to goes on.
+const afterPasswordCheck = vi.hoisted(() => ({ run: async () => {} }));
+vi.mock('../auth/crypto.ts', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../auth/crypto.ts')>();
+    return {
+        ...actual,
+        verifyPassword: async (...args: Parameters<typeof actual.verifyPassword>) => {
+            const valid = await actual.verifyPassword(...args);
+            await afterPasswordCheck.run();
+            return valid;
+        },
+    };
+});
+
+afterEach(() => {
+    afterPasswordCheck.run = async () => {};
+});
+
+describe('API responses', () => {
+    it('may not be kept by any cache', async () => {
+        const t = createTestApp();
+        const admin = await setUpAdmin(t);
+        const responses = [
+            await admin.get('/api/auth/me'),
+            await admin.get('/api/projects'),
+            await t.client().get('/api/auth/me'),
+            await admin.get('/api/nothing-here'),
+        ];
+        expect(responses.map((res) => [res.status, res.headers.get('cache-control')])).toEqual([
+            [200, 'no-store'],
+            [200, 'no-store'],
+            [401, 'no-store'],
+            [404, 'no-store'],
+        ]);
+    });
+});
+
 describe('first-run setup', () => {
     it('issues a setup link only while no account exists', async () => {
         const t = createTestApp();
@@ -147,6 +184,31 @@ describe('login and logout', () => {
             body: JSON.stringify(credentials),
         });
         expect((await me()).status).toBe(401);
+    });
+
+    it('starts no session when a password reset ends while the password is checked', async () => {
+        const t = createTestApp();
+        const admin = await setUpAdmin(t);
+        const { editorId } = await inviteEditor(t, admin);
+        const link = await admin.post(`/api/admin/users/${editorId}/reset-link`);
+        afterPasswordCheck.run = async () => {
+            afterPasswordCheck.run = async () => {};
+            const reset = await t.client().post(`/api/auth/tokens/${tokenFromUrl(link.body.url)}`, {
+                password: 'a brand new password',
+            });
+            expect(reset.status).toBe(200);
+        };
+
+        const client = t.client();
+        const login = await client.post('/api/auth/login', {
+            username: 'eddie',
+            password: PASSWORD,
+        });
+        expect({ status: login.status, body: login.body }).toEqual({
+            status: 401,
+            body: { error: 'invalid_credentials', message: 'Wrong username or password.' },
+        });
+        expect((await client.get('/api/auth/me')).status).toBe(401);
     });
 
     it('gives the same answer for unknown users and wrong passwords', async () => {
@@ -382,57 +444,96 @@ describe('user management', () => {
         expect(res).toMatchObject({ status: 409, body: { error: 'cannot_modify_self' } });
     });
 
-    it('keeps an active admin when two admins disable each other at once', async () => {
-        const t = createTestApp();
-        const admin = await setUpAdmin(t);
-        const adminId = (await admin.get('/api/auth/me')).body.id;
-        const invite = await admin.post('/api/admin/invites', { role: 'admin' });
-        const second = await t.client().post(`/api/auth/tokens/${tokenFromUrl(invite.body.url)}`, {
-            username: 'ada',
-            displayName: 'Ada',
-            password: PASSWORD,
-        });
-        const cookie = second.headers.getSetCookie()[0]?.split(';')[0] ?? '';
+    describe('a request under way when its admin is demoted or disabled', () => {
+        /** A second admin, Ada, whose request is sent now and whose body arrives on `send()`. */
+        async function adaRequest(method: string, path: string, payload: unknown) {
+            const t = createTestApp();
+            const admin = await setUpAdmin(t);
+            const adminId = (await admin.get('/api/auth/me')).body.id as string;
+            const invite = await admin.post('/api/admin/invites', { role: 'admin' });
+            const ada = await t.client().post(`/api/auth/tokens/${tokenFromUrl(invite.body.url)}`, {
+                username: 'ada',
+                displayName: 'Ada',
+                password: PASSWORD,
+            });
+            const cookie = ada.headers.getSetCookie()[0]?.split(';')[0] ?? '';
+            const json = JSON.stringify(payload);
+            let send = () => {};
+            const body = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    send = () => {
+                        controller.enqueue(new TextEncoder().encode(json));
+                        controller.close();
+                    };
+                },
+            });
+            // Node needs `duplex` for a streamed body, which the DOM types do not know.
+            const request: RequestInit & { duplex: 'half' } = {
+                method,
+                headers: {
+                    origin: 'http://loupe.test',
+                    'content-type': 'application/json',
+                    'content-length': String(json.length),
+                    cookie,
+                },
+                body,
+                duplex: 'half',
+            };
+            const pending = t.app.request(path.replace(':adminId', adminId), request);
+            await later();
+            return { t, admin, adaId: ada.body.id as string, pending, send };
+        }
 
-        // Ada's request is under way, signed in as an admin, while the first admin disables her:
-        // its body arrives afterwards.
-        const json = JSON.stringify({ disabled: true });
-        let send = () => {};
-        const body = new ReadableStream<Uint8Array>({
-            start(controller) {
-                send = () => {
-                    controller.enqueue(new TextEncoder().encode(json));
-                    controller.close();
-                };
+        const REFUSED = {
+            demoted: {
+                change: { role: 'editor' },
+                status: 403,
+                body: { error: 'forbidden', message: 'Only admins can do this.' },
             },
-        });
-        // Node needs `duplex` for a streamed body, which the DOM types do not know.
-        const request: RequestInit & { duplex: 'half' } = {
-            method: 'PATCH',
-            headers: {
-                origin: 'http://loupe.test',
-                'content-type': 'application/json',
-                'content-length': String(json.length),
-                cookie,
+            disabled: {
+                change: { disabled: true },
+                status: 401,
+                body: { error: 'unauthenticated', message: 'You are signed out. Sign in again.' },
             },
-            body,
-            duplex: 'half',
         };
-        const pending = t.app.request(`/api/admin/users/${adminId}`, request);
-        await later();
-        const disabled = await admin.patch(`/api/admin/users/${second.body.id}`, {
-            disabled: true,
-        });
-        expect(disabled.body).toMatchObject({ username: 'ada', disabled: true });
 
-        send();
-        const res = await pending;
-        expect(res.status).toBe(409);
-        expect(await res.json()).toEqual({
-            error: 'last_admin',
-            message: 'At least one active admin must remain.',
-        });
-        expect((await admin.get('/api/auth/me')).status).toBe(200);
+        it.each(Object.entries(REFUSED))(
+            'creates no invite once its issuer is %s',
+            async (_, { change, status, body }) => {
+                const { t, admin, adaId, pending, send } = await adaRequest(
+                    'POST',
+                    '/api/admin/invites',
+                    { role: 'admin' },
+                );
+                expect((await admin.patch(`/api/admin/users/${adaId}`, change)).status).toBe(200);
+
+                send();
+                const res = await pending;
+                expect({ status: res.status, body: await res.json() }).toEqual({ status, body });
+                const invites = t.db.$client
+                    .prepare("SELECT count(*) AS n FROM account_tokens WHERE kind = 'invite'")
+                    .get();
+                expect(invites?.n).toBe(0);
+            },
+        );
+
+        // Two admins disabling each other at once would otherwise leave no admin.
+        it.each(Object.entries(REFUSED))(
+            'changes no account once its sender is %s',
+            async (_, { change, status, body }) => {
+                const { admin, adaId, pending, send } = await adaRequest(
+                    'PATCH',
+                    '/api/admin/users/:adminId',
+                    { disabled: true },
+                );
+                expect((await admin.patch(`/api/admin/users/${adaId}`, change)).status).toBe(200);
+
+                send();
+                const res = await pending;
+                expect({ status: res.status, body: await res.json() }).toEqual({ status, body });
+                expect((await admin.get('/api/auth/me')).body).toMatchObject({ role: 'admin' });
+            },
+        );
     });
 
     it('lists users for admins', async () => {

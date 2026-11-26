@@ -14,7 +14,7 @@ import {
     findUsableAccountToken,
     insertAccountToken,
 } from '../db/account-tokens.ts';
-import type { Db } from '../db/client.ts';
+import { atomically, type Db } from '../db/client.ts';
 import { deleteUserSessions } from '../db/sessions.ts';
 import {
     countUsers,
@@ -40,6 +40,14 @@ const wrongLink = () => apiError(400, 'wrong_token_kind', 'This link cannot be u
 
 // Verified when the username does not exist, so response time does not reveal valid usernames.
 const DUMMY_PASSWORD_HASH = await hashPassword(randomToken());
+
+/**
+ * Whether an account may be used: signed in to, kept signed in and given reset links. Disabling
+ * it takes all of that away until an admin enables it again.
+ */
+export function isActive(user: UserRow) {
+    return !user.disabledAt;
+}
 
 export function toUser(row: UserRow): User {
     return { id: row.id, username: row.username, displayName: row.displayName, role: row.role };
@@ -98,7 +106,7 @@ export async function redeemAccountLink(
     input: { username: string; displayName: string; password: string },
 ) {
     const passwordHash = await hashPassword(input.password);
-    return db.transaction(() => {
+    return atomically(db, () => {
         const token = usableToken(db, secret);
         if (token.kind === 'reset') throw wrongLink();
         if (token.kind === 'setup' && countUsers(db) > 0) {
@@ -124,11 +132,11 @@ export async function redeemAccountLink(
  */
 export async function redeemResetLink(db: Db, secret: string, input: { password: string }) {
     const passwordHash = await hashPassword(input.password);
-    return db.transaction(() => {
+    return atomically(db, () => {
         const token = usableToken(db, secret);
         const user = token.kind === 'reset' && token.userId && findUserById(db, token.userId);
         if (!user) throw wrongLink();
-        if (user.disabledAt) throw apiError(403, 'account_disabled', 'This account is disabled.');
+        if (!isActive(user)) throw apiError(403, 'account_disabled', 'This account is disabled.');
         const updated = updateUser(db, user.id, { passwordHash });
         deleteUserSessions(db, user.id);
         deleteResetTokensOfUser(db, user.id);
@@ -140,5 +148,15 @@ export async function redeemResetLink(db: Db, secret: string, input: { password:
 export async function checkCredentials(db: Db, username: string, password: string) {
     const user = findUserByUsername(db, username);
     const valid = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
-    return valid && user && !user.disabledAt ? user : undefined;
+    return valid && user && isActive(user) ? user : undefined;
+}
+
+/**
+ * Whether a user returned by `checkCredentials` still has the password that was verified and an
+ * enabled account. Verifying takes time, during which a reset may change the password and end
+ * every session: check this in the transaction that starts the new one.
+ */
+export function credentialsStillValid(db: Db, verified: UserRow) {
+    const user = findUserById(db, verified.id);
+    return !!user && isActive(user) && user.passwordHash === verified.passwordHash;
 }

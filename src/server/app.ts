@@ -5,6 +5,7 @@ import { compress } from 'hono/compress';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { sessionMiddleware } from './auth/session.ts';
+import { pingDb } from './db/client.ts';
 import { findShareTokenOfCurrentVersion } from './db/mockups.ts';
 import { apiError, notFound } from './http.ts';
 import { createHub } from './review/hub.ts';
@@ -82,10 +83,15 @@ export function createApp(
     });
 
     app.get('/healthz', (c) => {
-        db.$client.prepare('SELECT 1').get();
+        pingDb(db);
         return c.json({ status: 'ok' });
     });
 
+    // API responses carry personal data and secrets: no cache, a proxy's included, may keep them.
+    app.use('/api/*', async (c, next) => {
+        await next();
+        c.res.headers.set('Cache-Control', 'no-store');
+    });
     const jsonLimit = bodyLimit({
         maxSize: MAX_JSON_BYTES,
         onError: () => {

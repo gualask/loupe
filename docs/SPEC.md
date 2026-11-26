@@ -75,9 +75,11 @@ No email server is required. Every account flow is a **single-use link** that ex
 - **Account management**: admins change roles and disable accounts (which ends their sessions
   and cancels their reset links). An admin who is disabled or made an editor loses the invites
   they created that nobody used yet, so none is left to come back with.
-  Admins cannot change their own account, and a change that would leave no active admin, such
-  as two admins disabling each other at the same moment, is refused (`409 last_admin`), so at
-  least one admin always remains.
+  Admins cannot change their own account, so at least one admin always remains. An invite or
+  account change is written only if its sender is still a signed-in admin at that moment:
+  a request sent before its admin was demoted, disabled or signed out is refused (`403` or
+  `401`), even when its body arrives later. Two admins disabling each other at the same moment
+  therefore leave one of them active.
 - **Locked-out admin**: `docker exec loupe loupe reset-link <username>` prints a reset link.
 - **Passwords**: Argon2id from `node:crypto`, with OWASP's minimum parameters (19 MiB, 2
   passes, 1 lane), stored as a standard PHC string that carries its parameters, so they can be
@@ -88,14 +90,16 @@ No email server is required. Every account flow is a **single-use link** that ex
   session ends after 30 days without use (`LOUPE_SESSION_TTL_DAYS`), and in any case 90 days
   after sign-in, so a stolen cookie cannot be kept alive by using it. The expiry is extended
   only when it moves by more than an hour, so requests rarely write to the database.
-  Signing in, or redeeming an account link, ends the browser's previous session; the account
-  link page warns when someone is already signed in. When a session ends (expiry, logout in
-  another tab, reset, disabled account), open pages return to the login page at their next
-  request or when their window regains focus, which checks the session again; a page whose
-  browser has meanwhile signed in as someone else reloads as that user. A review space checks
-  in the same way who it writes as, since a session started or ended in another tab changes it
-  (§4.3), and reloads under the new identity. A session that cannot be checked, e.g. offline,
-  offers to retry instead of signing out.
+  A sign-in starts a session only if, once the password is verified, the account is still
+  enabled and still has that password, so a reset finishing during the check leaves the old
+  password with no session. Signing in, or redeeming an account link, ends the browser's
+  previous session; the account link page warns when someone is already signed in. When a
+  session ends (expiry, logout in another tab, reset, disabled account), open pages return to
+  the login page at their next request or when their window regains focus, which checks the
+  session again; a page whose browser has meanwhile signed in as someone else reloads as that
+  user. A review space checks in the same way who it writes as, since a session started or
+  ended in another tab changes it (§4.3), and reloads under the new identity. A session that
+  cannot be checked, e.g. offline, offers to retry instead of signing out.
 - **CSRF**: Hono `csrf()` middleware (Origin check) on all state-changing routes.
 - **Brute force**: in-memory limit of 10 failed logins per username per 15 minutes. Account
   links carry 256-bit secrets and need no limit. The limit is per username, not per address:
@@ -437,7 +441,8 @@ All settings are environment variables prefixed with `LOUPE_`, validated at star
 - **Shared**: Zod schemas and types for the HTTP API and the bridge `postMessage` protocol live in
   `src/shared` and are imported by server, web app and bridge.
 - **HTTP caching**: built assets (hashed names) are `immutable` for a year; `index.html` is
-  `no-cache`, so an update takes effect at the next load; API responses are not cached.
+  `no-cache`, so an update takes effect at the next load; API responses are `no-store`, so no
+  cache, a proxy's included, keeps the personal data and secrets they carry.
 - **Compression**: gzip for the web app and mockup documents, which are compressed once and
   cached (§4.1). Not for API responses, which carry secrets next to user input (BREACH), nor
   for the event stream.

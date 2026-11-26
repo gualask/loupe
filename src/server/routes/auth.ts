@@ -6,12 +6,14 @@ import {
 } from '../../shared/api/auth.ts';
 import {
     checkCredentials,
+    credentialsStillValid,
     describeAccountToken,
     redeemAccountLink,
     redeemResetLink,
     toUser,
 } from '../auth/accounts.ts';
 import { endSession, signedInUser, startSession } from '../auth/session.ts';
+import { atomically } from '../db/client.ts';
 import { apiError, parseJson } from '../http.ts';
 import { createWindowLimiter } from '../rate-limit.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
@@ -29,9 +31,14 @@ export function authRoutes(deps: AppDeps) {
                 throw apiError(429, 'too_many_attempts', 'Too many failed attempts, retry later.');
             }
             const user = await checkCredentials(db, username, password);
-            if (!user) throw apiError(401, 'invalid_credentials', 'Wrong username or password.');
+            const invalid = () =>
+                apiError(401, 'invalid_credentials', 'Wrong username or password.');
+            if (!user) throw invalid();
+            atomically(db, () => {
+                if (!credentialsStillValid(db, user)) throw invalid();
+                startSession(c, deps, user.id);
+            });
             loginAttempts.reset(username);
-            startSession(c, deps, user.id);
             return c.json(toUser(user));
         })
         .post('/logout', (c) => {

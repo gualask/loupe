@@ -3,7 +3,7 @@ import { createApp } from './app.ts';
 import { issueSetupLinkIfNeeded } from './auth/accounts.ts';
 import { loadConfig } from './config.ts';
 import { deleteExpiredAccountTokens } from './db/account-tokens.ts';
-import { openDataDb } from './db/client.ts';
+import { closeDb, openDataDb } from './db/client.ts';
 import { deleteExpiredSessions } from './db/sessions.ts';
 
 const config = loadConfig();
@@ -32,7 +32,7 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
 
 function shutdown() {
     server.close(() => {
-        db.$client.close();
+        closeDb(db);
         process.exit(0);
     });
     // Event streams never end on their own; close them so close() can finish.

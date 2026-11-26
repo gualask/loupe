@@ -23,3 +23,20 @@ export function openDb(file: string) {
     migrate(db, { migrationsFolder });
     return db;
 }
+
+/**
+ * Runs `work` as one transaction: its queries see one consistent state, and if it throws none of
+ * its writes is kept. Code outside this module groups queries only through it.
+ */
+export function atomically<T>(db: Db, work: Parameters<typeof db.transaction<T>>[0]): T {
+    return db.transaction(work);
+}
+
+/** Fails unless the database answers a trivial query: the health check. */
+export function pingDb(db: Db) {
+    db.$client.prepare('SELECT 1').get();
+}
+
+export function closeDb(db: Db) {
+    db.$client.close();
+}

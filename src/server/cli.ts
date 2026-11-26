@@ -1,7 +1,7 @@
 // Maintenance commands, run inside the container as `loupe <command>`.
-import { createAccountLink } from './auth/accounts.ts';
+import { createAccountLink, isActive } from './auth/accounts.ts';
 import { loadConfig } from './config.ts';
-import { openDataDb } from './db/client.ts';
+import { closeDb, openDataDb } from './db/client.ts';
 import { findUserByUsername } from './db/users.ts';
 
 const USAGE = 'Usage: loupe reset-link <username>';
@@ -18,9 +18,9 @@ const config = loadConfig();
 const db = openDataDb(config.dataDir);
 const user = findUserByUsername(db, username.toLowerCase());
 if (!user) fail(`No user named "${username}".`);
-if (user.disabledAt) fail(`User "${user.username}" is disabled.`);
+if (!isActive(user)) fail(`User "${user.username}" is disabled.`);
 
 const link = createAccountLink(db, config, { kind: 'reset', userId: user.id });
 console.log(`Password reset link for ${user.username} (valid until ${link.expiresAt}):`);
 console.log(link.url);
-db.$client.close();
+closeDb(db);

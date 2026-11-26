@@ -1,6 +1,12 @@
 # Publishes the Docker image to Docker Hub and GitHub Container Registry when a version tag is
-# pushed, then a GitHub Release with the version's changelog. Nothing runs on branch pushes. Docker Hub needs the DOCKERHUB_USERNAME and
-# DOCKERHUB_TOKEN (a Read & Write access token) repository secrets.
+# pushed, then a GitHub Release with the version's changelog. Nothing runs on branch pushes.
+# Docker Hub needs the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Read & Write access token)
+# repository secrets.
+#
+# The image is first published under its version only. `latest` and the minor version (1.2)
+# move to it, and the GitHub Release is created, only once a scan of both platforms finds no
+# High or Critical vulnerability with a fix available. After a failed scan, publish a new
+# version once the fix is in the base image.
 #
 # Actions are pinned to a commit, with its version beside it: a tag can be moved to other code,
 # which would run here with the registry credentials.
@@ -23,6 +29,18 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # The image's Node.js cannot be read from .nvmrc: the Dockerfile names it for the build
+      # stages, and the runtime image's tag only names its major release.
+      - name: Check the image's Node.js release against .nvmrc
+        run: |
+          expected="$(cat .nvmrc)"
+          build=$(sed -n 's/^ARG NODE_VERSION=//p' Dockerfile)
+          runtime=$(awk '$1 == "FROM" { image = $2 } END { print image }' Dockerfile)
+          actual=$(docker run --rm "$runtime" -p 'process.versions.node')
+          if [ "$build" != "$expected" ] || [ "$actual" != "$expected" ]; then
+            echo "The Dockerfile builds with Node.js $build and $runtime runs $actual, not $expected" >&2
+            exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
@@ -35,10 +53,15 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # Every repository the image is published to. They all receive the same digest, so only the
+      # first is scanned.
+      IMAGES: |
+        ghcr.io/${{ github.repository }}
+        docker.io/gualask/loupe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Emulation runs only the final stage's one command: the build stages run natively.
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      # No emulation: the build stages run natively and the final stage only copies files.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
@@ -55,17 +78,13 @@ jobs:
           # Registries read a multi-platform image's description and license from its index.
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
-          images: |
-            docker.io/gualask/loupe
-            ghcr.io/${{ github.repository }}
-          # v1.2.3 → 1.2.3, 1.2 and latest; a pre-release (v1.2.3-rc.1) gets only its own tag.
-          # By default the action would also move `latest` to pre-releases.
+          images: ${{ env.IMAGES }}
+          # v1.2.3 → 1.2.3; the scan below decides on 1.2 and latest. By default the action would
+          # also tag latest.
           flavor: latest=false
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+          tags: type=semver,pattern={{version}}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -78,6 +97,30 @@ jobs:
           provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - id: grype
+        uses: anchore/scan-action/download-grype@11983a512817154c80a9db660c1a184be7513ed6 # v7.4.3
+      # Fetched from the registry with the credentials above, with the latest vulnerability data.
+      - name: Scan both platforms
+        run: |
+          image=$(printf '%s\n' "$IMAGES" | head -n 1)
+          for platform in linux/amd64 linux/arm64; do
+            "$GRYPE" "registry:$image@$DIGEST" --platform "$platform" --only-fixed --fail-on high
+          done
+        env:
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+      # A pre-release (v1.2.3-rc.1) keeps only its own tag. With a single source, imagetools
+      # copies the index as it is: the new tags have the scanned digest and its annotations.
+      - name: Tag latest and the minor version
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for image in $IMAGES; do
+            docker buildx imagetools create \
+              --tag "$image:${version%.*}" --tag "$image:latest" "$image@$DIGEST"
+          done
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
 
   release:
     needs: image

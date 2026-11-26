@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Docker image is built on Google's distroless Node.js image, without a shell or package manager: vulnerability scans find far fewer system packages, and `docker exec loupe sh` no longer works
+
 ### Security
 
 - An admin demoted, disabled or signed out while one of their requests was under way can no longer create an invite or change an account with it

@@ -55,6 +55,10 @@ If the only admin loses their password, print a reset link from the container:
 docker exec loupe loupe reset-link <username>
 ```
 
+The image holds Loupe, Node.js and the system libraries it needs, without a shell or package
+manager, so `docker exec loupe sh` does not work. To look at the data, copy it out as in
+[Backup](#backup).
+
 ## Configuration
 
 | Variable | Default | Description |

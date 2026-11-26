@@ -41,16 +41,23 @@ Pushing a version tag runs `.github/workflows/release.yml`: the same checks as a
 multi-platform image (`linux/amd64`, `linux/arm64`) published to Docker Hub as `gualask/loupe`
 and to `ghcr.io/gualask/loupe`. Nothing runs on branch pushes. Docker Hub needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, an access token with Read & Write
-permission. Once the images are published, the workflow creates a GitHub Release whose notes are
-the version's section of `CHANGELOG.md`, and fails if that section is missing. Its actions are
-pinned to a commit, since a tag can be moved: to update one, replace the commit and the version
-noted beside it.
+permission. The image is first published under its version only, then scanned with Grype on
+both platforms: only when no High or Critical vulnerability has a fix available do the other
+tags (below) move to it and the workflow create a GitHub Release, whose notes are the version's
+section of `CHANGELOG.md`; it fails if that section is missing. After a failed scan, release a
+new version once the base image carries the fix. The workflow's actions are pinned to a commit,
+since a tag can be moved: to update one, replace the commit and the version noted beside it.
+
+`.nvmrc` names the exact Node.js release. The `Dockerfile` cannot read it, so the workflow's checks
+also compare it with `NODE_VERSION` in the `Dockerfile` and with the runtime image (Google's
+distroless Node.js), which is tagged by major release only. To change Node.js, update `.nvmrc`
+and `NODE_VERSION` together, once the distroless image runs that release.
 
 1. Move the `[Unreleased]` entries of `CHANGELOG.md` into the new version and commit.
 2. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
 
-A stable version (`v1.2.3`) is tagged `1.2.3`, `1.2` and `latest`; a pre-release
-(`v1.2.3-rc.1`) only gets its own tag, on both registries. The first published image is private
+A stable version (`v1.2.3`) is tagged `1.2.3`, then `1.2` and `latest` once scanned; a
+pre-release (`v1.2.3-rc.1`) only gets its own tag, on both registries. The first published image is private
 on GitHub: make the package public once in its settings.
 
 ## Project layout and conventions

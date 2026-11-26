@@ -446,7 +446,9 @@ All settings are environment variables prefixed with `LOUPE_`, validated at star
 - **Compression**: gzip for the web app and mockup documents, which are compressed once and
   cached (§4.1). Not for API responses, which carry secrets next to user input (BREACH), nor
   for the event stream.
-- **Deployment**: one container, one port, one volume (`/data`).
+- **Deployment**: one container, one port, one volume (`/data`). The image is built on Google's
+  distroless Node.js image: no shell or package manager, and the maintenance command is a
+  Node.js script.
 
 ### 8.1 HTTP surface (sketch)
 
